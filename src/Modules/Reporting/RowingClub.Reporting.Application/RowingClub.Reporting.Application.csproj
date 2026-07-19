@@ -1,0 +1,20 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\BuildingBlocks\RowingClub.BuildingBlocks.Application\RowingClub.BuildingBlocks.Application.csproj" />
+    <ProjectReference Include="..\..\..\BuildingBlocks\RowingClub.BuildingBlocks.Domain\RowingClub.BuildingBlocks.Domain.csproj" />
+    <ProjectReference Include="..\..\Identity\RowingClub.Identity.Contracts\RowingClub.Identity.Contracts.csproj" />
+    <ProjectReference Include="..\..\Clubs\RowingClub.Clubs.Contracts\RowingClub.Clubs.Contracts.csproj" />
+    <ProjectReference Include="..\..\Memberships\RowingClub.Memberships.Contracts\RowingClub.Memberships.Contracts.csproj" />
+    <ProjectReference Include="..\..\Scheduling\RowingClub.Scheduling.Contracts\RowingClub.Scheduling.Contracts.csproj" />
+    <ProjectReference Include="..\..\Packages\RowingClub.Packages.Contracts\RowingClub.Packages.Contracts.csproj" />
+    <ProjectReference Include="..\..\Notifications\RowingClub.Notifications.Contracts\RowingClub.Notifications.Contracts.csproj" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+</Project>

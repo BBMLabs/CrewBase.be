@@ -1,0 +1,14 @@
+**/bin/
+**/obj/
+.git/
+.vs/
+.vscode/
+.idea/
+docs/
+deploy/
+*.env
+.env
+.env.developer
+.env.product
+*.user
+*.md

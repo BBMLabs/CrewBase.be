@@ -1,0 +1,179 @@
+# =============================================================================
+# RowingClub (CrewBase.be) - Lokal Gelistirme Docker Compose Dosyasi
+# =============================================================================
+# ONEMLI: Bu dosya YALNIZCA lokal gelistirme (dev-loop) icindir.
+# Uretim sertlestirmesi (hardening) icermez.
+#
+# Uretim ortaminda:
+#   - Parolalar ve anahtarlar bu dosyada oldugu gibi .env dosyasindan degil,
+#     CI/CD secret store, Docker/Kubernetes secrets, Vault veya bulut secret
+#     manager uzerinden enjekte edilmelidir (bkz. spec bolum 10).
+#   - MongoDB genellikle yonetilen (managed) bir replica set / cluster olarak
+#     kullanilmali, bu compose dosyasindaki gibi tek node / sifrelenmemis
+#     volume ile calistirilmamalidir.
+#   - TLS, network izolasyonu ve secret rotasyonu ayrica ele alinmalidir.
+#
+# Kullanim (bkz. deploy/scripts/dev-up.sh ve dev-down.sh):
+#   docker compose -f deploy/docker/docker-compose.yml --env-file .env.developer up -d
+#   docker compose -f deploy/docker/docker-compose.yml --env-file .env.developer down
+# =============================================================================
+
+name: rowingclub
+
+networks:
+  rowingclub-network:
+    name: rowingclub-network
+    driver: bridge
+
+volumes:
+  rowingclub-mongodb-data:
+    name: rowingclub-mongodb-data
+  rowingclub-redis-data:
+    name: rowingclub-redis-data
+  rowingclub-prometheus-data:
+    name: rowingclub-prometheus-data
+  rowingclub-grafana-data:
+    name: rowingclub-grafana-data
+
+services:
+  # ---------------------------------------------------------------------------
+  # MongoDB - tek veritabani: tum modullerin verisi (kullanici, kulup, uyelik,
+  # ders, randevu, paket, refresh token, outbox/inbox, bildirim, raporlama
+  # snapshot'lari, audit detay dokumanlari - bkz. docs/DATA_MODEL.md).
+  #
+  # --replSet rs0 ZORUNLUDUR: RowingClub.BuildingBlocks.Infrastructure.Mongo.MongoUnitOfWork
+  # her SaveChangesAsync cagrisinda coklu-dokuman (multi-document) bir transaction acar
+  # (aggregate yazma + outbox kaydi tek transaction'da - spec bolum 21). Standalone bir
+  # mongod transaction'lari desteklemez. Healthcheck ilk calistiginda tek node'luk
+  # replica set'i otomatik olarak initiate eder (idempotent - rs.status() zaten basariliysa
+  # hicbir sey yapmaz).
+  # ---------------------------------------------------------------------------
+  mongodb:
+    image: mongo:7
+    container_name: rowingclub-mongodb
+    restart: unless-stopped
+    command: ["--replSet", "rs0", "--bind_ip_all"]
+    ports:
+      - "${MONGODB_PORT:-27017}:27017"
+    volumes:
+      - rowingclub-mongodb-data:/data/db
+    healthcheck:
+      test: ["CMD-SHELL", "mongosh --quiet --eval \"try { rs.status().ok } catch (e) { rs.initiate({_id:'rs0',members:[{_id:0,host:'mongodb:27017'}]}).ok }\""]
+      interval: 5s
+      timeout: 10s
+      retries: 20
+      start_period: 15s
+    networks:
+      - rowingclub-network
+
+  # ---------------------------------------------------------------------------
+  # Redis - dagitik cache, idempotency, rate limiting, distributed lock
+  # ---------------------------------------------------------------------------
+  redis:
+    image: redis:7-alpine
+    container_name: rowingclub-redis
+    restart: unless-stopped
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - rowingclub-redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    networks:
+      - rowingclub-network
+
+  # ---------------------------------------------------------------------------
+  # Prometheus - metrik toplama
+  # ---------------------------------------------------------------------------
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: rowingclub-prometheus
+    restart: unless-stopped
+    volumes:
+      - ../prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - rowingclub-prometheus-data:/prometheus
+    ports:
+      - "${PROMETHEUS_PORT:-9090}:9090"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:9090/-/healthy || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 15s
+    networks:
+      - rowingclub-network
+
+  # ---------------------------------------------------------------------------
+  # Grafana - dashboard ve gozlemlenebilirlik arayuzu
+  # ---------------------------------------------------------------------------
+  grafana:
+    image: grafana/grafana:latest
+    container_name: rowingclub-grafana
+    restart: unless-stopped
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?GRAFANA_ADMIN_PASSWORD ortam degiskeni zorunludur}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    ports:
+      - "${GRAFANA_PORT:-3000}:3000"
+    volumes:
+      - ../grafana/provisioning:/etc/grafana/provisioning:ro
+      - ../grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - rowingclub-grafana-data:/var/lib/grafana
+    depends_on:
+      prometheus:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3000/api/health || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 15s
+    networks:
+      - rowingclub-network
+
+  # ---------------------------------------------------------------------------
+  # RowingClub.Api - ASP.NET Core Minimal API
+  # ---------------------------------------------------------------------------
+  api:
+    build:
+      context: ../..
+      dockerfile: deploy/docker/Dockerfile
+    container_name: rowingclub-api
+    restart: unless-stopped
+    # Not: env_file yerine dogrudan ${VAR} interpolasyonu kullanilir; degerler
+    # "docker compose --env-file .env(.developer)" ile enjekte edilir (bkz.
+    # deploy/scripts/dev-up.sh). Bu sayede compose dosyasi, var olmayan bir
+    # .env dosyasina sabit referans vermez ve "docker compose config" her
+    # zaman dogrulanabilir kalir.
+    environment:
+      APP_ENV: ${APP_ENV:-Development}
+      ASPNETCORE_ENVIRONMENT: ${APP_ENV:-Development}
+      ASPNETCORE_URLS: http://+:8080
+      MONGODB_CONNECTION_STRING: ${MONGODB_CONNECTION_STRING}
+      MONGODB_DATABASE_NAME: ${MONGODB_DATABASE_NAME:-rowingclub}
+      REDIS_CONNECTION_STRING: ${REDIS_CONNECTION_STRING}
+      JWT_ISSUER: ${JWT_ISSUER}
+      JWT_AUDIENCE: ${JWT_AUDIENCE}
+      JWT_SIGNING_PRIVATE_KEY: ${JWT_SIGNING_PRIVATE_KEY}
+      JWT_SIGNING_PUBLIC_KEY: ${JWT_SIGNING_PUBLIC_KEY}
+      FIELD_ENCRYPTION_KEY_CURRENT: ${FIELD_ENCRYPTION_KEY_CURRENT}
+      FIELD_ENCRYPTION_KEY_PREVIOUS: ${FIELD_ENCRYPTION_KEY_PREVIOUS}
+      FIELD_ENCRYPTION_KEY_VERSION: ${FIELD_ENCRYPTION_KEY_VERSION}
+      SMTP_HOST: ${SMTP_HOST}
+      SMTP_USERNAME: ${SMTP_USERNAME}
+      SMTP_PASSWORD: ${SMTP_PASSWORD}
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT}
+    ports:
+      - "${API_HTTP_PORT:-8080}:8080"
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - rowingclub-network

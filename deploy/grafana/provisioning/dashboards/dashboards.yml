@@ -1,0 +1,19 @@
+# =============================================================================
+# Grafana - Dashboard provisioning (lokal gelistirme)
+# "deploy/grafana/dashboards" klasorundeki tum dashboard JSON dosyalarini
+# otomatik olarak yukler.
+# =============================================================================
+
+apiVersion: 1
+
+providers:
+  - name: "RowingClub Dashboards"
+    orgId: 1
+    folder: "RowingClub"
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 30
+    allowUiUpdates: true
+    options:
+      path: /var/lib/grafana/dashboards
+      foldersFromFilesStructure: false

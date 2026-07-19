@@ -1,0 +1,47 @@
+{
+  "id": null,
+  "uid": "rowingclub-api-overview",
+  "title": "RowingClub API - Genel Gorunum",
+  "description": "Baslangic dashboard'u: istek orani ve hata orani. Gelistirme ilerledikce genisletilecektir.",
+  "tags": ["rowingclub", "api", "starter"],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "30s",
+  "time": {
+    "from": "now-6h",
+    "to": "now"
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "timeseries",
+      "title": "Istek Orani (req/s)",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "sum(rate(http_server_request_duration_seconds_count{job=\"rowingclub-api\"}[5m]))",
+          "legendFormat": "requests/sec",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "type": "timeseries",
+      "title": "Hata Orani (5xx) (%)",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "100 * sum(rate(http_server_request_duration_seconds_count{job=\"rowingclub-api\", http_response_status_code=~\"5..\"}[5m])) / sum(rate(http_server_request_duration_seconds_count{job=\"rowingclub-api\"}[5m]))",
+          "legendFormat": "error rate %",
+          "refId": "A"
+        }
+      ]
+    }
+  ]
+}

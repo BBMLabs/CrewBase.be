@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="..\RowingClub.Identity.Application\RowingClub.Identity.Application.csproj" />
+    <ProjectReference Include="..\RowingClub.Identity.Domain\RowingClub.Identity.Domain.csproj" />
+    <ProjectReference Include="..\..\..\BuildingBlocks\RowingClub.BuildingBlocks.Infrastructure\RowingClub.BuildingBlocks.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\..\BuildingBlocks\RowingClub.BuildingBlocks.Application\RowingClub.BuildingBlocks.Application.csproj" />
+    <ProjectReference Include="..\..\..\BuildingBlocks\RowingClub.BuildingBlocks.Domain\RowingClub.BuildingBlocks.Domain.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="MongoDB.Driver" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.Abstractions" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+</Project>

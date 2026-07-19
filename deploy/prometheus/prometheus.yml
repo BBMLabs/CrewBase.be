@@ -1,0 +1,24 @@
+# =============================================================================
+# Prometheus - Lokal gelistirme scrape yapilandirmasi
+# RowingClub.Api tarafindan prometheus-net.AspNetCore araciligiyla acilan
+# "/metrics" endpoint'i taranir.
+# =============================================================================
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  - job_name: "rowingclub-api"
+    metrics_path: /metrics
+    scrape_interval: 15s
+    static_configs:
+      - targets: ["api:8080"]
+        labels:
+          service: "rowingclub-api"
+          environment: "local"
+
+  - job_name: "prometheus"
+    scrape_interval: 15s
+    static_configs:
+      - targets: ["localhost:9090"]

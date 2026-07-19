@@ -1,0 +1,47 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="coverlet.collector" />
+    <PackageReference Include="FluentAssertions" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="NetArchTest.Rules" />
+    <PackageReference Include="xunit" />
+    <PackageReference Include="xunit.runner.visualstudio" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\BuildingBlocks\RowingClub.BuildingBlocks.Domain\RowingClub.BuildingBlocks.Domain.csproj" />
+    <ProjectReference Include="..\..\src\BuildingBlocks\RowingClub.BuildingBlocks.Application\RowingClub.BuildingBlocks.Application.csproj" />
+    <ProjectReference Include="..\..\src\BuildingBlocks\RowingClub.BuildingBlocks.Infrastructure\RowingClub.BuildingBlocks.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\src\Modules\Identity\RowingClub.Identity.Domain\RowingClub.Identity.Domain.csproj" />
+    <ProjectReference Include="..\..\src\Modules\Identity\RowingClub.Identity.Application\RowingClub.Identity.Application.csproj" />
+    <ProjectReference Include="..\..\src\Modules\Identity\RowingClub.Identity.Infrastructure\RowingClub.Identity.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\src\Modules\Clubs\RowingClub.Clubs.Domain\RowingClub.Clubs.Domain.csproj" />
+    <ProjectReference Include="..\..\src\Modules\Clubs\RowingClub.Clubs.Application\RowingClub.Clubs.Application.csproj" />
+    <ProjectReference Include="..\..\src\Modules\Clubs\RowingClub.Clubs.Infrastructure\RowingClub.Clubs.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\src\Modules\Memberships\RowingClub.Memberships.Domain\RowingClub.Memberships.Domain.csproj" />
+    <ProjectReference Include="..\..\src\Modules\Memberships\RowingClub.Memberships.Application\RowingClub.Memberships.Application.csproj" />
+    <ProjectReference Include="..\..\src\Modules\Memberships\RowingClub.Memberships.Infrastructure\RowingClub.Memberships.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\src\Modules\Scheduling\RowingClub.Scheduling.Domain\RowingClub.Scheduling.Domain.csproj" />
+    <ProjectReference Include="..\..\src\Modules\Scheduling\RowingClub.Scheduling.Application\RowingClub.Scheduling.Application.csproj" />
+    <ProjectReference Include="..\..\src\Modules\Scheduling\RowingClub.Scheduling.Infrastructure\RowingClub.Scheduling.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\src\Modules\Packages\RowingClub.Packages.Domain\RowingClub.Packages.Domain.csproj" />
+    <ProjectReference Include="..\..\src\Modules\Packages\RowingClub.Packages.Application\RowingClub.Packages.Application.csproj" />
+    <ProjectReference Include="..\..\src\Modules\Packages\RowingClub.Packages.Infrastructure\RowingClub.Packages.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\src\Modules\Notifications\RowingClub.Notifications.Domain\RowingClub.Notifications.Domain.csproj" />
+    <ProjectReference Include="..\..\src\Modules\Notifications\RowingClub.Notifications.Application\RowingClub.Notifications.Application.csproj" />
+    <ProjectReference Include="..\..\src\Modules\Notifications\RowingClub.Notifications.Infrastructure\RowingClub.Notifications.Infrastructure.csproj" />
+  </ItemGroup>
+
+</Project>
