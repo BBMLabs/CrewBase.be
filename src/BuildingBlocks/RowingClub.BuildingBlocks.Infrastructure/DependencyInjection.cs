@@ -24,19 +24,30 @@ public static class DependencyInjection
     {
         services.AddSingleton<ICorrelationIdAccessor, AsyncLocalCorrelationIdAccessor>();
 
-        var redisConnectionString = configuration.GetConnectionString("Redis")
-            ?? throw new InvalidOperationException(
-                "REDIS_CONNECTION_STRING / ConnectionStrings:Redis yapılandırması eksik.");
+        services
+            .AddOptions<RedisOptions>()
+            .Bind(configuration.GetSection(RedisOptions.SectionName))
+            .ValidateDataAnnotations()
+            .ValidateOnStart();
 
-        services.AddSingleton<IConnectionMultiplexer>(_ =>
+        services.AddSingleton<IConnectionMultiplexer>(provider =>
         {
-            var redisOptions = ConfigurationOptions.Parse(redisConnectionString);
-            // MediatR builds every registered IPipelineBehavior<,> for EVERY request, so this
-            // gets constructed even for commands that never touch idempotency. AbortOnConnectFail
-            // must be false or a Redis outage would take down completely unrelated commands
-            // (e.g. Register) instead of only the idempotency check that actually needs Redis.
-            redisOptions.AbortOnConnectFail = false;
-            return ConnectionMultiplexer.Connect(redisOptions);
+            var redisOptions = provider.GetRequiredService<IOptions<RedisOptions>>().Value;
+
+            var connectionOptions = new ConfigurationOptions
+            {
+                // MediatR builds every registered IPipelineBehavior<,> for EVERY request, so this
+                // gets constructed even for commands that never touch idempotency.
+                // AbortOnConnectFail must be false or a Redis outage would take down completely
+                // unrelated commands (e.g. Register) instead of only the idempotency check that
+                // actually needs Redis.
+                AbortOnConnectFail = false,
+                User = redisOptions.Username,
+                Password = redisOptions.Password,
+            };
+            connectionOptions.EndPoints.Add(redisOptions.Host, redisOptions.Port);
+
+            return ConnectionMultiplexer.Connect(connectionOptions);
         });
 
         services.AddSingleton<IIdempotencyStore, RedisIdempotencyStore>();

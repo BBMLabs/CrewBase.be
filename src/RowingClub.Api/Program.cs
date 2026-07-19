@@ -8,6 +8,9 @@ using RowingClub.Bootstrapper;
 using RowingClub.BuildingBlocks.Observability;
 using RowingClub.BuildingBlocks.Observability.Logging;
 
+DotEnvFileLoader.LoadForEnvironment(Environment.GetEnvironmentVariable("APP_ENV")
+    ?? Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT"));
+
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Configuration.AddRowingClubEnvironmentMapping();

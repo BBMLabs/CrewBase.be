@@ -20,11 +20,20 @@ public static class EnvironmentConfigurationExtensions
 
         var mapped = new Dictionary<string, string?>
         {
-            // Must include replicaSet=... - MongoUnitOfWork uses multi-document transactions,
-            // which a standalone mongod does not support (spec section 8/21).
-            ["Mongo:ConnectionString"] = Get("MONGODB_CONNECTION_STRING"),
+            // The backend builds the actual mongodb:// connection string (with the mandatory
+            // replicaSet=rs0 - MongoUnitOfWork uses multi-document transactions, which a
+            // standalone mongod does not support, spec section 8/21) from these three pieces -
+            // see MongoOptions.ConnectionString.
+            ["Mongo:Host"] = Get("MONGODB_HOST"),
+            ["Mongo:Port"] = Get("MONGODB_PORT"),
             ["Mongo:DatabaseName"] = Get("MONGODB_DATABASE_NAME") ?? "rowingclub",
-            ["ConnectionStrings:Redis"] = Get("REDIS_CONNECTION_STRING"),
+            ["Mongo:Username"] = Get("MONGODB_USERNAME"),
+            ["Mongo:Password"] = Get("MONGODB_PASSWORD"),
+
+            ["Redis:Host"] = Get("REDIS_HOST"),
+            ["Redis:Port"] = Get("REDIS_PORT"),
+            ["Redis:Username"] = Get("REDIS_USERNAME"),
+            ["Redis:Password"] = Get("REDIS_PASSWORD"),
 
             ["Jwt:Issuer"] = Get("JWT_ISSUER"),
             ["Jwt:Audience"] = Get("JWT_AUDIENCE"),

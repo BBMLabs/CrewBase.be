@@ -154,9 +154,18 @@ services:
       APP_ENV: ${APP_ENV:-Development}
       ASPNETCORE_ENVIRONMENT: ${APP_ENV:-Development}
       ASPNETCORE_URLS: http://+:8080
-      MONGODB_CONNECTION_STRING: ${MONGODB_CONNECTION_STRING}
+      # mongodb/redis/27017/6379 burada BILINCLI OLARAK SABIT (hardcoded) - bunlar docker
+      # network'u icindeki servis adi ve container-ic (internal) port, host tarafinda
+      # yayinlanan MONGODB_PORT/REDIS_PORT ile KARISTIRILMAMALI: o degiskenler yalnizca
+      # `ports:` eslemesini (host disina acilan portu) kontrol eder, container'lar birbirine
+      # her zaman kendi ic portlarindan baglanir. .env dosyasindaki MONGODB_HOST/PORT ve
+      # REDIS_HOST/PORT, API'yi docker DISINDA (dogrudan `dotnet run` ile) calistirirken
+      # kullanilir (bkz. .env.developer basindaki not).
+      MONGODB_HOST: mongodb
+      MONGODB_PORT: "27017"
       MONGODB_DATABASE_NAME: ${MONGODB_DATABASE_NAME:-rowingclub}
-      REDIS_CONNECTION_STRING: ${REDIS_CONNECTION_STRING}
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
       JWT_ISSUER: ${JWT_ISSUER}
       JWT_AUDIENCE: ${JWT_AUDIENCE}
       JWT_SIGNING_PRIVATE_KEY: ${JWT_SIGNING_PRIVATE_KEY}

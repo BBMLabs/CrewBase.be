@@ -13,6 +13,16 @@ namespace RowingClub.FunctionalTests;
 /// </summary>
 public sealed class RowingClubWebApplicationFactory : WebApplicationFactory<RowingClub.Api.Program>
 {
+    // Must run before Program.cs's top-level code (DotEnvFileLoader) does, so a developer's real
+    // .env.developer on disk never leaks into this test run and overrides the settings below.
+    // A static constructor is guaranteed to run before any member access on this type, including
+    // the instance constructor IClassFixture uses well before CreateClient() builds the host.
+    static RowingClubWebApplicationFactory()
+    {
+        Environment.SetEnvironmentVariable(
+            RowingClub.Api.Configuration.DotEnvFileLoader.DisableEnvVarName, "1");
+    }
+
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         builder.UseSetting("Jwt:Issuer", "https://rowingclub.tests");
@@ -25,9 +35,11 @@ public sealed class RowingClubWebApplicationFactory : WebApplicationFactory<Rowi
         builder.UseSetting("FieldEncryption:Keys:1", "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=");
         builder.UseSetting("FieldEncryption:BlindIndexKey", "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=");
 
-        builder.UseSetting("Mongo:ConnectionString", "mongodb://unused:27017/unused?replicaSet=rs0");
+        builder.UseSetting("Mongo:Host", "unused");
+        builder.UseSetting("Mongo:Port", "27017");
         builder.UseSetting("Mongo:DatabaseName", "unused");
-        builder.UseSetting("ConnectionStrings:Redis", "unused:6379,abortConnect=false");
+        builder.UseSetting("Redis:Host", "unused");
+        builder.UseSetting("Redis:Port", "6379");
 
         builder.ConfigureServices(services =>
         {
