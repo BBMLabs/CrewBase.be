@@ -1,6 +1,6 @@
 namespace RowingClub.Identity.Infrastructure.Persistence;
 
-public static class IdentityMongoCollectionNames
+public static class IdentityTableNames
 {
     public const string Users = "identity_users";
     public const string Credentials = "identity_credentials";

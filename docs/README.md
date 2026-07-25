@@ -13,9 +13,9 @@ Bu dizin, **RowingClub** (repo: `CrewBase.be`) kürek kulübü yönetim platform
 | Dosya | İçerik |
 |---|---|
 | [DEVELOPMENT.md](./DEVELOPMENT.md) | Lokal geliştirme kurulumu, gerekli SDK'lar, environment değişkenleri, Docker Compose, migration, test komutları, seed data, kod standartları, yeni özellik ekleme adımları |
-| [ARCHITECTURE.md](./ARCHITECTURE.md) | Sistem bağlamı, bounded context'ler, katman sorumlulukları, DDD/CQRS yaklaşımı, tenant çözümleme akışı, outbox/inbox akışı, MongoDB veri modeli |
+| [ARCHITECTURE.md](./ARCHITECTURE.md) | Sistem bağlamı, bounded context'ler, katman sorumlulukları, DDD/CQRS yaklaşımı, tenant çözümleme akışı, outbox/inbox akışı, PostgreSQL/EF Core veri modeli |
 | [SECURITY.md](./SECURITY.md) | Authentication, authorization modeli, secret yönetimi, alan bazlı şifreleme, key rotation, threat model, OWASP kontrolleri, audit, rate limiting, PII |
-| [DATA_MODEL.md](./DATA_MODEL.md) | Modül bazlı aggregate/entity listesi, MongoDB koleksiyonları, indeksler, `$jsonSchema` doğrulama |
+| [DATA_MODEL.md](./DATA_MODEL.md) | Modül bazlı aggregate/entity listesi, PostgreSQL tabloları, indeksler, EF Core migration'ları |
 | [ODATA.md](./ODATA.md) | OData güvenlik kuralları: allow-list query option'lar, `$expand` kısıtı, maksimum `$top`, tenant filtresi zorunluluğu |
 | [OBSERVABILITY.md](./OBSERVABILITY.md) | Log formatı ve zorunlu alanlar, metric listesi, trace span'leri, Grafana dashboard'ları, correlation id yayılımı |
 | [DEPLOYMENT.md](./DEPLOYMENT.md) | Environment yapılandırması, secret injection, Docker/production deployment, migration/rollback, backup/restore, health check |

@@ -1,12 +1,14 @@
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Diagnostics.HealthChecks;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
-using MongoDB.Driver;
+using Npgsql;
 using RowingClub.BuildingBlocks.Application.Abstractions;
 using RowingClub.BuildingBlocks.Infrastructure.Idempotency;
-using RowingClub.BuildingBlocks.Infrastructure.Mongo;
-using RowingClub.BuildingBlocks.Infrastructure.Mongo.Migrations;
 using RowingClub.BuildingBlocks.Infrastructure.Observability;
+using RowingClub.BuildingBlocks.Infrastructure.Postgres;
 using StackExchange.Redis;
 
 namespace RowingClub.BuildingBlocks.Infrastructure;
@@ -15,8 +17,8 @@ public static class DependencyInjection
 {
     /// <summary>
     /// Registers the cross-cutting infrastructure shared by every module: correlation id, Redis
-    /// (idempotency), and the single MongoDB client/database + unit-of-work/migration machinery
-    /// every module's repositories build on.
+    /// (idempotency), and the single PostgreSQL/EF Core DbContext + unit-of-work/migration
+    /// machinery every module's repositories build on.
     /// </summary>
     public static IServiceCollection AddRowingClubInfrastructure(
         this IServiceCollection services,
@@ -52,32 +54,27 @@ public static class DependencyInjection
 
         services.AddSingleton<IIdempotencyStore, RedisIdempotencyStore>();
 
-        MongoBsonConfiguration.EnsureConfigured();
-
         services
-            .AddOptions<MongoOptions>()
-            .Bind(configuration.GetSection(MongoOptions.SectionName))
+            .AddOptions<PostgresOptions>()
+            .Bind(configuration.GetSection(PostgresOptions.SectionName))
             .ValidateDataAnnotations()
             .ValidateOnStart();
 
-        services.AddSingleton<IMongoClient>(provider =>
-        {
-            var options = provider.GetRequiredService<IOptions<MongoOptions>>().Value;
-            return new MongoClient(options.ConnectionString);
-        });
-
         services.AddSingleton(provider =>
         {
-            var options = provider.GetRequiredService<IOptions<MongoOptions>>().Value;
-            return provider.GetRequiredService<IMongoClient>().GetDatabase(options.DatabaseName);
+            var options = provider.GetRequiredService<IOptions<PostgresOptions>>().Value;
+            return NpgsqlDataSource.Create(options.ConnectionString);
         });
 
-        services.AddScoped<IMongoUnitOfWork, MongoUnitOfWork>();
-        services.AddScoped<IUnitOfWork>(provider => provider.GetRequiredService<IMongoUnitOfWork>());
+        services.AddDbContext<RowingClubDbContext>((provider, options) =>
+            options.UseNpgsql(provider.GetRequiredService<NpgsqlDataSource>()));
 
-        services.AddSingleton<MongoMigrationRunner>();
-        services.AddSingleton<IMongoMigration, CoreCollectionsMigration>();
-        services.AddHostedService<MongoMigrationHostedService>();
+        services.AddScoped<IUnitOfWork, EfUnitOfWork>();
+        services.AddHostedService<EfMigrationHostedService>();
+
+        services
+            .AddHealthChecks()
+            .AddCheck<PostgresHealthCheck>("postgres");
 
         return services;
     }

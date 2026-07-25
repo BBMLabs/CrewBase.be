@@ -92,16 +92,16 @@ Genel kurallar:
 - Refresh token düz metin saklanmaz (hashlenir).
 - Veritabanı yedekleri şifrelenir.
 
-### MongoDB'ye Özgü Veri Deposu Güvenliği
+### PostgreSQL'e Özgü Veri Deposu Güvenliği
 
-Platformun tek veri deposu MongoDB olduğundan (bkz. [adr/0002-mongodb-tek-veritabani-stratejisi.md](./adr/0002-mongodb-tek-veritabani-stratejisi.md)), alan bazlı şifrelemeye ek olarak şu önlemler uygulanır:
+Platformun tek veri deposu PostgreSQL olduğundan (bkz. [adr/0004-postgresql-tek-veritabani-stratejisi.md](./adr/0004-postgresql-tek-veritabani-stratejisi.md)), alan bazlı şifrelemeye ek olarak şu önlemler uygulanır:
 
-- **Encryption at rest**: yönetilen (managed) bir MongoDB servisi kullanılıyorsa servisin yerleşik disk şifrelemesi; self-hosted bir replica set'te dosya sistemi/disk düzeyinde şifreleme (ör. LUKS) zorunludur. Bu, §4'teki alan bazlı şifrelemenin **yerine geçmez**, onu tamamlar — alan bazlı şifreleme uygulama kodundaki bir sızıntıya karşı da koruma sağlarken, encryption at rest yalnızca disk/yedek erişimine karşı korur.
-- **Replica set kimlik doğrulaması**: production replica set'i keyfile veya x.509 tabanlı internal authentication ile çalışır; client bağlantı stringi kimlik bilgisi taşır ve diğer secret'lar gibi asla loglanmaz (bkz. §3).
-- **Ağ izolasyonu**: MongoDB'ye erişim özel bir ağ/subnet (VPC, security group) ile sınırlandırılır; replica set node'ları public internet'e açık çalıştırılmaz, yalnızca `api` servisi ve yönetim araçları erişebilir.
-- **Yetkilendirilmiş roller**: uygulamanın kullandığı MongoDB kullanıcısı yalnızca ilgili veritabanı üzerinde `readWrite` yetkisine sahiptir; cluster-admin yetkileri operasyonel/insan kullanıcılarına ayrılır.
+- **Encryption at rest**: yönetilen (managed) bir PostgreSQL servisi kullanılıyorsa servisin yerleşik disk şifrelemesi; self-hosted bir sunucuda dosya sistemi/disk düzeyinde şifreleme (ör. LUKS) zorunludur. Bu, §4'teki alan bazlı şifrelemenin **yerine geçmez**, onu tamamlar — alan bazlı şifreleme uygulama kodundaki bir sızıntıya karşı da koruma sağlarken, encryption at rest yalnızca disk/yedek erişimine karşı korur.
+- **Bağlantı kimlik doğrulaması**: production sunucusuna erişim kullanıcı adı/parola (veya sertifika tabanlı) authentication ile korunur; client bağlantı stringi kimlik bilgisi taşır ve diğer secret'lar gibi asla loglanmaz (bkz. §3). Bağlantılar TLS ile şifrelenir.
+- **Ağ izolasyonu**: PostgreSQL'e erişim özel bir ağ/subnet (VPC, security group) ile sınırlandırılır; sunucu public internet'e açık çalıştırılmaz, yalnızca `api` servisi ve yönetim araçları erişebilir.
+- **Yetkilendirilmiş roller**: uygulamanın kullandığı PostgreSQL rolü yalnızca ilgili veritabanı üzerinde gerekli DML/DDL (migration'lar için) yetkisine sahiptir; superuser/cluster-admin yetkileri operasyonel/insan kullanıcılarına ayrılır — MongoDB'nin `readWrite` rolünün doğrudan karşılığı.
 
-Rasyonel için bkz. [adr/0003-tenant-izolasyon-stratejisi.md](./adr/0003-tenant-izolasyon-stratejisi.md) (tenant izolasyonu) ve ilgili şifreleme ADR'i eklendiğinde referans verilecektir.
+Rasyonel için bkz. [adr/0003-tenant-izolasyon-stratejisi.md](./adr/0003-tenant-izolasyon-stratejisi.md) (tenant izolasyonu) ve [adr/0004-postgresql-tek-veritabani-stratejisi.md](./adr/0004-postgresql-tek-veritabani-stratejisi.md) (veri deposu seçimi); ilgili şifreleme ADR'i eklendiğinde referans verilecektir.
 
 ## 5. Key Rotation
 
@@ -113,13 +113,13 @@ Rasyonel için bkz. [adr/0003-tenant-izolasyon-stratejisi.md](./adr/0003-tenant-
 
 | Tehdit | Karşı Önlem |
 |---|---|
-| Tenant ID manipülasyonu (başka kulübün verisine erişim) | Header'daki `X-Club-Id` sunucu tarafında üyelikle doğrulanır; route/header/context tutarlılığı kontrol edilir; `MongoUnitOfWork.Track()` her `ITenantOwned` aggregate'i izlemeye alırken `ICurrentTenant`'a karşı doğrular |
+| Tenant ID manipülasyonu (başka kulübün verisine erişim) | Header'daki `X-Club-Id` sunucu tarafında üyelikle doğrulanır; route/header/context tutarlılığı kontrol edilir; `RowingClubDbContext.SaveChangesAsync` değişen her `ITenantOwned` entity'yi `ICurrentTenant`'a karşı doğrular (yazma anında; okuma yolunda tenant filtresi repository sorgularının sorumluluğundadır — bkz. [adr/0003-tenant-izolasyon-stratejisi.md](./adr/0003-tenant-izolasyon-stratejisi.md)) |
 | IDOR (tahmin edilebilir ID ile başka kullanıcının kaynağına erişim) | Handler seviyesinde kaynak sahipliği kontrolü; GUID kullanımı; yetkisiz erişimde 403 veya güvenli 404 |
 | Refresh token çalınması / replay | Rotation + reuse detection + token family iptali; hashlenmiş saklama |
 | Brute-force / credential stuffing | Rate limiting, hesap kilitleme, gecikmeli/loglanan başarısız giriş denemeleri |
 | Hassas veri sızıntısı (loglar, hata mesajları) | Log maskeleme, production'da stack trace döndürülmemesi, Problem Details standardı |
 | Yetki yükseltme (privilege escalation) | Deny-by-default policy modeli, çok katmanlı authorization kontrolü (rol + tenant + permission + sahiplik + iş kuralı) |
-| Injection (NoSQL) | MongoDB.Driver'ın tip güvenli, parametreli `Builders<T>.Filter` API'si (serbest string/BSON birleştirme yapılmaz), girdi validation |
+| Injection (SQL) | EF Core'un parametreli LINQ sorguları (serbest string birleştirme veya raw SQL yapılmaz), girdi validation |
 | Man-in-the-middle | TLS zorunluluğu, güvenli header'lar (HSTS) |
 | Idempotency ihlali (çift işlem) | `Idempotency-Key` header'ı ve idempotency pipeline behavior |
 | Platform Admin yetkisinin kötüye kullanımı | Bypass işlemleri özel policy + zorunlu audit kaydı gerektirir |
@@ -131,7 +131,7 @@ Kontroller OWASP API Security Top 10 ve ASVS ile hizalıdır: broken object leve
 ## 8. Audit Logging
 
 - Tüm önemli kullanıcı işlemleri (yaratma, güncelleme, silme, rol değişikliği, Platform Admin bypass'ları) audit edilir.
-- Audit kayıtları DB tabanlı tutulur (yalnızca Serilog dosya logu yeterli değildir) — platformun tek veri deposu MongoDB'de, ayrı bir audit koleksiyonu ile saklanır (henüz implemente edilmedi; ilgili modülün geliştirmesiyle birlikte `docs/DATA_MODEL.md`'e eklenecektir).
+- Audit kayıtları DB tabanlı tutulur (yalnızca Serilog dosya logu yeterli değildir) — platformun tek veri deposu PostgreSQL'de, ayrı bir audit tablosu ile saklanır (henüz implemente edilmedi; ilgili modülün geliştirmesiyle birlikte `docs/DATA_MODEL.md`'e eklenecektir).
 - Audit kaydı en az şunları içerir: kim, ne zaman, hangi tenant'ta, hangi işlemi, hangi kaynak üzerinde, önceki/sonraki durum (mümkünse), correlation id.
 - Audit gereksinimi her endpoint dokümantasyonunda (`API_ENDPOINTS.md`) ayrı bir alan olarak işaretlenir.
 

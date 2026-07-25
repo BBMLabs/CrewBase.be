@@ -1,8 +1,10 @@
 # 0002 — MongoDB Tek Veritabanı Stratejisi
 
+> **SUPERSEDED.** Bu ADR **artık geçerli değildir**; yerini [adr/0004-postgresql-tek-veritabani-stratejisi.md](./0004-postgresql-tek-veritabani-stratejisi.md) almıştır — platform, MongoDB'den PostgreSQL + EF Core'a taşınmıştır. Bu dosya, o dönemdeki kararın gerekçesini ve bağlamını **tarihsel kayıt olarak** korumak amacıyla değiştirilmeden bırakılmıştır; aşağıdaki içerik güncel mimariyi yansıtmaz.
+
 ## Durum
 
-Kabul edildi. **Bu ADR, önceki "0002 — Oracle ve MongoDB'nin Birlikte Kullanımı" kararının yerine geçer (supersedes)** — Oracle+MongoDB'yi birlikte kullanma kararı tamamen iptal edilmiştir; bu dosya aynı ADR numarasını (0002) taşımaya devam eder, eski dosya kaldırılmıştır.
+~~Kabul edildi.~~ **Superseded** (bkz. yukarıdaki not). **Bu ADR, önceki "0002 — Oracle ve MongoDB'nin Birlikte Kullanımı" kararının yerine geçmişti (supersedes)** — Oracle+MongoDB'yi birlikte kullanma kararı tamamen iptal edilmiştir; bu dosya aynı ADR numarasını (0002) taşımaya devam eder, eski dosya kaldırılmıştır.
 
 ## Bağlam
 

@@ -8,7 +8,7 @@ Bu doküman RowingClub backend'inde lokal geliştirme ortamının nasıl kurulac
 |---|---|
 | .NET SDK | .NET 10 (güncel LTS) |
 | Docker Desktop | Docker Compose v2 destekli |
-| MongoDB | Platformun tek veri deposu; Docker Compose üzerinden çalıştırılır (lokal kurulum gerekmez), `--replSet rs0` ile |
+| PostgreSQL | Platformun tek veri deposu; lokal geliştirmede `.env.developer`'daki `POSTGRES_*` değişkenleriyle işaret edilen bir sunucuya (uzak dev sunucusu veya lokal kurulum) bağlanılır — Testcontainers/Docker Compose gerekmez, tek node yeterlidir (replica set gibi bir gereklilik yoktur) |
 | Redis | Docker Compose üzerinden çalıştırılır |
 | IDE | Visual Studio 2022+ veya JetBrains Rider (nullable reference types ve `TreatWarningsAsErrors` desteği açık olmalı) |
 
@@ -26,8 +26,11 @@ Ana geliştirme talimatının 10. bölümüne göre secret'lar `.env.developer` 
 
 ```dotenv
 APP_ENV=Development
-MONGODB_CONNECTION_STRING=
-MONGODB_DATABASE_NAME=rowingclub
+POSTGRES_HOST=
+POSTGRES_PORT=5432
+POSTGRES_DATABASE_NAME=rowingclub
+POSTGRES_USERNAME=
+POSTGRES_PASSWORD=
 REDIS_CONNECTION_STRING=
 JWT_ISSUER=
 JWT_AUDIENCE=
@@ -49,13 +52,13 @@ Kurallar:
 - Uygulama, zorunlu bir secret eksikse **fail-fast** davranmalıdır (başlatmayı reddetmelidir).
 - Secret değerleri hiçbir koşulda loglanmaz.
 - JWT imzalama RS256 veya ES256 ile yapılır; `kid` claim'i ile key rotation desteklenir.
-- `MONGODB_CONNECTION_STRING` **`replicaSet=rs0`** (veya eşdeğeri) içermek zorundadır — `MongoUnitOfWork` her `SaveChangesAsync` çağrısında multi-document transaction açar, standalone bir `mongod` bunu desteklemez (bkz. [ARCHITECTURE.md §9.1](./ARCHITECTURE.md#9-mongodb-veri-modeli)). Örnek: `mongodb://mongodb:27017/rowingclub?replicaSet=rs0`.
+- `POSTGRES_HOST`/`POSTGRES_PORT`/`POSTGRES_DATABASE_NAME`/`POSTGRES_USERNAME`/`POSTGRES_PASSWORD`, `EnvironmentConfigurationExtensions` tarafından `Postgres:*` config anahtarlarına map'lenir; gerçek Npgsql bağlantı stringi bu parçalardan `PostgresOptions.ConnectionString` içinde inşa edilir. PostgreSQL tek node üzerinde bile gerçek ACID transaction desteği sağladığından, MongoDB'deki gibi bir `replicaSet=rs0` gerekliliği **yoktur** (bkz. [ARCHITECTURE.md §9](./ARCHITECTURE.md#9-postgresql-ve-ef-core-veri-modeli)).
 
 Detaylı açıklamalar için bkz. [SECURITY.md](./SECURITY.md#secret-yönetimi).
 
 ## 3. Docker Compose ile Ayağa Kaldırma
 
-Destek servisleri (`api`, `mongodb`, `redis`, `prometheus`, `grafana`) `deploy/docker/docker-compose.yml` altında tanımlıdır. `mongodb` servisi `--replSet rs0` ile başlar; healthcheck'i ilk ayağa kalkışta tek node'luk replica set'i idempotent şekilde initiate eder, ayrıca bir kurulum adımı gerekmez. Genel kullanım şekli:
+Destek servisleri (`api`, `redis`, `prometheus`, `grafana`) `deploy/docker/docker-compose.yml` altında tanımlıdır. PostgreSQL, `.env.developer`'daki `POSTGRES_*` değişkenleriyle işaret edilen bir sunucu üzerinden kullanılır — tek node yeterlidir, MongoDB'deki gibi bir replica set kurulumuna gerek yoktur. Genel kullanım şekli:
 
 ```powershell
 docker compose -f deploy/docker/docker-compose.yml up -d
@@ -67,20 +70,28 @@ Servis listesi ve amaçları için bkz. [DEPLOYMENT.md](./DEPLOYMENT.md).
 
 ## 4. Migration Çalıştırma
 
-Manuel bir migration komutu **yoktur** — EF Core kullanılmıyor. Migration'lar `IMongoMigration` implementasyonlarıdır; DI'a kayıtlıdırlar ve `MongoMigrationHostedService`, API host'u başlarken (istek almadan önce) hepsini `Version`'a göre sırayla, henüz uygulanmamış olanları `schema_migrations` koleksiyonundan tespit ederek otomatik çalıştırır. Lokal geliştirmede `dotnet run` veya `docker compose up` ile API'yi başlatmak yeterlidir — ayrı bir "migration çalıştır" adımı gerekmez.
+Migration'lar **EF Core Migrations** ile yönetilir; `IMongoMigration`/`MongoMigrationRunner`/`MongoMigrationHostedService` sistemi tamamen kaldırılmıştır. Migration dosyaları `src/BuildingBlocks/RowingClub.BuildingBlocks.Infrastructure/Postgres/Migrations/` altında tutulur (ilki `InitialCreate`) ve uygulama başlangıcında `EfMigrationHostedService`, API host'u istek almaya başlamadan önce `context.Database.MigrateAsync()` çağırarak henüz uygulanmamış migration'ları (EF'in kendi `__EFMigrationsHistory` tablosundan tespit ederek) otomatik uygular. Lokal geliştirmede `dotnet run` ile API'yi başlatmak yeterlidir — ayrı bir "migration çalıştır" adımı gerekmez.
 
 Yeni bir migration eklemek için:
 
-1. İlgili modülün `Infrastructure/Persistence` klasöründe `IMongoMigration`'ı implemente eden bir sınıf yazın (`Version`, `Name`, `ExecuteAsync(IMongoDatabase, CancellationToken)`).
-2. `Version` için modülünüze ayrılmış aralıktaki bir sonraki numarayı kullanın (bkz. [DATA_MODEL.md — Migration Versiyon Aralıkları](./DATA_MODEL.md#migration-versiyon-aralıkları); örn. Identity 100-199).
-3. `ExecuteAsync` içinde koleksiyonu (yoksa) bir `$jsonSchema` validator'ıyla oluşturun ve gerekli indeksleri kurun — idempotent yazın (`CreateCollectionAsync` öncesi `ListCollectionNamesAsync` ile varlık kontrolü, bkz. `IdentityCollectionsMigration` örneği).
-4. Yeni sınıfı modülün DI kayıtlarına `services.AddSingleton<IMongoMigration, YeniMigrasyon>()` olarak ekleyin.
-5. **Zaten yayınlanmış bir migration'ı asla değiştirmeyin** — bir düzeltme gerekiyorsa yeni bir versiyon numarasıyla ayrı bir migration ekleyin (bkz. [DEPLOYMENT.md §6 Rollback](./DEPLOYMENT.md#6-rollback) — fix-forward yaklaşımı).
+1. İlgili modülün Infrastructure katmanında entity mapping'ini bir `IEntityTypeConfiguration<T>` sınıfı olarak yazın/güncelleyin (modül assembly'si, DI kaydındaki `PersistenceAssemblyMarker` üzerinden zaten `RowingClubDbContext`'e bağlıdır — bkz. [ARCHITECTURE.md §9](./ARCHITECTURE.md#9-postgresql-ve-ef-core-veri-modeli)).
+2. Model değişikliğinden EF Core'un otomatik olarak diff üretmesi için şu komutu çalıştırın:
+
+   ```powershell
+   dotnet ef migrations add <Ad> `
+     --project src/BuildingBlocks/RowingClub.BuildingBlocks.Infrastructure/RowingClub.BuildingBlocks.Infrastructure.csproj `
+     --startup-project src/RowingClub.Api/RowingClub.Api.csproj `
+     --context RowingClub.BuildingBlocks.Infrastructure.Postgres.RowingClubDbContext
+   ```
+
+3. Üretilen migration dosyasını (`Up`/`Down` metotları) gözden geçirin — EF'in otomatik diff'i genelde doğrudur ama özellikle veri taşıyan (data migration) veya isim değişikliği içeren senaryolarda elle düzeltme gerekebilir.
+4. Uygulamayı `dotnet run` ile başlatmak migration'ı otomatik uygular; manuel olarak uygulamak isterseniz `dotnet ef database update` (aynı `--project`/`--startup-project`/`--context` parametreleriyle) kullanılabilir.
+5. **Zaten yayınlanmış (production'a gitmiş) bir migration'ı asla değiştirmeyin** — bir düzeltme gerekiyorsa yeni bir migration ekleyin (bkz. [DEPLOYMENT.md §6 Rollback](./DEPLOYMENT.md#6-rollback)).
 
 Kurallar:
 
 - Migration gerektiren bir domain değişikliği migration'sız merge edilemez (bkz. CI/CD kalite kapıları).
-- Integration testleri (`MongoIdentityFixture` gibi) migration'ları Testcontainers ile açılan geçici bir MongoDB replica set'ine karşı gerçekten çalıştırarak doğrular — ayrı bir "migration validation" CI adımına ihtiyaç yoktur, normal test koşusu yeterlidir.
+- Integration testleri (`PostgresIdentityFixture`) `.env.developer`'daki ile aynı uzak dev PostgreSQL sunucusuna bağlanır (Docker/Testcontainers **kullanılmaz**), ayrı bir `rowingclub_tests` veritabanını her test koşusunda drop+create edip gerçek EF Core migration'larıyla (`Database.MigrateAsync()`) migrate ederek doğrular — böylece test şeması hiçbir zaman production'dan sapmaz; ayrı bir "migration validation" CI adımına ihtiyaç yoktur, normal test koşusu yeterlidir.
 
 ## 5. Test Komutları
 
@@ -89,7 +100,7 @@ Beş test projesi bulunur, hepsi `RowingClub.sln` altında derlenir:
 | Proje | Amaç |
 |---|---|
 | `tests/RowingClub.UnitTests` | Domain kuralları, handler, validator, authorization handler testleri |
-| `tests/RowingClub.IntegrationTests` | MongoDB repository (`IMongoUnitOfWork`, migration'lar), outbox, tenant filter, encryption, refresh token rotation, idempotency, optimistic concurrency |
+| `tests/RowingClub.IntegrationTests` | PostgreSQL repository (`RowingClubDbContext`, EF Core migration'lar), outbox, tenant filter, encryption, refresh token rotation, idempotency, optimistic concurrency |
 | `tests/RowingClub.FunctionalTests` | Gerçek HTTP request üzerinden authentication, role-policy, tenant isolation, validation, Problem Details, rate limiting, OData sınırları |
 | `tests/RowingClub.ArchitectureTests` | NetArchTest ile katman ve modül bağımlılık kuralları |
 | `tests/RowingClub.SecurityTests` | Token yok/yanlış rol/yanlış tenant/IDOR/tenant manipülasyonu güvenlik regresyon testleri |
@@ -108,7 +119,7 @@ dotnet test tests/RowingClub.ArchitectureTests/RowingClub.ArchitectureTests.cspr
 dotnet test RowingClub.sln --collect:"XPlat Code Coverage"
 ```
 
-Integration testleri Testcontainers ile geçici MongoDB (Testcontainers'ın `MongoDbBuilder`'ı, tek-node replica set önceden initiate edilmiş halde) ve Redis konteynerleri açar; Docker Desktop'ın çalışıyor olması gerekir.
+Integration testleri, PostgreSQL için Testcontainers/Docker **kullanmaz** — `PostgresIdentityFixture`, `.env.developer`'daki ile aynı uzak dev PostgreSQL sunucusuna bağlanır ve ayrı bir `rowingclub_tests` veritabanını her koşuda drop+create edip gerçek EF Core migration'larıyla migrate eder (bkz. §4). Eski `MongoIdentityFixture`'ın Testcontainers.MongoDb bağımlılığı bu geçişle birlikte tamamen kaldırıldı.
 
 ## 6. Seed Data Yaklaşımı
 
@@ -139,7 +150,7 @@ Ana geliştirme talimatının 27. bölümünde tanımlanan 16 adımlık süreç 
 5. `docs/AUTHORIZATION_MATRIX.md` içinde rol ve policy taslağını oluştur.
 6. Domain modelini (entity, aggregate, value object, domain event, domain service) geliştir.
 7. Application katmanında command/query, handler ve validator'ları geliştir.
-8. Infrastructure implementasyonunu (Mongo repository, gerekiyorsa yeni `IMongoMigration`, outbox, adaptörler) geliştir.
+8. Infrastructure implementasyonunu (PostgreSQL/EF Core repository, entity konfigürasyonu, gerekiyorsa yeni bir EF Core migration'ı, outbox, adaptörler) geliştir.
 9. Minimal API endpoint'ini `RowingClub.Api` altında route group olarak ekle.
 10. Authorization ve tenant güvenliğini uygula (policy + handler seviyesi kaynak kontrolü + `ICurrentTenant`/`ICurrentUser`).
 11. Unit, integration, functional ve security testlerini yaz.

@@ -68,8 +68,9 @@ public sealed class AuthEndpointFunctionalTests(RowingClubWebApplicationFactory 
         using var isolatedFactory = new RowingClubWebApplicationFactory();
         using var client = isolatedFactory.CreateClient();
 
-        // Empty credentials fail FluentValidation before ever touching Mongo, so this stays fast
-        // regardless of database reachability - only the rate limiter's behavior is under test.
+        // Empty credentials fail FluentValidation before ever touching the database, so this
+        // stays fast regardless of database reachability - only the rate limiter's behavior is
+        // under test.
         HttpResponseMessage? lastResponse = null;
         for (var i = 0; i < 15; i++)
         {

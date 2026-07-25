@@ -7,12 +7,12 @@ RowingClub, Docker Compose ile ayağa kaldırılabilecek şekilde tasarlanmışt
 | Servis | Amaç |
 |---|---|
 | `api` | RowingClub.Api — ASP.NET Core Minimal API host'u |
-| `mongodb` | MongoDB — platformun **tek** veri deposu; `--replSet rs0` ile çalışır, healthcheck ilk ayağa kalkışta tek node'luk replica set'i idempotent şekilde initiate eder (bkz. [ARCHITECTURE.md §9](./ARCHITECTURE.md#9-mongodb-veri-modeli)) |
+| `postgresql` | PostgreSQL — platformun **tek** veri deposu; tek node üzerinde gerçek ACID transaction desteği sağlar, MongoDB'deki gibi bir replica set kurulumu gerekmez (bkz. [ARCHITECTURE.md §9](./ARCHITECTURE.md#9-postgresql-ve-ef-core-veri-modeli)) |
 | `redis` | Dağıtık cache, idempotency, rate limiting verisi, distributed lock |
 | `prometheus` | Metric toplama |
 | `grafana` | Dashboard ve görselleştirme |
 
-Oracle veya başka bir ilişkisel veritabanı servisi yoktur — mimari kararın gerekçesi için bkz. [adr/0002-mongodb-tek-veritabani-stratejisi.md](./adr/0002-mongodb-tek-veritabani-stratejisi.md). Bu doküman `docker-compose.yml`'in kesin içeriğini tekrarlamaz, deployment stratejisinin genel kurallarını tanımlar; production'da `docker-compose.yml`'in kendisi (yalnızca lokal geliştirme için, sertleştirme içermez) kullanılmaz — bkz. dosyanın başındaki uyarı notu.
+Oracle veya MongoDB gibi başka bir veritabanı servisi yoktur — mimari kararın gerekçesi için bkz. [adr/0004-postgresql-tek-veritabani-stratejisi.md](./adr/0004-postgresql-tek-veritabani-stratejisi.md). Bu doküman `docker-compose.yml`'in kesin içeriğini tekrarlamaz, deployment stratejisinin genel kurallarını tanımlar; production'da `docker-compose.yml`'in kendisi (yalnızca lokal geliştirme için, sertleştirme içermez) kullanılmaz — bkz. dosyanın başındaki uyarı notu.
 
 ## 2. Environment Yapılandırması
 
@@ -45,31 +45,31 @@ Kurallar:
 
 ## 5. Migration Stratejisi
 
-- Migration'lar **otomatik** çalışır: `MongoMigrationHostedService`, DI'a kayıtlı tüm `IMongoMigration` implementasyonlarını (`IEnumerable<IMongoMigration>`, tüm modüllerden toplanır) `Version`'a göre sıralayıp API host'u istek almaya başlamadan önce çalıştırır. Zaten uygulanmış versiyonlar `schema_migrations` koleksiyonundaki kayıttan tespit edilip atlanır — aynı migration seti her deploy'da güvenle tekrar çalıştırılabilir (idempotent).
-- `dotnet ef database update` gibi manuel/ayrı bir migration adımı **yoktur** — EF Core kullanılmıyor. Bir migration'ın uygulanıp uygulanmadığını görmek için `schema_migrations` koleksiyonu sorgulanır.
-- Her migration, bir koleksiyonu (yoksa) `$jsonSchema` validator'ıyla oluşturur ve ilgili indeksleri kurar; migration versiyon aralıkları modül başına ayrılmıştır (bkz. [DATA_MODEL.md](./DATA_MODEL.md#migration-versiyon-aralıkları)).
-- Migration gerektiren bir domain değişikliği migration'sız merge edilemez; zaten yayınlanmış bir migration'ın içeriği **asla değiştirilmez** — bir düzeltme gerekiyorsa yeni, bir sonraki versiyon numarasıyla migration eklenir (EF Core migration'larındaki disiplinin aynısı).
-- Geriye dönük uyumluluk: mümkün olduğunca **expand/contract** deseni izlenir (önce yeni alan eklenir ve iki sürüm kod tarafından da desteklenir, eski alan daha sonraki bir sürümde temizlenir) — böylece rolling deployment sırasında eski/yeni kod aynı doküman şekliyle çalışabilir. MongoDB'nin şemasız doğası bunu SQL'e göre kolaylaştırır: yeni alan eklemek var olan dokümanları etkilemez, `$jsonSchema`'daki `required` listesi yalnızca yeni yazılan dokümanlar için geçerlidir.
+- Migration'lar **otomatik** çalışır: `EfMigrationHostedService`, API host'u istek almaya başlamadan önce `context.Database.MigrateAsync()` çağırarak henüz uygulanmamış EF Core migration'larını sırayla uygular. Zaten uygulanmış migration'lar EF'in kendi `__EFMigrationsHistory` tablosundaki kayıttan tespit edilip atlanır — aynı migration seti her deploy'da güvenle tekrar çalıştırılabilir (idempotent).
+- Migration'lar **versiyonlu SQL migration'larıdır**: `dotnet ef migrations add <Ad>` ile üretilir, `src/BuildingBlocks/RowingClub.BuildingBlocks.Infrastructure/Postgres/Migrations/` altında dosya olarak saklanır ve koda commit edilir (bkz. [DATA_MODEL.md — EF Core Migrations](./DATA_MODEL.md#ef-core-migrations)). Manuel olarak uygulamak isteyen bir operatör `dotnet ef database update` çalıştırabilir, ancak normal akışta buna gerek yoktur — `EfMigrationHostedService` bunu otomatik yapar.
+- Her migration, ilgili modülün `IEntityTypeConfiguration<T>` tanımlarından EF Core tarafından otomatik üretilen bir diff'tir (tablo/sütun/indeks/foreign key oluşturma-değiştirme); modül başına ayrılmış manuel bir versiyon aralığı şeması **yoktur** — sıralama dosya adındaki timestamp'e göre, `__EFMigrationsHistory` tablosunca izlenir.
+- Migration gerektiren bir domain değişikliği migration'sız merge edilemez; zaten yayınlanmış (production'a gitmiş) bir migration'ın içeriği **asla değiştirilmez** — bir düzeltme gerekiyorsa yeni bir migration eklenir.
+- Geriye dönük uyumluluk: mümkün olduğunca **expand/contract** deseni izlenir (önce yeni sütun eklenir ve iki sürüm kod tarafından da desteklenir, eski sütun daha sonraki bir sürümde temizlenir) — böylece rolling deployment sırasında eski/yeni kod aynı şemayla çalışabilir. SQL migration'ları MongoDB'nin şemasız dokümanlarının aksine sütun ekleme/kaldırmayı da versiyonlu bir adım olarak ele alır; `NOT NULL` bir sütun eklemek önce nullable + backfill + sonra `NOT NULL`'a geçiş gibi çok adımlı bir migration dizisi gerektirebilir.
 
 ## 6. Rollback
 
 - Container image'ları versiyonlanır (ör. semver veya commit SHA tag'i); bir dağıtımda sorun tespit edilirse bir önceki image tag'ine dönülür.
-- **Mongo migration'ları SQL migration'ları gibi geri alınamaz.** Bir `IMongoMigration` için "down" script'i yoktur — bir index'i düşürmek, bir `$jsonSchema` validator'ını gevşetmek veya bir alanı geri eski haline getirmek, önceki migration'ı geri almak yerine **fix-forward**: yeni bir versiyon numarasıyla düzeltici bir migration eklenir. Bu, migration'ların tek yönlü, sıralı bir geçmiş oluşturduğu `schema_migrations` modeliyle tutarlıdır.
-- Bu yüzden migration'lar mümkün olduğunca **geriye uyumlu ve additive** yazılır (expand/contract): bir önceki image tag'ine rollback edildiğinde, o eski kod hâlâ (migration'ın eklediği yeni alan/index'i görmezden gelerek) doğru çalışabilmelidir. Kod tarafında bir alanı zorunlu kılmadan önce, o alanı yazan migration'ın tüm production trafiğine yayılmış olduğundan emin olunur.
+- EF Core migration'ları teknik olarak `Down()` metoduyla geri alınabilir (`dotnet ef database update <öncekiMigrationAdı>`), ancak production'da bir migration'ı geri almak (özellikle veri kaybına yol açabilecek `DROP COLUMN`/`DROP TABLE` içeren migration'larda) riskli kabul edilir; tercih edilen yaklaşım hâlâ **fix-forward**: yeni bir migration ile düzeltme eklenir, önceki migration'ın kendisi geri alınmaz.
+- Bu yüzden migration'lar mümkün olduğunca **geriye uyumlu ve additive** yazılır (expand/contract): bir önceki image tag'ine rollback edildiğinde, o eski kod hâlâ (migration'ın eklediği yeni sütun/indeksi görmezden gelerek) doğru çalışabilmelidir. Kod tarafında bir sütunu zorunlu kılmadan önce, o sütunu yazan migration'ın tüm production trafiğine yayılmış olduğundan emin olunur.
 - Rollback öncesi, rollback edilecek sürümün outbox'ta bekleyen mesajlarla uyumluluğu (payload şeması) kontrol edilir.
 
 ## 7. Health Check
 
-- `api` servisi ASP.NET Core Health Checks middleware'i ile en az şu bağımlılıkları kontrol eden bir health endpoint'i sağlar: MongoDB bağlantısı, Redis bağlantısı.
+- `api` servisi ASP.NET Core Health Checks middleware'i ile en az şu bağımlılıkları kontrol eden bir health endpoint'i sağlar: PostgreSQL bağlantısı (`PostgresHealthCheck`, `SELECT 1` çalıştırır), Redis bağlantısı.
 - Liveness ve readiness ayrımı yapılır: liveness yalnızca process'in ayakta olduğunu, readiness ise bağımlılıkların (DB, cache) erişilebilir olduğunu doğrular.
 - Orkestrasyon katmanı (Docker Compose `healthcheck`, veya ileride Kubernetes probe'ları) bu endpoint'leri kullanarak trafik yönlendirme kararlarını verir.
 
 ## 8. Backup / Restore
 
-- MongoDB, platformun tek veri deposu olduğu için tüm iş verisi (kullanıcı, kulüp, üyelik, ders/randevu, paket, refresh token, outbox/inbox, bildirim, raporlama snapshot'ları, audit) burada tutulur; düzenli, otomatik ve **şifreli** yedekler alınır (bkz. [SECURITY.md](./SECURITY.md#4-alan-bazlı-şifreleme-field-level-encryption)). Production'da bir replica set kullanıldığından, oplog tabanlı point-in-time recovery değerlendirilmelidir.
+- PostgreSQL, platformun tek veri deposu olduğu için tüm iş verisi (kullanıcı, kulüp, üyelik, ders/randevu, paket, refresh token, outbox/inbox, bildirim, raporlama snapshot'ları, audit) burada tutulur; düzenli, otomatik ve **şifreli** yedekler alınır (bkz. [SECURITY.md](./SECURITY.md#4-alan-bazlı-şifreleme-field-level-encryption)). Mantıksal yedekleme için `pg_dump`/`pg_restore`, fiziksel/point-in-time recovery için `pg_basebackup` + WAL arşivleme genel PostgreSQL pratiğidir; bu repoda henüz somut bir yedekleme aracı/otomasyonu konfigüre edilmemiştir, seçilecek yaklaşım production altyapısı netleştikçe belirlenecektir.
 - Yedekten geri yükleme prosedürü periyodik olarak test edilir (tatbikat).
-- Refresh token, outbox ve idempotency verisi gibi kısa ömürlü/operasyonel koleksiyonlar için backup önceliği, kullanıcı/kulüp/paket gibi kalıcı iş verisine göre daha düşüktür; ancak reuse-detection ve audit bütünlüğü için bu koleksiyonlar yine de yedeklenir.
-- Restore sonrası, uygulamanın outbox/idempotency tutarlılığını (ör. yarım kalmış mesajların yeniden işlenmesi) doğru şekilde ele aldığından emin olunmalıdır — consumer'lar idempotent olduğu için bu senaryo güvenlidir. Restore edilen veritabanının bir replica set olarak (tek node dahi olsa `--replSet`) ayağa kalktığından emin olunmalıdır, aksi halde `MongoUnitOfWork`'ün transaction'ları çalışmaz.
+- Refresh token, outbox ve idempotency verisi gibi kısa ömürlü/operasyonel tablolar için backup önceliği, kullanıcı/kulüp/paket gibi kalıcı iş verisine göre daha düşüktür; ancak reuse-detection ve audit bütünlüğü için bu tablolar yine de yedeklenir.
+- Restore sonrası, uygulamanın outbox/idempotency tutarlılığını (ör. yarım kalmış mesajların yeniden işlenmesi) doğru şekilde ele aldığından emin olunmalıdır — consumer'lar idempotent olduğu için bu senaryo güvenlidir. Restore edilen veritabanının şemasının, uygulamanın beklediği EF Core migration seviyesiyle (`__EFMigrationsHistory`) uyumlu olduğundan emin olunmalıdır; gerekiyorsa restore sonrası `context.Database.MigrateAsync()` (uygulama başlangıcında zaten otomatik çalışır) eksik migration'ları tamamlar.
 
 ## 9. Gözlemlenebilirlik Entegrasyonu
 

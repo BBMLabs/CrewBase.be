@@ -20,15 +20,13 @@ public static class EnvironmentConfigurationExtensions
 
         var mapped = new Dictionary<string, string?>
         {
-            // The backend builds the actual mongodb:// connection string (with the mandatory
-            // replicaSet=rs0 - MongoUnitOfWork uses multi-document transactions, which a
-            // standalone mongod does not support, spec section 8/21) from these three pieces -
-            // see MongoOptions.ConnectionString.
-            ["Mongo:Host"] = Get("MONGODB_HOST"),
-            ["Mongo:Port"] = Get("MONGODB_PORT"),
-            ["Mongo:DatabaseName"] = Get("MONGODB_DATABASE_NAME") ?? "rowingclub",
-            ["Mongo:Username"] = Get("MONGODB_USERNAME"),
-            ["Mongo:Password"] = Get("MONGODB_PASSWORD"),
+            // The backend builds the actual Npgsql connection string from these pieces - see
+            // PostgresOptions.ConnectionString.
+            ["Postgres:Host"] = Get("POSTGRES_HOST"),
+            ["Postgres:Port"] = Get("POSTGRES_PORT"),
+            ["Postgres:DatabaseName"] = Get("POSTGRES_DATABASE_NAME") ?? "rowingclub",
+            ["Postgres:Username"] = Get("POSTGRES_USERNAME"),
+            ["Postgres:Password"] = Get("POSTGRES_PASSWORD"),
 
             ["Redis:Host"] = Get("REDIS_HOST"),
             ["Redis:Port"] = Get("REDIS_PORT"),

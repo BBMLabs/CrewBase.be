@@ -36,7 +36,7 @@ Prometheus formatında en az aşağıdaki metrikler üretilir:
 - Ders doluluk oranı
 - Outbox pending count
 - Outbox retry count
-- MongoDB erişim süreleri
+- PostgreSQL erişim süreleri
 - Background job başarısızlıkları
 
 Identity implementasyonu tamamlandıkça login/refresh/logout ile ilgili metrikler ilk olarak devreye girecektir; Scheduling/Packages metrikleri ilgili modüller implemente edildiğinde eklenecektir.
@@ -48,13 +48,13 @@ OpenTelemetry ile aşağıdaki span'ler izlenir:
 ```
 API request
  └─ MediatR handler (Command/Query)
-     ├─ MongoDB query (henüz otomatik span'lenmiyor - aşağıdaki nota bakın)
+     ├─ PostgreSQL query (henüz otomatik span'lenmiyor - aşağıdaki nota bakın)
      ├─ Redis (cache/idempotency/rate limit/lock)
      ├─ Outbox processing (background worker span'i, ayrı trace kökü olabilir)
      └─ Notification provider (e-posta/SMS/push adaptörü)
 ```
 
-**Not — MongoDB span'leri henüz yok:** `MongoDB.Driver` için resmi/stabil bir OpenTelemetry instrumentation paketi henüz mevcut değil (yalnızca community paketleri var); bu yüzden `OpenTelemetrySetup.AddRowingClubOpenTelemetry` şu an yalnızca ASP.NET Core ve `HttpClient` instrumentation'ını ekliyor, Mongo sorgu span'leri izlenmiyor (bkz. `RowingClub.BuildingBlocks.Observability/Telemetry/OpenTelemetrySetup.cs` içindeki kod yorumu). Stabil bir resmi paket çıktığında veya mevcut community paketi değerlendirilip kabul edildiğinde bu boşluk kapatılacaktır.
+**Not — PostgreSQL/EF Core span'leri henüz yok:** `OpenTelemetrySetup.AddRowingClubOpenTelemetry` şu an yalnızca ASP.NET Core ve `HttpClient` instrumentation'ını ekliyor; Npgsql/EF Core için henüz bir OpenTelemetry instrumentation paketi wire edilmedi, bu yüzden Postgres sorgu span'leri izlenmiyor (bkz. `RowingClub.BuildingBlocks.Observability/Telemetry/OpenTelemetrySetup.cs` içindeki kod yorumu). Uygun bir paket (ör. Npgsql'in kendi OpenTelemetry desteği) değerlendirilip kabul edildiğinde bu boşluk kapatılacaktır.
 
 Trace'ler `OTEL_EXPORTER_OTLP_ENDPOINT` üzerinden bir OTLP collector'a export edilir. Her span, ilgili `CorrelationId` ve tenant (`ClubId`) bilgisini attribute olarak taşır.
 
@@ -66,7 +66,7 @@ Provision edilmesi öngörülen dashboard'lar (`deploy/grafana/` altında, ilgil
 |---|---|
 | API genel görünüm | Toplam istek, status code dağılımı, throughput |
 | Hata ve latency | Hata oranı, p50/p95/p99 latency, endpoint bazlı yavaşlıklar |
-| Database | MongoDB sorgu süreleri, bağlantı havuzu durumu |
+| Database | PostgreSQL sorgu süreleri, bağlantı havuzu durumu |
 | Outbox | Pending/retry/dead-letter sayıları, işleme gecikmesi (lag) |
 | Authentication güvenliği | Login başarısızlıkları, hesap kilitlemeleri, refresh token reuse tespitleri |
 | Scheduling operasyonları | Randevu oluşturma/iptal oranı, doluluk oranı, bekleme listesi büyüklüğü |

@@ -25,8 +25,8 @@ public static class OpenTelemetrySetup
             .ConfigureResource(resource => resource.AddService(ServiceName))
             .WithTracing(tracing =>
             {
-                // No official OpenTelemetry MongoDB.Driver instrumentation package exists yet
-                // (community packages only) - Mongo query spans are added once one is stable.
+                // No Npgsql/EF Core OpenTelemetry instrumentation package is wired up yet -
+                // query spans are added once one is adopted.
                 tracing
                     .AddAspNetCoreInstrumentation()
                     .AddHttpClientInstrumentation();

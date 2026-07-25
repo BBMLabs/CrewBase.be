@@ -1,6 +1,6 @@
 using System.Text;
 
-namespace RowingClub.Api.Configuration;
+namespace RowingClub.BuildingBlocks.Infrastructure.Configuration;
 
 /// <summary>
 /// `.env.developer` / `.env.production` are only ever read by <c>docker compose --env-file</c> -
@@ -9,7 +9,9 @@ namespace RowingClub.Api.Configuration;
 /// dotenv file straight into the process's real environment variables (never overwriting a value
 /// that's already set - e.g. one exported by the shell or by docker-compose itself) so both ways
 /// of running the app behave the same. Supports the double-quoted, multi-line values this project
-/// uses for PEM keys.
+/// uses for PEM keys. Lives in BuildingBlocks.Infrastructure (not RowingClub.Api) so
+/// RowingClub.IntegrationTests can load real dev credentials for its Postgres fixture without a
+/// project reference to the API.
 /// </summary>
 public static class DotEnvFileLoader
 {

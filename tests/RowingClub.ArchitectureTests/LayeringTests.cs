@@ -47,7 +47,7 @@ public sealed class LayeringTests
     {
         var result = Types.InAssembly(assembly)
             .Should()
-            .NotHaveDependencyOnAny("MongoDB.Driver")
+            .NotHaveDependencyOnAny("Npgsql", "Microsoft.EntityFrameworkCore")
             .GetResult();
 
         result.IsSuccessful.Should().BeTrue(FormatFailures(result));
@@ -56,7 +56,7 @@ public sealed class LayeringTests
     [Fact]
     public void Identity_infrastructure_should_not_depend_on_other_modules()
     {
-        var assembly = typeof(RowingClub.Identity.Infrastructure.Repositories.MongoUserRepository).Assembly;
+        var assembly = typeof(RowingClub.Identity.Infrastructure.Repositories.UserRepository).Assembly;
 
         var result = Types.InAssembly(assembly)
             .Should()
@@ -71,7 +71,7 @@ public sealed class LayeringTests
     [Fact]
     public void Api_layer_types_should_not_be_referenced_from_any_module_infrastructure()
     {
-        var assembly = typeof(RowingClub.Identity.Infrastructure.Repositories.MongoUserRepository).Assembly;
+        var assembly = typeof(RowingClub.Identity.Infrastructure.Repositories.UserRepository).Assembly;
 
         var result = Types.InAssembly(assembly)
             .Should()

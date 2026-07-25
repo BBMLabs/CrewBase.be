@@ -1,10 +1,10 @@
 namespace RowingClub.BuildingBlocks.Infrastructure.Outbox;
 
 /// <summary>
-/// Written in the same MongoDB multi-document transaction as the business data that raised the
-/// domain event (requires the replica-set-backed connection - see docs/ARCHITECTURE.md). A
-/// background worker (per module, using Quartz) later reads pending documents, publishes them,
-/// and marks them processed - never both in one step.
+/// Written in the same PostgreSQL transaction as the business data that raised the domain event
+/// (see <see cref="RowingClub.BuildingBlocks.Infrastructure.Postgres.RowingClubDbContext"/> and
+/// docs/ARCHITECTURE.md). A background worker (per module, using Quartz) later reads pending
+/// rows, publishes them, and marks them processed - never both in one step.
 /// </summary>
 public sealed class OutboxMessage
 {

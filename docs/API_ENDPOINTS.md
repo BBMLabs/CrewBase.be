@@ -75,10 +75,10 @@ HTTP `201 Created`
 
 ### İş Kuralları
 
-- E-posta normalize edilir (trim + lowercase) ve `identity_users.email.value` üzerindeki unique
+- E-posta normalize edilir (trim + lowercase) ve `identity_users.Email` üzerindeki unique
   index ile aynı adresin ikinci kez kaydına DB seviyesinde de izin verilmez.
 - Parola asla düz metin saklanmaz - Argon2id ile hashlenir (spec bölüm 9).
-- `UserRegisteredDomainEvent` aynı MongoDB transaction'ı içinde outbox'a yazılır.
+- `UserRegisteredDomainEvent` aynı PostgreSQL transaction'ı içinde outbox'a yazılır.
 
 ### Uygulama Bağlantıları
 
@@ -315,8 +315,8 @@ HTTP `204 No Content`
   kullanıcı işlemleri AuditLog tablosunda saklanmalı") bu modülün bir sonraki iterasyonunda ele
   alınmalıdır.
 - **forgot-password / reset-password / verify-email** endpointleri (spec bölüm 14) bu sürümde
-  implemente edilmedi. `EmailVerificationToken` ve `PasswordResetToken` domain modelleri ve Mongo
-  koleksiyonları hazır (bkz. `docs/DATA_MODEL.md`), ancak Application/Api katmanları yazılmadı -
+  implemente edilmedi. `EmailVerificationToken` ve `PasswordResetToken` domain modelleri ve Postgres
+  tabloları hazır (bkz. `docs/DATA_MODEL.md`), ancak Application/Api katmanları yazılmadı -
   gönderilecek e-postaları işleyecek Notifications modülü de henüz scaffold aşamasındadır.
 - **Idempotency-Key desteği** bu 5 endpoint için opsiyonel bırakıldı (hiçbiri `IIdempotentCommand`
   uygulamıyor) - altyapı (`IdempotencyBehavior`, Redis) hazır, ileride POST endpointlerine

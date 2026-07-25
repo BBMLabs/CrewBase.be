@@ -3,16 +3,17 @@ using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Hosting;
 
 namespace RowingClub.SecurityTests;
 
 /// <summary>
 /// Boots the real <c>RowingClub.Api</c> pipeline (auth, validation, rate limiting, exception
-/// mapping) with throwaway-but-valid secrets, and strips the Mongo migration hosted service so
+/// mapping) with throwaway-but-valid secrets, and strips the EF Core migration hosted service so
 /// the host can start without a live database - these tests exercise the HTTP layer only, never
-/// persistence (that's what RowingClub.IntegrationTests is for, against a real Testcontainers
-/// MongoDB replica set).
+/// persistence (that's what RowingClub.IntegrationTests is for, against a real PostgreSQL
+/// database).
 /// </summary>
 public sealed class RowingClubWebApplicationFactory : WebApplicationFactory<RowingClub.Api.Program>
 {
@@ -23,7 +24,7 @@ public sealed class RowingClubWebApplicationFactory : WebApplicationFactory<Rowi
     static RowingClubWebApplicationFactory()
     {
         Environment.SetEnvironmentVariable(
-            RowingClub.Api.Configuration.DotEnvFileLoader.DisableEnvVarName, "1");
+            RowingClub.BuildingBlocks.Infrastructure.Configuration.DotEnvFileLoader.DisableEnvVarName, "1");
     }
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
@@ -38,15 +39,21 @@ public sealed class RowingClubWebApplicationFactory : WebApplicationFactory<Rowi
         builder.UseSetting("FieldEncryption:Keys:1", "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=");
         builder.UseSetting("FieldEncryption:BlindIndexKey", "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=");
 
-        builder.UseSetting("Mongo:Host", "unused");
-        builder.UseSetting("Mongo:Port", "27017");
-        builder.UseSetting("Mongo:DatabaseName", "unused");
+        builder.UseSetting("Postgres:Host", "unused");
+        builder.UseSetting("Postgres:Port", "5432");
+        builder.UseSetting("Postgres:DatabaseName", "unused");
         builder.UseSetting("Redis:Host", "unused");
         builder.UseSetting("Redis:Port", "6379");
 
         builder.ConfigureServices(services =>
         {
             services.RemoveAll<IHostedService>();
+
+            // PostgresHealthCheck would otherwise try a real connection using the dummy
+            // "unused" host above and report Unhealthy - these tests exercise the HTTP layer
+            // only, so /health should stay trivially Healthy like it did before Postgres was
+            // introduced.
+            services.Configure<HealthCheckServiceOptions>(options => options.Registrations.Clear());
         });
     }
 }

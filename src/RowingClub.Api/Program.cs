@@ -5,8 +5,10 @@ using RowingClub.Api.RateLimiting;
 using RowingClub.Api.Security;
 using RowingClub.Api.Versioning;
 using RowingClub.Bootstrapper;
+using RowingClub.BuildingBlocks.Infrastructure.Configuration;
 using RowingClub.BuildingBlocks.Observability;
 using RowingClub.BuildingBlocks.Observability.Logging;
+using Scalar.AspNetCore;
 
 DotEnvFileLoader.LoadForEnvironment(Environment.GetEnvironmentVariable("APP_ENV")
     ?? Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT"));
@@ -29,6 +31,7 @@ var app = builder.Build();
 if (app.Environment.IsDevelopment())
 {
     app.MapOpenApi();
+    app.MapScalarApiReference();
 }
 
 app.UseRowingClubObservability();

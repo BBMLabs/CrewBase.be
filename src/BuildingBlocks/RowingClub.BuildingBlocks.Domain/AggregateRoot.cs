@@ -19,7 +19,7 @@ public abstract class AggregateRoot<TId> : Entity<TId>, IHasDomainEvents
     /// Optimistic concurrency token (spec section 24 - "Concurrency token kullan"). The persistence
     /// layer reads this at load time, matches on it in the write filter, and bumps it via
     /// <see cref="IncrementVersion"/> right before persisting - a mismatch means someone else wrote
-    /// the document first (see docs/ARCHITECTURE.md - MongoDB optimistic concurrency).
+    /// the row first (see docs/ARCHITECTURE.md - PostgreSQL optimistic concurrency).
     /// </summary>
     public long Version { get; private set; }
 
