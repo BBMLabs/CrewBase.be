@@ -16,7 +16,6 @@ using RowingClub.Identity.Application.TwoFactor.GenerateRecoveryCodes;
 
 namespace RowingClub.Api.Endpoints;
 
-public sealed record RegisterRequest(string Email, string Password);
 public sealed record RegisterCompanyRequest(
     string CompanyName, string AdminEmail, string AdminPassword, string? Phone, string? ContactEmail, string? Address);
 public sealed record LoginRequest(string Email, string Password);
@@ -43,12 +42,6 @@ public static class AuthEndpoints
             .MapToApiVersion(1)
             .WithTags("Auth")
             .RequireRateLimiting(RateLimitingSetup.AuthPolicy);
-
-        group.MapPost("/register", RegisterAsync)
-            .WithName("RegisterUser")
-            .Produces<ApiResponse<RegisterResponse>>(StatusCodes.Status201Created)
-            .ProducesValidationProblem()
-            .ProducesProblem(StatusCodes.Status409Conflict);
 
         group.MapPost("/companies/register", RegisterCompanyAsync)
             .WithName("RegisterCompany")
@@ -130,13 +123,6 @@ public static class AuthEndpoints
             .Produces<ApiResponse<GenerateRecoveryCodesResponse>>(StatusCodes.Status200OK);
 
         return app;
-    }
-
-    private static async Task<IResult> RegisterAsync(
-        [FromBody] RegisterRequest request, ISender sender, CancellationToken cancellationToken)
-    {
-        var response = await sender.Send(new RegisterCommand(request.Email, request.Password), cancellationToken);
-        return Results.Created($"/api/v1/me", ApiResponse<RegisterResponse>.Ok(response));
     }
 
     private static async Task<IResult> RegisterCompanyAsync(

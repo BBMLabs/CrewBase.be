@@ -24,10 +24,9 @@ public sealed class LoginCommandHandlerTests
     private readonly IPasswordHasher _passwordHasher = Substitute.For<IPasswordHasher>();
     private readonly IRefreshTokenRepository _refreshTokenRepository = Substitute.For<IRefreshTokenRepository>();
     private readonly IJwtTokenService _jwtTokenService = Substitute.For<IJwtTokenService>();
+    private readonly IAuditLogger _auditLogger = Substitute.For<IAuditLogger>();
     private readonly IOpaqueTokenGenerator _opaqueTokenGenerator = Substitute.For<IOpaqueTokenGenerator>();
     private readonly IRefreshTokenHasher _refreshTokenHasher = Substitute.For<IRefreshTokenHasher>();
-    private readonly IAuditLogger _auditLogger = Substitute.For<IAuditLogger>();
-    private readonly IPendingTwoFactorTokenRepository _pendingTwoFactorTokenRepository = Substitute.For<IPendingTwoFactorTokenRepository>();
 
     private readonly IdentityOptions _identityOptions = new()
     {
@@ -53,10 +52,7 @@ public sealed class LoginCommandHandlerTests
             _passwordHasher,
             tokenPairIssuer,
             Options.Create(_identityOptions),
-            _auditLogger,
-            _pendingTwoFactorTokenRepository,
-            _refreshTokenHasher,
-            _opaqueTokenGenerator);
+            _auditLogger);
     }
 
     private static User CreateActiveUser() => User.Register(EmailAddress.Create("test@example.com"));
@@ -115,7 +111,7 @@ public sealed class LoginCommandHandlerTests
     }
 
     [Fact]
-    public async Task Handle_returns_two_factor_required_when_user_has_2fa_enabled()
+    public async Task Handle_bypasses_two_factor_when_user_has_2fa_enabled()
     {
         var user = CreateActiveUser();
         user.EnableTwoFactor("Totp", TwoFactorService.GenerateTotpSecret());
@@ -124,15 +120,14 @@ public sealed class LoginCommandHandlerTests
         _userRepository.GetByEmailAsync(Arg.Any<EmailAddress>(), Arg.Any<CancellationToken>()).Returns(user);
         _credentialRepository.GetByUserIdAsync(user.Id, Arg.Any<CancellationToken>()).Returns(credential);
         _passwordHasher.Verify("correct-password", "hashed-password").Returns(true);
-        _opaqueTokenGenerator.Generate().Returns("pending-token-raw");
-        _refreshTokenHasher.Hash("pending-token-raw").Returns("pending-token-hash");
+        _jwtTokenService.IssueAccessToken(user.Id, user.Email.Value, Arg.Any<System.Collections.Generic.IReadOnlyCollection<System.Security.Claims.Claim>?>())
+            .Returns(new IssuedAccessToken("access-token", DateTimeOffset.UtcNow.AddMinutes(15), "jti"));
 
         var result = await CreateHandler().Handle(
             new LoginCommand("test@example.com", "correct-password", "unit-test-device"), CancellationToken.None);
 
-        result.RequiresTwoFactor.Should().BeTrue();
-        result.PendingTwoFactorToken.Should().Be("pending-token-raw");
-        result.AccessToken.Should().BeNull();
-        _pendingTwoFactorTokenRepository.Received(1).Add(Arg.Any<PendingTwoFactorToken>());
+        result.RequiresTwoFactor.Should().BeFalse();
+        result.AccessToken.Should().Be("access-token");
+        result.RefreshToken.Should().NotBeNull();
     }
 }

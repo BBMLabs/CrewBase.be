@@ -18,10 +18,7 @@ public sealed class LoginCommandHandler(
     IPasswordHasher passwordHasher,
     TokenPairIssuer tokenPairIssuer,
     IOptions<IdentityOptions> identityOptions,
-    IAuditLogger auditLogger,
-    IPendingTwoFactorTokenRepository pendingTwoFactorTokenRepository,
-    IRefreshTokenHasher refreshTokenHasher,
-    IOpaqueTokenGenerator opaqueTokenGenerator)
+    IAuditLogger auditLogger)
     : IRequestHandler<LoginCommand, LoginResult>
 {
     private static readonly AuthenticationFailedException InvalidCredentials =
@@ -50,18 +47,6 @@ public sealed class LoginCommandHandler(
 
         user.RegisterSuccessfulLogin();
         auditLogger.Log("LOGIN_SUCCESS", user.Id.ToString(), "Başarılı giriş.");
-
-        if (user.TwoFactorEnabled)
-        {
-            var rawToken = opaqueTokenGenerator.Generate();
-            var tokenHash = refreshTokenHasher.Hash(rawToken);
-            var pendingToken = PendingTwoFactorToken.Create(
-                user.Id, tokenHash, request.DeviceInfo ?? "unknown", _options.PendingTwoFactorTokenLifetime);
-
-            pendingTwoFactorTokenRepository.Add(pendingToken);
-
-            return LoginResult.TwoFactorRequired(rawToken);
-        }
 
         var role = user.Role.ToString();
         var (tokenPair, refreshToken) = tokenPairIssuer.IssueNewFamily(user.Id, user.Email.Value, role, user.CompanyId);

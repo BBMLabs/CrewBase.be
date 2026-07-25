@@ -20,7 +20,6 @@ public sealed class AuthEndpointFunctionalTests(RowingClubWebApplicationFactory 
 
         foreach (var expected in new[]
                  {
-                     "/api/v1/auth/register",
                      "/api/v1/auth/companies/register",
                      "/api/v1/auth/login",
                      "/api/v1/auth/login/verify-2fa",
@@ -65,23 +64,6 @@ public sealed class AuthEndpointFunctionalTests(RowingClubWebApplicationFactory 
         {
             paths.TryGetProperty(expected, out _).Should().BeTrue($"{expected} OpenAPI'de eksik");
         }
-    }
-
-    [Fact]
-    public async Task Register_validation_failure_returns_problem_details_with_correlation_id()
-    {
-        using var client = factory.CreateClient();
-
-        var response = await client.PostAsJsonAsync(
-            "/api/v1/auth/register", new { email = "not-an-email", password = "short" });
-
-        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
-        response.Headers.Should().ContainKey("X-Correlation-Id");
-
-        var body = await response.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>();
-        body.GetProperty("code").GetString().Should().Be("validation_error");
-        body.GetProperty("errors").TryGetProperty("Email", out _).Should().BeTrue();
-        body.GetProperty("errors").TryGetProperty("Password", out _).Should().BeTrue();
     }
 
     [Fact]
@@ -179,7 +161,7 @@ public sealed class AuthEndpointFunctionalTests(RowingClubWebApplicationFactory 
         client.DefaultRequestHeaders.Add("X-Correlation-Id", correlationId);
 
         var response = await client.PostAsJsonAsync(
-            "/api/v1/auth/register", new { email = "not-an-email", password = "short" });
+            "/api/v1/auth/forgot-password", new { email = "" });
 
         response.Headers.GetValues("X-Correlation-Id").Should().ContainSingle().Which.Should().Be(correlationId);
     }

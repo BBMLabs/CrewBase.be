@@ -25,7 +25,6 @@ public sealed class AuthEndpointSecurityTests(RowingClubWebApplicationFactory fa
 
     public static TheoryData<string, object> PublicEndpointsWithInvalidPayload => new()
     {
-        { "/api/v1/auth/register", new { email = "", password = "" } },
         { "/api/v1/auth/companies/register", new { } },
         { "/api/v1/auth/login", new { email = "", password = "" } },
         { "/api/v1/auth/login/verify-2fa", new { PendingToken = "", Code = "" } },
@@ -103,18 +102,6 @@ public sealed class AuthEndpointSecurityTests(RowingClubWebApplicationFactory fa
         var response = await client.PostAsJsonAsync(url, payload);
 
         response.StatusCode.Should().NotBe(HttpStatusCode.InternalServerError);
-    }
-
-    [Fact]
-    public async Task Register_with_sql_injection_style_payload_is_rejected_by_validation_not_executed()
-    {
-        using var client = factory.CreateClient();
-
-        var response = await client.PostAsJsonAsync(
-            "/api/v1/auth/register",
-            new { email = "'; DROP TABLE users; --@example.com", password = "SecurePass123" });
-
-        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
     }
 
     [Fact]
