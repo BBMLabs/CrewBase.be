@@ -48,5 +48,4 @@ namespace RowingClub.Api
 {
     /// <summary>Entry point marker so WebApplicationFactory&lt;Program&gt; can target this assembly in tests.</summary>
     public partial class Program;
-//selam
 }
