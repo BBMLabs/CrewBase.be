@@ -474,3 +474,7 @@ $RECYCLE.BIN/
 
 # Vim temporary swap files
 *.swp
+
+# Environment files with secrets
+.env.developer
+.env.production

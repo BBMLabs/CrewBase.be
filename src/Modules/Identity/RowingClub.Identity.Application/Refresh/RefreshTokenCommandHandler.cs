@@ -1,6 +1,8 @@
 using MediatR;
 using RowingClub.BuildingBlocks.Domain;
 using RowingClub.BuildingBlocks.Security.Tokens;
+using RowingClub.Identity.Application.Audit;
+using RowingClub.Identity.Application.Email;
 using RowingClub.Identity.Application.Tokens;
 using RowingClub.Identity.Domain.Tokens;
 using RowingClub.Identity.Domain.Users;
@@ -12,7 +14,9 @@ public sealed class RefreshTokenCommandHandler(
     IUserSessionRepository userSessionRepository,
     IUserRepository userRepository,
     IRefreshTokenHasher refreshTokenHasher,
-    TokenPairIssuer tokenPairIssuer)
+    TokenPairIssuer tokenPairIssuer,
+    IAuditLogger auditLogger,
+    IEmailSender emailSender)
     : IRequestHandler<RefreshTokenCommand, RefreshTokenResponse>
 {
     private static readonly AuthenticationFailedException InvalidRefreshToken =
@@ -27,18 +31,19 @@ public sealed class RefreshTokenCommandHandler(
 
         if (presentedToken.RevokedAtUtc is not null)
         {
-            // Already-rotated token presented again -> theft signal. Revoke the whole family.
-            presentedToken.FlagReuse();
+            await RevokeAllForUser(presentedToken.UserId, presentedToken.FamilyId, cancellationToken);
 
-            var family = await refreshTokenRepository.GetFamilyAsync(presentedToken.FamilyId, cancellationToken);
-            foreach (var sibling in family.Where(t => t.Id != presentedToken.Id && t.IsActive))
+            auditLogger.Log("TOKEN_THEFT", presentedToken.UserId.ToString(),
+                $"MUHTEMEL TOKEN HIRSIZLIĞI: Daha önce iptal edilmiş refresh token ({presentedToken.Id}) tekrar kullanılmaya çalışıldı. Tüm oturumlar iptal edildi.");
+
+            var theftUser = await userRepository.GetByIdAsync(presentedToken.UserId, cancellationToken);
+            if (theftUser is not null)
             {
-                sibling.Revoke();
+                var msg = new EmailMessage(theftUser.Email.Value,
+                    "Hesabınızda Şüpheli Aktivite Tespit Edildi",
+                    "<h1>Güvenlik Uyarısı</h1><p>Hesabınızda şüpheli aktivite tespit edildi. Tüm oturumlarınız güvenlik amacıyla kapatılmıştır.</p><p>Eğer bu siz değilseniz, lütfen hemen şifrenizi değiştirin.</p><p>RowingClub</p>");
+                await emailSender.SendAsync(msg, cancellationToken);
             }
-
-            var session = await userSessionRepository.GetByRefreshTokenFamilyIdAsync(
-                presentedToken.FamilyId, cancellationToken);
-            session?.Revoke();
 
             throw InvalidRefreshToken;
         }
@@ -53,8 +58,6 @@ public sealed class RefreshTokenCommandHandler(
 
         if (existingSession is null || !existingSession.IsActive)
         {
-            // Session was revoked (logout / logout-all) - the family is dead even if this
-            // particular token row hasn't expired yet.
             throw InvalidRefreshToken;
         }
 
@@ -63,8 +66,9 @@ public sealed class RefreshTokenCommandHandler(
 
         user.EnsureCanAuthenticate();
 
+        var role = user.Role.ToString();
         var (tokenPair, newRefreshToken) = tokenPairIssuer.RotateWithinFamily(
-            user.Id, user.Email.Value, presentedToken.FamilyId);
+            user.Id, user.Email.Value, presentedToken.FamilyId, role, user.CompanyId);
 
         presentedToken.MarkReplacedBy(newRefreshToken.Id);
 
@@ -72,5 +76,20 @@ public sealed class RefreshTokenCommandHandler(
 
         return new RefreshTokenResponse(
             tokenPair.AccessToken, tokenPair.AccessTokenExpiresAtUtc, tokenPair.RefreshToken);
+    }
+
+    private async Task RevokeAllForUser(Guid userId, Guid familyId, CancellationToken cancellationToken)
+    {
+        var family = await refreshTokenRepository.GetFamilyAsync(familyId, cancellationToken);
+        foreach (var sibling in family.Where(t => t.IsActive))
+        {
+            sibling.Revoke();
+        }
+
+        var sessions = await userSessionRepository.GetActiveByUserIdAsync(userId, cancellationToken);
+        foreach (var session in sessions)
+        {
+            session.Revoke();
+        }
     }
 }

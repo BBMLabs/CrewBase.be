@@ -10,6 +10,13 @@ public enum UserStatus
     Deactivated = 1,
 }
 
+public enum UserRole
+{
+    PlatformAdmin = 0,
+    CompanyAdmin = 1,
+    Employee = 2,
+}
+
 /// <summary>
 /// Platform-level account identity. Deliberately has no ClubId - a user can belong to many clubs
 /// with different roles in each (spec section 2, kural 1-2); club membership is a separate
@@ -21,7 +28,17 @@ public sealed class User : AggregateRoot<Guid>
 
     public bool EmailVerified { get; private set; }
 
+    public UserRole Role { get; private set; }
+
+    public Guid? CompanyId { get; private set; }
+
     public UserStatus Status { get; private set; }
+
+    public bool TwoFactorEnabled { get; private set; }
+
+    public string TwoFactorMethod { get; private set; } = "None";
+
+    public string? TwoFactorSecret { get; private set; }
 
     public int FailedLoginAttemptCount { get; private set; }
 
@@ -35,18 +52,46 @@ public sealed class User : AggregateRoot<Guid>
     {
     }
 
-    private User(Guid id, EmailAddress email) : base(id)
+    private User(Guid id, EmailAddress email, UserRole role, Guid? companyId) : base(id)
     {
         Email = email;
+        Role = role;
+        CompanyId = companyId;
         Status = UserStatus.Active;
         CreatedAtUtc = DateTimeOffset.UtcNow;
     }
 
     public static User Register(EmailAddress email)
     {
-        var user = new User(Guid.NewGuid(), email);
+        var user = new User(Guid.NewGuid(), email, UserRole.Employee, null);
         user.RaiseDomainEvent(new UserRegisteredDomainEvent(user.Id, email.Value));
         return user;
+    }
+
+    public static User RegisterCompanyAdmin(EmailAddress email, Guid companyId)
+    {
+        var user = new User(Guid.NewGuid(), email, UserRole.CompanyAdmin, companyId);
+        user.RaiseDomainEvent(new UserRegisteredDomainEvent(user.Id, email.Value));
+        return user;
+    }
+
+    public void ChangeRole(UserRole newRole)
+    {
+        Role = newRole;
+    }
+
+    public void EnableTwoFactor(string method, string? secret = null)
+    {
+        TwoFactorEnabled = true;
+        TwoFactorMethod = method;
+        TwoFactorSecret = secret;
+    }
+
+    public void DisableTwoFactor()
+    {
+        TwoFactorEnabled = false;
+        TwoFactorMethod = "None";
+        TwoFactorSecret = null;
     }
 
     public void VerifyEmail()
@@ -73,7 +118,7 @@ public sealed class User : AggregateRoot<Guid>
         {
             throw new DomainException(
                 "account_locked",
-                $"Hesap {LockedUntilUtc:O} tarihine kadar kilitli. Çok fazla başarısız giriş denemesi.");
+                "Hesabınız çok fazla başarısız giriş denemesi nedeniyle geçici olarak kilitlenmiştir. Lütfen daha sonra tekrar deneyiniz.");
         }
     }
 

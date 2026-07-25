@@ -37,7 +37,7 @@ public static class EnvironmentConfigurationExtensions
             ["Jwt:Audience"] = Get("JWT_AUDIENCE"),
             ["Jwt:SigningPrivateKeyPem"] = Get("JWT_SIGNING_PRIVATE_KEY"),
             ["Jwt:SigningPublicKeyPem"] = Get("JWT_SIGNING_PUBLIC_KEY"),
-            ["Jwt:KeyId"] = currentKeyVersion,
+            ["Jwt:KeyId"] = Get("JWT_KEY_ID") ?? "1",
 
             ["FieldEncryption:CurrentKeyVersion"] = currentKeyVersion,
             ["FieldEncryption:BlindIndexKey"] = Get("FIELD_ENCRYPTION_BLIND_INDEX_KEY") ?? currentKey,

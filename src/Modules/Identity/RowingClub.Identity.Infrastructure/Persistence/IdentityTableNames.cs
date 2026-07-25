@@ -8,4 +8,7 @@ public static class IdentityTableNames
     public const string UserSessions = "identity_user_sessions";
     public const string EmailVerificationTokens = "identity_email_verification_tokens";
     public const string PasswordResetTokens = "identity_password_reset_tokens";
+    public const string Companies = "identity_companies";
+    public const string RecoveryCodes = "identity_recovery_codes";
+    public const string PendingTwoFactorTokens = "identity_pending_two_factor_tokens";
 }

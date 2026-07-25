@@ -25,6 +25,7 @@ public sealed class RowingClubWebApplicationFactory : WebApplicationFactory<Rowi
     {
         Environment.SetEnvironmentVariable(
             RowingClub.BuildingBlocks.Infrastructure.Configuration.DotEnvFileLoader.DisableEnvVarName, "1");
+        Environment.SetEnvironmentVariable("AUTH_RATE_LIMIT", "1000");
     }
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)

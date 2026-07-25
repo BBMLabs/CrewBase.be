@@ -6,8 +6,10 @@ using RowingClub.BuildingBlocks.Security.Jwt;
 using RowingClub.BuildingBlocks.Security.Passwords;
 using RowingClub.BuildingBlocks.Security.Tokens;
 using RowingClub.Identity.Application;
+using RowingClub.Identity.Application.Audit;
 using RowingClub.Identity.Application.Login;
 using RowingClub.Identity.Application.Tokens;
+using RowingClub.Identity.Application.TwoFactor;
 using RowingClub.Identity.Domain.Tokens;
 using RowingClub.Identity.Domain.Users;
 using RowingClub.Identity.Domain.ValueObjects;
@@ -24,12 +26,15 @@ public sealed class LoginCommandHandlerTests
     private readonly IJwtTokenService _jwtTokenService = Substitute.For<IJwtTokenService>();
     private readonly IOpaqueTokenGenerator _opaqueTokenGenerator = Substitute.For<IOpaqueTokenGenerator>();
     private readonly IRefreshTokenHasher _refreshTokenHasher = Substitute.For<IRefreshTokenHasher>();
+    private readonly IAuditLogger _auditLogger = Substitute.For<IAuditLogger>();
+    private readonly IPendingTwoFactorTokenRepository _pendingTwoFactorTokenRepository = Substitute.For<IPendingTwoFactorTokenRepository>();
 
     private readonly IdentityOptions _identityOptions = new()
     {
         MaxFailedLoginAttempts = 5,
         LockoutDuration = TimeSpan.FromMinutes(15),
         RefreshTokenLifetime = TimeSpan.FromDays(30),
+        PendingTwoFactorTokenLifetime = TimeSpan.FromMinutes(5),
     };
 
     private LoginCommandHandler CreateHandler()
@@ -47,7 +52,11 @@ public sealed class LoginCommandHandlerTests
             _userSessionRepository,
             _passwordHasher,
             tokenPairIssuer,
-            Options.Create(_identityOptions));
+            Options.Create(_identityOptions),
+            _auditLogger,
+            _pendingTwoFactorTokenRepository,
+            _refreshTokenHasher,
+            _opaqueTokenGenerator);
     }
 
     private static User CreateActiveUser() => User.Register(EmailAddress.Create("test@example.com"));
@@ -66,11 +75,12 @@ public sealed class LoginCommandHandlerTests
         _opaqueTokenGenerator.Generate().Returns("raw-refresh-token");
         _refreshTokenHasher.Hash("raw-refresh-token").Returns("hashed-refresh-token");
 
-        var response = await CreateHandler().Handle(
+        var result = await CreateHandler().Handle(
             new LoginCommand("test@example.com", "correct-password", "unit-test-device"), CancellationToken.None);
 
-        response.AccessToken.Should().Be("access-token");
-        response.RefreshToken.Should().Be("raw-refresh-token");
+        result.RequiresTwoFactor.Should().BeFalse();
+        result.AccessToken.Should().Be("access-token");
+        result.RefreshToken.Should().Be("raw-refresh-token");
         _userSessionRepository.Received(1).Add(Arg.Any<UserSession>());
         _refreshTokenRepository.Received(1).Add(Arg.Any<RefreshToken>());
     }
@@ -102,5 +112,27 @@ public sealed class LoginCommandHandlerTests
             new LoginCommand("missing@example.com", "whatever", null), CancellationToken.None);
 
         await act.Should().ThrowAsync<AuthenticationFailedException>();
+    }
+
+    [Fact]
+    public async Task Handle_returns_two_factor_required_when_user_has_2fa_enabled()
+    {
+        var user = CreateActiveUser();
+        user.EnableTwoFactor("Totp", TwoFactorService.GenerateTotpSecret());
+        var credential = Credential.Create(user.Id, "hashed-password");
+
+        _userRepository.GetByEmailAsync(Arg.Any<EmailAddress>(), Arg.Any<CancellationToken>()).Returns(user);
+        _credentialRepository.GetByUserIdAsync(user.Id, Arg.Any<CancellationToken>()).Returns(credential);
+        _passwordHasher.Verify("correct-password", "hashed-password").Returns(true);
+        _opaqueTokenGenerator.Generate().Returns("pending-token-raw");
+        _refreshTokenHasher.Hash("pending-token-raw").Returns("pending-token-hash");
+
+        var result = await CreateHandler().Handle(
+            new LoginCommand("test@example.com", "correct-password", "unit-test-device"), CancellationToken.None);
+
+        result.RequiresTwoFactor.Should().BeTrue();
+        result.PendingTwoFactorToken.Should().Be("pending-token-raw");
+        result.AccessToken.Should().BeNull();
+        _pendingTwoFactorTokenRepository.Received(1).Add(Arg.Any<PendingTwoFactorToken>());
     }
 }

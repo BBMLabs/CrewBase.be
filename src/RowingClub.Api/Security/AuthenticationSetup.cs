@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.IdentityModel.Tokens;
@@ -44,7 +45,13 @@ public static class AuthenticationSetup
                 };
             });
 
-        services.AddAuthorization();
+        services.AddAuthorization(options =>
+        {
+            options.AddPolicy("SameCompany", policy =>
+                policy.Requirements.Add(new SameCompanyRequirement()));
+        });
+
+        services.AddScoped<IAuthorizationHandler, SameCompanyAuthorizationHandler>();
 
         return services;
     }

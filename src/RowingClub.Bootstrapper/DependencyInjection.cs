@@ -28,7 +28,7 @@ public static class DependencyInjection
             typeof(RowingClub.Identity.Application.DependencyInjection).Assembly);
 
         services.AddIdentityApplication(configuration);
-        services.AddIdentityInfrastructure();
+        services.AddIdentityInfrastructure(configuration);
 
         // Clubs, Memberships, Scheduling, Packages, Notifications, Reporting: scaffolded only,
         // no Application/Infrastructure registrations yet - see docs/ARCHITECTURE.md.

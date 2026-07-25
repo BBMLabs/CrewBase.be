@@ -10,4 +10,6 @@ public sealed class IdentityOptions
     public TimeSpan LockoutDuration { get; init; } = TimeSpan.FromMinutes(15);
 
     public TimeSpan RefreshTokenLifetime { get; init; } = TimeSpan.FromDays(30);
+
+    public TimeSpan PendingTwoFactorTokenLifetime { get; init; } = TimeSpan.FromMinutes(5);
 }

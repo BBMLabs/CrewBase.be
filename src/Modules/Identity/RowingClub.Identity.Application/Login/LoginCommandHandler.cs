@@ -2,6 +2,8 @@ using MediatR;
 using Microsoft.Extensions.Options;
 using RowingClub.BuildingBlocks.Domain;
 using RowingClub.BuildingBlocks.Security.Passwords;
+using RowingClub.BuildingBlocks.Security.Tokens;
+using RowingClub.Identity.Application.Audit;
 using RowingClub.Identity.Application.Tokens;
 using RowingClub.Identity.Domain.Tokens;
 using RowingClub.Identity.Domain.Users;
@@ -15,15 +17,19 @@ public sealed class LoginCommandHandler(
     IUserSessionRepository userSessionRepository,
     IPasswordHasher passwordHasher,
     TokenPairIssuer tokenPairIssuer,
-    IOptions<IdentityOptions> identityOptions)
-    : IRequestHandler<LoginCommand, LoginResponse>
+    IOptions<IdentityOptions> identityOptions,
+    IAuditLogger auditLogger,
+    IPendingTwoFactorTokenRepository pendingTwoFactorTokenRepository,
+    IRefreshTokenHasher refreshTokenHasher,
+    IOpaqueTokenGenerator opaqueTokenGenerator)
+    : IRequestHandler<LoginCommand, LoginResult>
 {
     private static readonly AuthenticationFailedException InvalidCredentials =
         new("E-posta veya parola hatalı.");
 
     private readonly IdentityOptions _options = identityOptions.Value;
 
-    public async Task<LoginResponse> Handle(LoginCommand request, CancellationToken cancellationToken)
+    public async Task<LoginResult> Handle(LoginCommand request, CancellationToken cancellationToken)
     {
         var email = EmailAddress.Create(request.Email);
 
@@ -38,15 +44,30 @@ public sealed class LoginCommandHandler(
         if (!passwordHasher.Verify(request.Password, credential.PasswordHash))
         {
             user.RegisterFailedLogin(_options.MaxFailedLoginAttempts, _options.LockoutDuration);
+            auditLogger.Log("LOGIN_FAILED", user.Id.ToString(), $"Başarısız giriş denemesi. İp: {request.DeviceInfo}");
             throw InvalidCredentials;
         }
 
         user.RegisterSuccessfulLogin();
+        auditLogger.Log("LOGIN_SUCCESS", user.Id.ToString(), "Başarılı giriş.");
 
-        var (tokenPair, refreshToken) = tokenPairIssuer.IssueNewFamily(user.Id, user.Email.Value);
+        if (user.TwoFactorEnabled)
+        {
+            var rawToken = opaqueTokenGenerator.Generate();
+            var tokenHash = refreshTokenHasher.Hash(rawToken);
+            var pendingToken = PendingTwoFactorToken.Create(
+                user.Id, tokenHash, request.DeviceInfo ?? "unknown", _options.PendingTwoFactorTokenLifetime);
+
+            pendingTwoFactorTokenRepository.Add(pendingToken);
+
+            return LoginResult.TwoFactorRequired(rawToken);
+        }
+
+        var role = user.Role.ToString();
+        var (tokenPair, refreshToken) = tokenPairIssuer.IssueNewFamily(user.Id, user.Email.Value, role, user.CompanyId);
 
         userSessionRepository.Add(UserSession.Start(user.Id, refreshToken.FamilyId, request.DeviceInfo));
 
-        return new LoginResponse(tokenPair.AccessToken, tokenPair.AccessTokenExpiresAtUtc, tokenPair.RefreshToken);
+        return LoginResult.Complete(tokenPair.AccessToken, tokenPair.AccessTokenExpiresAtUtc, tokenPair.RefreshToken);
     }
 }

@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using Microsoft.Extensions.Options;
 using RowingClub.BuildingBlocks.Security.Jwt;
 using RowingClub.BuildingBlocks.Security.Tokens;
@@ -7,10 +8,6 @@ namespace RowingClub.Identity.Application.Tokens;
 
 public sealed record TokenPair(string AccessToken, DateTimeOffset AccessTokenExpiresAtUtc, string RefreshToken);
 
-/// <summary>
-/// Shared by Login (starts a new refresh token family) and Refresh (rotates within an existing
-/// family) so the access+refresh issuing logic exists in exactly one place.
-/// </summary>
 public sealed class TokenPairIssuer(
     IJwtTokenService jwtTokenService,
     IOpaqueTokenGenerator opaqueTokenGenerator,
@@ -20,9 +17,11 @@ public sealed class TokenPairIssuer(
 {
     private readonly IdentityOptions _options = identityOptions.Value;
 
-    public (TokenPair Pair, RefreshToken IssuedRefreshToken) IssueNewFamily(Guid userId, string email)
+    public (TokenPair Pair, RefreshToken IssuedRefreshToken) IssueNewFamily(
+        Guid userId, string email, string role, Guid? companyId = null)
     {
-        var accessToken = jwtTokenService.IssueAccessToken(userId, email);
+        var extraClaims = BuildClaims(role, companyId);
+        var accessToken = jwtTokenService.IssueAccessToken(userId, email, extraClaims);
         var rawRefreshToken = opaqueTokenGenerator.Generate();
         var refreshToken = RefreshToken.IssueNewFamily(
             userId, refreshTokenHasher.Hash(rawRefreshToken), _options.RefreshTokenLifetime);
@@ -33,9 +32,10 @@ public sealed class TokenPairIssuer(
     }
 
     public (TokenPair Pair, RefreshToken IssuedRefreshToken) RotateWithinFamily(
-        Guid userId, string email, Guid familyId)
+        Guid userId, string email, Guid familyId, string role, Guid? companyId = null)
     {
-        var accessToken = jwtTokenService.IssueAccessToken(userId, email);
+        var extraClaims = BuildClaims(role, companyId);
+        var accessToken = jwtTokenService.IssueAccessToken(userId, email, extraClaims);
         var rawRefreshToken = opaqueTokenGenerator.Generate();
         var refreshToken = RefreshToken.IssueInFamily(
             userId, familyId, refreshTokenHasher.Hash(rawRefreshToken), _options.RefreshTokenLifetime);
@@ -43,5 +43,17 @@ public sealed class TokenPairIssuer(
         refreshTokenRepository.Add(refreshToken);
 
         return (new TokenPair(accessToken.Token, accessToken.ExpiresAtUtc, rawRefreshToken), refreshToken);
+    }
+
+    private static IReadOnlyCollection<Claim> BuildClaims(string role, Guid? companyId)
+    {
+        var claims = new List<Claim> { new(ClaimTypes.Role, role) };
+
+        if (companyId.HasValue)
+        {
+            claims.Add(new Claim("company_id", companyId.Value.ToString()));
+        }
+
+        return claims;
     }
 }
