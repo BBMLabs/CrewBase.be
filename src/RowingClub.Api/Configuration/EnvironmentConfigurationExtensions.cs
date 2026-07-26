@@ -12,7 +12,11 @@ public static class EnvironmentConfigurationExtensions
     {
         var env = Environment.GetEnvironmentVariables();
 
-        string? Get(string key) => env.Contains(key) ? env[key] as string : null;
+        // A blank env var (e.g. an unfilled ".env.production" template line, `KEY=`) must be
+        // treated the same as "not set" - otherwise it silently overrides a valid value from an
+        // earlier config source (docker-compose's own environment block, appsettings.json) with
+        // an empty string, which then fails options binding for non-string types like int.
+        string? Get(string key) => env.Contains(key) && env[key] is string { Length: > 0 } value ? value : null;
 
         var currentKeyVersion = Get("FIELD_ENCRYPTION_KEY_VERSION");
         var currentKey = Get("FIELD_ENCRYPTION_KEY_CURRENT");
