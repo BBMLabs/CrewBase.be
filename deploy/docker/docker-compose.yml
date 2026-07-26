@@ -1,7 +1,3 @@
-# =============================================================================
-# RowingClub (CrewBase.be) - Docker Compose
-# =============================================================================
-
 name: rowingclub
 
 networks:
@@ -11,21 +7,16 @@ networks:
 volumes:
   rowingclub-postgres-data:
   rowingclub-redis-data:
-  rowingclub-prometheus-data:
-  rowingclub-grafana-data:
 
 services:
-  # ---------------------------------------------------------------------------
-  # PostgreSQL
-  # ---------------------------------------------------------------------------
   postgres:
     image: postgres:16-alpine
     restart: unless-stopped
 
     environment:
-      POSTGRES_DB: "${POSTGRES_DB:-rowingclub}"
-      POSTGRES_USER: "${POSTGRES_USER:-rowingclub}"
-      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:?POSTGRES_PASSWORD zorunludur}"
+      POSTGRES_DB: "${POSTGRES_DATABASE_NAME}"
+      POSTGRES_USER: "${POSTGRES_USERNAME}"
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD}"
 
     volumes:
       - rowingclub-postgres-data:/var/lib/postgresql/data
@@ -33,7 +24,7 @@ services:
     healthcheck:
       test:
         - CMD-SHELL
-        - pg_isready -U "${POSTGRES_USER:-rowingclub}" -d "${POSTGRES_DB:-rowingclub}"
+        - pg_isready -U "${POSTGRES_USERNAME}" -d "${POSTGRES_DATABASE_NAME}"
       interval: 10s
       timeout: 5s
       retries: 10
@@ -42,88 +33,35 @@ services:
     networks:
       - rowingclub-network
 
-  # ---------------------------------------------------------------------------
-  # Redis
-  # ---------------------------------------------------------------------------
   redis:
     image: redis:7-alpine
     restart: unless-stopped
+
+    command:
+      - redis-server
+      - --appendonly
+      - "yes"
+      - --requirepass
+      - "${REDIS_PASSWORD}"
 
     volumes:
       - rowingclub-redis-data:/data
 
     healthcheck:
       test:
-        - CMD
-        - redis-cli
-        - ping
+        - CMD-SHELL
+        - redis-cli -a "$${REDIS_PASSWORD}" ping | grep PONG
       interval: 10s
       timeout: 5s
       retries: 10
       start_period: 10s
 
-    networks:
-      - rowingclub-network
-
-  # ---------------------------------------------------------------------------
-  # Prometheus
-  # ---------------------------------------------------------------------------
-  prometheus:
-    image: prom/prometheus:latest
-    restart: unless-stopped
-
-    volumes:
-      - ./deploy/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
-      - rowingclub-prometheus-data:/prometheus
-
-    healthcheck:
-      test:
-        - CMD-SHELL
-        - wget -qO- http://localhost:9090/-/healthy || exit 1
-      interval: 15s
-      timeout: 10s
-      retries: 10
-      start_period: 15s
-
-    networks:
-      - rowingclub-network
-
-  # ---------------------------------------------------------------------------
-  # Grafana
-  # ---------------------------------------------------------------------------
-  grafana:
-    image: grafana/grafana:latest
-    restart: unless-stopped
-
     environment:
-      GF_SECURITY_ADMIN_USER: "${GRAFANA_ADMIN_USER:-admin}"
-      GF_SECURITY_ADMIN_PASSWORD: "${GRAFANA_ADMIN_PASSWORD:?GRAFANA_ADMIN_PASSWORD zorunludur}"
-      GF_USERS_ALLOW_SIGN_UP: "false"
-
-    volumes:
-      - ./deploy/grafana/provisioning:/etc/grafana/provisioning:ro
-      - ./deploy/grafana/dashboards:/var/lib/grafana/dashboards:ro
-      - rowingclub-grafana-data:/var/lib/grafana
-
-    depends_on:
-      prometheus:
-        condition: service_healthy
-
-    healthcheck:
-      test:
-        - CMD-SHELL
-        - wget -qO- http://localhost:3000/api/health || exit 1
-      interval: 15s
-      timeout: 10s
-      retries: 10
-      start_period: 15s
+      REDIS_PASSWORD: "${REDIS_PASSWORD}"
 
     networks:
       - rowingclub-network
 
-  # ---------------------------------------------------------------------------
-  # RowingClub API
-  # ---------------------------------------------------------------------------
   api:
     build:
       context: .
@@ -138,20 +76,21 @@ services:
 
       POSTGRES_HOST: postgres
       POSTGRES_PORT: "5432"
-      POSTGRES_DB: "${POSTGRES_DB:-rowingclub}"
-      POSTGRES_USER: "${POSTGRES_USER:-rowingclub}"
+      POSTGRES_DATABASE_NAME: "${POSTGRES_DATABASE_NAME}"
+      POSTGRES_USERNAME: "${POSTGRES_USERNAME}"
       POSTGRES_PASSWORD: "${POSTGRES_PASSWORD}"
 
-      # Uygulama tek connection string bekliyorsa bunu kullanın.
-      CONNECTION_STRING: >-
+      ConnectionStrings__DefaultConnection: >-
         Host=postgres;
         Port=5432;
-        Database=${POSTGRES_DB:-rowingclub};
-        Username=${POSTGRES_USER:-rowingclub};
+        Database=${POSTGRES_DATABASE_NAME};
+        Username=${POSTGRES_USERNAME};
         Password=${POSTGRES_PASSWORD}
 
       REDIS_HOST: redis
       REDIS_PORT: "6379"
+      REDIS_USERNAME: default
+      REDIS_PASSWORD: "${REDIS_PASSWORD}"
 
       JWT_ISSUER: "${JWT_ISSUER}"
       JWT_AUDIENCE: "${JWT_AUDIENCE}"
@@ -167,9 +106,6 @@ services:
       SMTP_PASSWORD: "${SMTP_PASSWORD}"
 
       OTEL_EXPORTER_OTLP_ENDPOINT: "${OTEL_EXPORTER_OTLP_ENDPOINT}"
-
-    ports:
-      - "${API_HTTP_PORT:-8080}:8080"
 
     depends_on:
       postgres:
