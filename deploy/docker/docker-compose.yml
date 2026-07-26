@@ -139,50 +139,44 @@ services:
   # ---------------------------------------------------------------------------
   # RowingClub.Api - ASP.NET Core Minimal API
   # ---------------------------------------------------------------------------
-  api:
-    build:
-      context: ../..
-      dockerfile: deploy/docker/Dockerfile
-    container_name: rowingclub-api
-    restart: unless-stopped
-    # Not: env_file yerine dogrudan ${VAR} interpolasyonu kullanilir; degerler
-    # "docker compose --env-file .env(.developer)" ile enjekte edilir (bkz.
-    # deploy/scripts/dev-up.sh). Bu sayede compose dosyasi, var olmayan bir
-    # .env dosyasina sabit referans vermez ve "docker compose config" her
-    # zaman dogrulanabilir kalir.
-    environment:
-      APP_ENV: ${APP_ENV:-Development}
-      ASPNETCORE_ENVIRONMENT: ${APP_ENV:-Development}
-      ASPNETCORE_URLS: http://+:8080
-      # mongodb/redis/27017/6379 burada BILINCLI OLARAK SABIT (hardcoded) - bunlar docker
-      # network'u icindeki servis adi ve container-ic (internal) port, host tarafinda
-      # yayinlanan MONGODB_PORT/REDIS_PORT ile KARISTIRILMAMALI: o degiskenler yalnizca
-      # `ports:` eslemesini (host disina acilan portu) kontrol eder, container'lar birbirine
-      # her zaman kendi ic portlarindan baglanir. .env dosyasindaki MONGODB_HOST/PORT ve
-      # REDIS_HOST/PORT, API'yi docker DISINDA (dogrudan `dotnet run` ile) calistirirken
-      # kullanilir (bkz. .env.developer basindaki not).
-      MONGODB_HOST: mongodb
-      MONGODB_PORT: "27017"
-      MONGODB_DATABASE_NAME: ${MONGODB_DATABASE_NAME:-rowingclub}
-      REDIS_HOST: redis
-      REDIS_PORT: "6379"
-      JWT_ISSUER: ${JWT_ISSUER}
-      JWT_AUDIENCE: ${JWT_AUDIENCE}
-      JWT_SIGNING_PRIVATE_KEY: ${JWT_SIGNING_PRIVATE_KEY}
-      JWT_SIGNING_PUBLIC_KEY: ${JWT_SIGNING_PUBLIC_KEY}
-      FIELD_ENCRYPTION_KEY_CURRENT: ${FIELD_ENCRYPTION_KEY_CURRENT}
-      FIELD_ENCRYPTION_KEY_PREVIOUS: ${FIELD_ENCRYPTION_KEY_PREVIOUS}
-      FIELD_ENCRYPTION_KEY_VERSION: ${FIELD_ENCRYPTION_KEY_VERSION}
-      SMTP_HOST: ${SMTP_HOST}
-      SMTP_USERNAME: ${SMTP_USERNAME}
-      SMTP_PASSWORD: ${SMTP_PASSWORD}
-      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT}
-    ports:
-      - "${API_HTTP_PORT:-8080}:8080"
-    depends_on:
-      mongodb:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    networks:
-      - rowingclub-network
+ api:
+  build:
+    context: .
+    dockerfile: deploy/docker/Dockerfile
+  container_name: rowingclub-api
+  restart: unless-stopped
+  environment:
+    APP_ENV: '${APP_ENV:-Production}'
+    ASPNETCORE_ENVIRONMENT: '${APP_ENV:-Production}'
+    ASPNETCORE_URLS: 'http://+:8080'
+
+    MONGODB_HOST: mongodb
+    MONGODB_PORT: '27017'
+    MONGODB_DATABASE_NAME: '${MONGODB_DATABASE_NAME:-rowingclub}'
+
+    REDIS_HOST: redis
+    REDIS_PORT: '6379'
+
+    JWT_ISSUER: '${JWT_ISSUER}'
+    JWT_AUDIENCE: '${JWT_AUDIENCE}'
+    JWT_SIGNING_PRIVATE_KEY: '${JWT_SIGNING_PRIVATE_KEY}'
+    JWT_SIGNING_PUBLIC_KEY: '${JWT_SIGNING_PUBLIC_KEY}'
+
+    FIELD_ENCRYPTION_KEY_CURRENT: '${FIELD_ENCRYPTION_KEY_CURRENT}'
+    FIELD_ENCRYPTION_KEY_PREVIOUS: '${FIELD_ENCRYPTION_KEY_PREVIOUS}'
+    FIELD_ENCRYPTION_KEY_VERSION: '${FIELD_ENCRYPTION_KEY_VERSION}'
+
+    SMTP_HOST: '${SMTP_HOST}'
+    SMTP_USERNAME: '${SMTP_USERNAME}'
+    SMTP_PASSWORD: '${SMTP_PASSWORD}'
+
+    OTEL_EXPORTER_OTLP_ENDPOINT: '${OTEL_EXPORTER_OTLP_ENDPOINT}'
+  ports:
+    - '${API_HTTP_PORT:-8080}:8080'
+  depends_on:
+    mongodb:
+      condition: service_healthy
+    redis:
+      condition: service_healthy
+  networks:
+    - rowingclub-network
