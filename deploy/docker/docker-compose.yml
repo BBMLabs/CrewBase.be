@@ -13,6 +13,9 @@ services:
     image: postgres:16-alpine
     restart: unless-stopped
 
+    env_file:
+      - ../../.env.developer
+
     environment:
       POSTGRES_DB: "${POSTGRES_DATABASE_NAME}"
       POSTGRES_USER: "${POSTGRES_USERNAME}"
@@ -24,7 +27,7 @@ services:
     healthcheck:
       test:
         - CMD-SHELL
-        - pg_isready -U "${POSTGRES_USERNAME}" -d "${POSTGRES_DATABASE_NAME}"
+        - pg_isready -U "$${POSTGRES_USERNAME}" -d "$${POSTGRES_DATABASE_NAME}"
       interval: 10s
       timeout: 5s
       retries: 10
@@ -37,12 +40,13 @@ services:
     image: redis:7-alpine
     restart: unless-stopped
 
+    env_file:
+      - ../../.env.developer
+
     command:
-      - redis-server
-      - --appendonly
-      - "yes"
-      - --requirepass
-      - "${REDIS_PASSWORD}"
+      - sh
+      - -c
+      - exec redis-server --appendonly yes --requirepass "$$REDIS_PASSWORD"
 
     volumes:
       - rowingclub-redis-data:/data
@@ -50,14 +54,11 @@ services:
     healthcheck:
       test:
         - CMD-SHELL
-        - redis-cli -a "$${REDIS_PASSWORD}" ping | grep PONG
+        - redis-cli -a "$$REDIS_PASSWORD" ping | grep PONG
       interval: 10s
       timeout: 5s
       retries: 10
       start_period: 10s
-
-    environment:
-      REDIS_PASSWORD: "${REDIS_PASSWORD}"
 
     networks:
       - rowingclub-network
@@ -69,16 +70,18 @@ services:
 
     restart: unless-stopped
 
+    env_file:
+      - ../../.env.developer
+
     environment:
-      APP_ENV: "${APP_ENV:-Production}"
       ASPNETCORE_ENVIRONMENT: "${APP_ENV:-Production}"
       ASPNETCORE_URLS: "http://+:8080"
 
       POSTGRES_HOST: postgres
       POSTGRES_PORT: "5432"
-      POSTGRES_DATABASE_NAME: "${POSTGRES_DATABASE_NAME}"
-      POSTGRES_USERNAME: "${POSTGRES_USERNAME}"
-      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD}"
+
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
 
       ConnectionStrings__DefaultConnection: >-
         Host=postgres;
@@ -87,25 +90,12 @@ services:
         Username=${POSTGRES_USERNAME};
         Password=${POSTGRES_PASSWORD}
 
-      REDIS_HOST: redis
-      REDIS_PORT: "6379"
-      REDIS_USERNAME: default
-      REDIS_PASSWORD: "${REDIS_PASSWORD}"
+      FieldEncryption__CurrentKey: "${FIELD_ENCRYPTION_KEY_CURRENT}"
+      FieldEncryption__PreviousKey: "${FIELD_ENCRYPTION_KEY_PREVIOUS}"
+      FieldEncryption__CurrentKeyVersion: "${FIELD_ENCRYPTION_KEY_VERSION:-1}"
 
-      JWT_ISSUER: "${JWT_ISSUER}"
-      JWT_AUDIENCE: "${JWT_AUDIENCE}"
-      JWT_SIGNING_PRIVATE_KEY: "${JWT_SIGNING_PRIVATE_KEY}"
-      JWT_SIGNING_PUBLIC_KEY: "${JWT_SIGNING_PUBLIC_KEY}"
-
-      FIELD_ENCRYPTION_KEY_CURRENT: "${FIELD_ENCRYPTION_KEY_CURRENT}"
-      FIELD_ENCRYPTION_KEY_PREVIOUS: "${FIELD_ENCRYPTION_KEY_PREVIOUS}"
-      FIELD_ENCRYPTION_KEY_VERSION: "${FIELD_ENCRYPTION_KEY_VERSION}"
-
-      SMTP_HOST: "${SMTP_HOST}"
-      SMTP_USERNAME: "${SMTP_USERNAME}"
-      SMTP_PASSWORD: "${SMTP_PASSWORD}"
-
-      OTEL_EXPORTER_OTLP_ENDPOINT: "${OTEL_EXPORTER_OTLP_ENDPOINT}"
+    expose:
+      - "8080"
 
     depends_on:
       postgres:
