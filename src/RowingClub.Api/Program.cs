@@ -3,6 +3,7 @@ using RowingClub.Api.Endpoints;
 using RowingClub.Api.HealthChecks;
 using RowingClub.Api.RateLimiting;
 using RowingClub.Api.Security;
+using RowingClub.Api.Tenancy;
 using RowingClub.Api.Versioning;
 using RowingClub.Bootstrapper;
 using RowingClub.BuildingBlocks.Infrastructure.Configuration;
@@ -26,6 +27,30 @@ builder.Services
     .AddRowingClubHealthChecks()
     .AddOpenApi();
 
+builder.Services.AddScoped<TenantResolver>();
+builder.Services.AddSingleton<TenantSiteRenderer>();
+builder.Services.AddScoped<RowingClub.Scheduling.Application.Reminders.IAppointmentReminderSender,
+    EmailAppointmentReminderSender>();
+builder.Services.AddSingleton<MemberTokenIssuer>();
+builder.Services.AddSignalR();
+builder.Services.AddSingleton<Microsoft.AspNetCore.SignalR.IUserIdProvider, TenantUserIdProvider>();
+builder.Services.AddScoped<RowingClub.Scheduling.Application.Members.IChatNotifier, SignalRChatNotifier>();
+builder.Services.AddScoped<RowingClub.Scheduling.Application.Members.IOtpSender, EmailOtpSender>();
+builder.Services.AddHostedService<TenantMigrationHostedService>();
+builder.Services.AddHostedService<PlatformAdminSeeder>();
+builder.Services.AddHostedService<ReminderWorker>();
+
+// React frontend'i (Vite dev sunucusu) ayrı origin'den çalışır; *.localhost subdomain'leri ve
+// mock domain için CORS açılır. Kimlik Authorization header'ıyla taşındığından cookie yoktur.
+builder.Services.AddCors(options => options.AddPolicy("frontend", policy =>
+    policy.SetIsOriginAllowed(origin =>
+            Uri.TryCreate(origin, UriKind.Absolute, out var uri) &&
+            (uri.Host == "localhost" || uri.Host.EndsWith(".localhost", StringComparison.Ordinal) ||
+             uri.Host.EndsWith(".faturebase.com", StringComparison.Ordinal)))
+        .AllowAnyHeader()
+        .AllowAnyMethod()
+        .AllowCredentials())); // SignalR JS istemcisi negotiate isteğini credentials ile atar
+
 var app = builder.Build();
 
 if (app.Environment.IsDevelopment())
@@ -35,12 +60,17 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseRowingClubObservability();
+app.UseCors("frontend");
 app.UseRateLimiter();
 app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapAuthEndpoints();
 app.MapAdminEndpoints();
+app.MapPublicSiteEndpoints();
+app.MapCompanyPanelEndpoints();
+app.MapMemberEndpoints();
+app.MapHub<ChatHub>("/hubs/chat").RequireCors("frontend");
 app.MapRowingClubHealthChecks();
 
 app.Run();

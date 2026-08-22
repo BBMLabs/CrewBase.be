@@ -43,6 +43,23 @@ public static class AuthenticationSetup
                     ValidateIssuerSigningKey = true,
                     IssuerSigningKey = new RsaSecurityKey(publicKey),
                 };
+
+                // SignalR websocket'leri Authorization başlığı taşıyamaz; hub yoluna gelen
+                // access_token query parametresi kabul edilir (standart SignalR JWT deseni).
+                options.Events = new JwtBearerEvents
+                {
+                    OnMessageReceived = context =>
+                    {
+                        var accessToken = context.Request.Query["access_token"];
+                        if (!string.IsNullOrEmpty(accessToken) &&
+                            context.HttpContext.Request.Path.StartsWithSegments("/hubs"))
+                        {
+                            context.Token = accessToken;
+                        }
+
+                        return Task.CompletedTask;
+                    },
+                };
             });
 
         services.AddAuthorization(options =>

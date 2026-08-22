@@ -1,0 +1,46 @@
+using Microsoft.EntityFrameworkCore;
+using RowingClub.Scheduling.Domain.Appointments;
+using RowingClub.Scheduling.Infrastructure.Persistence;
+
+namespace RowingClub.Scheduling.Infrastructure.Repositories;
+
+public sealed class AppointmentRepository(TenantDbContext context) : IAppointmentRepository
+{
+    public Task<Appointment?> GetByIdAsync(Guid id, CancellationToken cancellationToken) =>
+        context.Appointments
+            .Include(a => a.Customer)
+            .Include(a => a.Session)
+            .FirstOrDefaultAsync(a => a.Id == id, cancellationToken);
+
+    public Task<List<Appointment>> GetByDateAsync(DateOnly date, CancellationToken cancellationToken) =>
+        context.Appointments
+            .Include(a => a.Customer)
+            .Include(a => a.Session)
+            .Where(a => a.Date == date)
+            .ToListAsync(cancellationToken);
+
+    public Task<List<Appointment>> GetAllAsync(CancellationToken cancellationToken) =>
+        context.Appointments
+            .Include(a => a.Customer)
+            .Include(a => a.Session)
+            .ToListAsync(cancellationToken);
+
+    public Task<bool> HasActiveForCustomerAtAsync(
+        Guid customerId, DateOnly date, TimeOnly startTime, CancellationToken cancellationToken) =>
+        context.Appointments.AnyAsync(
+            a => a.CustomerId == customerId && a.Date == date && a.StartTime == startTime &&
+                 a.Status != AppointmentStatus.Cancelled,
+            cancellationToken);
+
+    public Task<List<Appointment>> GetPendingRemindersAsync(
+        DateOnly fromDate, CancellationToken cancellationToken) =>
+        context.Appointments
+            .Include(a => a.Customer)
+            .Where(a => a.ReminderSentAtUtc == null &&
+                        a.ReminderMinutes != null &&
+                        a.Status != AppointmentStatus.Cancelled &&
+                        a.Date >= fromDate.AddDays(-1) && a.Date <= fromDate.AddDays(8))
+            .ToListAsync(cancellationToken);
+
+    public void Add(Appointment appointment) => context.Appointments.Add(appointment);
+}

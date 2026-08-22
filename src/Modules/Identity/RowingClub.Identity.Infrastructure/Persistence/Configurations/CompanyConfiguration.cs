@@ -15,6 +15,11 @@ public sealed class CompanyConfiguration : IEntityTypeConfiguration<Company>
         builder.Property(c => c.Name).HasMaxLength(200).IsRequired();
         builder.HasIndex(c => c.Name).IsUnique();
 
+        builder.Property(c => c.Subdomain).HasMaxLength(63).IsRequired();
+        builder.HasIndex(c => c.Subdomain).IsUnique();
+
+        builder.Property(c => c.DatabaseName).HasMaxLength(63).IsRequired();
+
         builder.Property(c => c.LogoPath).HasMaxLength(500);
         builder.Property(c => c.Phone).HasMaxLength(20);
         builder.Property(c => c.ContactEmail).HasMaxLength(254);

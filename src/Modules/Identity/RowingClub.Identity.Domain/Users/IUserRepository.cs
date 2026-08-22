@@ -10,5 +10,7 @@ public interface IUserRepository
 
     Task<bool> ExistsByEmailAsync(EmailAddress email, CancellationToken cancellationToken);
 
+    Task<List<User>> GetByCompanyIdAsync(Guid companyId, CancellationToken cancellationToken);
+
     void Add(User user);
 }

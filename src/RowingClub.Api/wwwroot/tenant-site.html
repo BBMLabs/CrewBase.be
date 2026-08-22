@@ -1,0 +1,327 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{COMPANY_NAME}} — Online Randevu</title>
+<style>
+  :root {
+    --brand: #2563eb;
+    --brand-dark: #1e40af;
+    --ink: #0f172a;
+    --muted: #64748b;
+    --bg: #f8fafc;
+    --card: #ffffff;
+    --ok: #16a34a;
+    --err: #dc2626;
+    --radius: 14px;
+  }
+  * { box-sizing: border-box; margin: 0; }
+  body { font-family: "Segoe UI", system-ui, sans-serif; background: var(--bg); color: var(--ink); }
+  header {
+    background: linear-gradient(135deg, var(--brand), var(--brand-dark));
+    color: #fff; padding: 56px 20px 72px; text-align: center;
+  }
+  .logo {
+    width: 72px; height: 72px; border-radius: 50%; background: rgba(255,255,255,.18);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 34px; font-weight: 700; margin: 0 auto 16px; border: 2px solid rgba(255,255,255,.4);
+  }
+  header h1 { font-size: 30px; letter-spacing: .3px; }
+  header .host { opacity: .85; margin-top: 6px; font-size: 14px; }
+  main { max-width: 900px; margin: -40px auto 60px; padding: 0 16px; display: grid; gap: 20px; }
+  @media (min-width: 760px) { main { grid-template-columns: 1fr 1.25fr; } }
+  .card { background: var(--card); border-radius: var(--radius); padding: 24px; box-shadow: 0 10px 30px rgba(2,6,23,.08); }
+  .card h2 { font-size: 18px; margin-bottom: 14px; }
+  .info-row { display: flex; gap: 10px; padding: 8px 0; border-bottom: 1px solid #f1f5f9; font-size: 14px; }
+  .info-row:last-child { border-bottom: 0; }
+  .info-row .k { color: var(--muted); min-width: 84px; }
+  .pkg { border: 1px solid #e2e8f0; border-radius: 10px; padding: 12px; margin-top: 10px; font-size: 14px; }
+  .pkg b { display: block; }
+  .pkg .price { color: var(--brand); font-weight: 700; float: right; }
+  label { display: block; font-size: 13px; color: var(--muted); margin: 12px 0 4px; }
+  input, select, textarea {
+    width: 100%; padding: 10px 12px; border: 1px solid #e2e8f0; border-radius: 8px;
+    font: inherit; background: #fff;
+  }
+  textarea { resize: vertical; min-height: 60px; }
+  .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .slots { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 4px; }
+  .slot {
+    padding: 9px 4px; text-align: center; border: 1px solid #e2e8f0; border-radius: 8px;
+    cursor: pointer; font-size: 13px; background: #fff; user-select: none;
+  }
+  .slot small { display: block; color: var(--muted); font-size: 11px; }
+  .slot.taken { background: #f1f5f9; color: #cbd5e1; cursor: not-allowed; }
+  .slot.taken small { color: #cbd5e1; }
+  .slot.selected { background: var(--brand); color: #fff; border-color: var(--brand); }
+  .slot.selected small { color: #dbeafe; }
+  button.submit {
+    margin-top: 18px; width: 100%; padding: 13px; border: 0; border-radius: 10px;
+    background: var(--brand); color: #fff; font-size: 16px; font-weight: 600; cursor: pointer;
+  }
+  button.submit:disabled { opacity: .6; cursor: wait; }
+  .msg { margin-top: 14px; padding: 12px; border-radius: 8px; font-size: 14px; display: none; }
+  .msg.ok { display: block; background: #f0fdf4; color: var(--ok); border: 1px solid #bbf7d0; }
+  .msg.err { display: block; background: #fef2f2; color: var(--err); border: 1px solid #fecaca; }
+  footer { text-align: center; color: var(--muted); font-size: 12px; padding: 24px; }
+</style>
+</head>
+<body>
+<header>
+  <div class="logo">{{COMPANY_INITIAL}}</div>
+  <h1>{{COMPANY_NAME}}</h1>
+  <div class="host">{{SITE_HOST}}</div>
+</header>
+
+<main>
+  <section>
+    <div class="card">
+      <h2>İletişim</h2>
+      <div class="info-row"><span class="k">Telefon</span><span>{{PHONE}}</span></div>
+      <div class="info-row"><span class="k">E-posta</span><span>{{EMAIL}}</span></div>
+      <div class="info-row"><span class="k">Adres</span><span>{{ADDRESS}}</span></div>
+      <div class="info-row"><span class="k">Çalışma</span><span id="hours">-</span></div>
+    </div>
+    <div class="card" id="packages-card" style="margin-top:20px; display:none">
+      <h2>Ders Paketleri</h2>
+      <div id="packages"></div>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>Online Randevu Al</h2>
+    <form id="booking-form">
+      <label for="fullName">Ad Soyad</label>
+      <input id="fullName" required maxlength="200" placeholder="Adınız Soyadınız">
+
+      <div class="row2">
+        <div>
+          <label for="phone">Telefon</label>
+          <input id="phone" required maxlength="20" placeholder="05xx xxx xx xx">
+        </div>
+        <div>
+          <label for="email">E-posta</label>
+          <input id="email" type="email" maxlength="254" placeholder="Hatırlatma için önerilir">
+        </div>
+      </div>
+
+      <div class="row2">
+        <div>
+          <label for="boatClass">Tekne Sınıfı</label>
+          <select id="boatClass"></select>
+        </div>
+        <div>
+          <label for="date">Tarih</label>
+          <input id="date" type="date" required>
+        </div>
+      </div>
+
+      <label>Saat <small id="slot-hint" style="color:#94a3b8"></small></label>
+      <div class="slots" id="slots"></div>
+
+      <div class="row2">
+        <div>
+          <label for="reminder">Hatırlatma</label>
+          <select id="reminder"></select>
+        </div>
+        <div>
+          <label for="package">Ders Paketi (isteğe bağlı)</label>
+          <select id="package"><option value="">Paketsiz</option></select>
+        </div>
+      </div>
+
+      <label style="display:flex;gap:8px;align-items:flex-start;margin:14px 0 4px;font-size:13px;color:var(--muted)">
+        <input id="consents" type="checkbox" required style="width:auto;margin-top:2px">
+        <span>Yüzme Beyanı'nı, Sağlık Beyanı'nı, Kulüp ve Rezervasyon Kuralları'nı ve KVKK Aydınlatma Metni'ni okudum, kabul ediyorum.</span>
+      </label>
+
+      <label for="note">Not (isteğe bağlı)</label>
+      <textarea id="note" maxlength="1000" placeholder="Eklemek istedikleriniz..."></textarea>
+
+      <button class="submit" type="submit" id="submit-btn">Randevu Oluştur</button>
+      <div class="msg" id="msg"></div>
+    </form>
+  </section>
+</main>
+
+<footer>{{COMPANY_NAME}} · FatureBase altyapısıyla · {{SITE_HOST}}</footer>
+
+<script>
+(function () {
+  var apiBase = "/api/v1/public/{{SUBDOMAIN}}";
+  var els = {
+    slots: document.getElementById("slots"),
+    date: document.getElementById("date"),
+    msg: document.getElementById("msg"),
+    btn: document.getElementById("submit-btn"),
+    boatClass: document.getElementById("boatClass"),
+    reminder: document.getElementById("reminder"),
+    pkg: document.getElementById("package"),
+    phone: document.getElementById("phone"),
+    hours: document.getElementById("hours"),
+    slotHint: document.getElementById("slot-hint")
+  };
+  var selectedTime = null;
+  var dayNames = ["Paz", "Pzt", "Sal", "Çar", "Per", "Cum", "Cmt"];
+
+  var today = new Date();
+  els.date.min = today.toISOString().slice(0, 10);
+  els.date.value = els.date.min;
+
+  function showMsg(text, ok) {
+    els.msg.textContent = text;
+    els.msg.className = "msg " + (ok ? "ok" : "err");
+  }
+
+  function reminderLabel(min) {
+    if (min >= 1440) return (min / 1440) + " gün önce";
+    if (min >= 60) return (min / 60) + " saat önce";
+    return min + " dakika önce";
+  }
+
+  function loadOptions() {
+    fetch(apiBase + "/options")
+      .then(function (r) { return r.json(); })
+      .then(function (body) {
+        var o = body.data;
+        if (!o) return;
+
+        els.date.max = new Date(Date.now() + o.maxAdvanceDays * 86400000).toISOString().slice(0, 10);
+
+        var openDays = o.openDays.map(function (d) { return dayNames[d]; }).join(", ");
+        els.hours.textContent = openDays + " " + o.openingTime + " – " + o.closingTime;
+
+        els.boatClass.innerHTML = "";
+        o.boatClasses.forEach(function (c) {
+          var opt = document.createElement("option");
+          opt.value = c.value;
+          opt.textContent = c.label + " (" + c.capacity + " kişilik)";
+          els.boatClass.appendChild(opt);
+        });
+
+        els.reminder.innerHTML = "";
+        o.reminderOptions.forEach(function (min) {
+          var opt = document.createElement("option");
+          opt.value = min;
+          opt.textContent = reminderLabel(min);
+          if (min === o.defaultReminderMinutes) opt.selected = true;
+          els.reminder.appendChild(opt);
+        });
+        var noRem = document.createElement("option");
+        noRem.value = "0";
+        noRem.textContent = "Hatırlatma istemiyorum";
+        els.reminder.appendChild(noRem);
+
+        if (o.packages.length > 0) {
+          document.getElementById("packages-card").style.display = "block";
+          var packagesEl = document.getElementById("packages");
+          o.packages.forEach(function (p) {
+            var div = document.createElement("div");
+            div.className = "pkg";
+            var price = document.createElement("span");
+            price.className = "price";
+            price.textContent = p.price + " ₺";
+            var name = document.createElement("b");
+            name.textContent = p.name + " · " + p.sessionCount + " ders";
+            div.appendChild(price);
+            div.appendChild(name);
+            if (p.description) div.appendChild(document.createTextNode(p.description));
+            packagesEl.appendChild(div);
+
+            var opt = document.createElement("option");
+            opt.value = p.id;
+            opt.textContent = p.name + " (" + p.sessionCount + " ders)";
+            els.pkg.appendChild(opt);
+          });
+        }
+
+        loadSlots();
+      })
+      .catch(function () { showMsg("Firma bilgileri yüklenemedi.", false); });
+  }
+
+  function loadSlots() {
+    selectedTime = null;
+    els.slots.innerHTML = "<span style='color:#94a3b8;font-size:13px'>Yükleniyor...</span>";
+    var url = apiBase + "/availability?date=" + els.date.value +
+      "&boatClass=" + encodeURIComponent(els.boatClass.value || "1x");
+    if (els.phone.value.trim()) url += "&phone=" + encodeURIComponent(els.phone.value.trim());
+
+    fetch(url)
+      .then(function (r) { return r.json(); })
+      .then(function (body) {
+        els.slots.innerHTML = "";
+        var slots = body.data || [];
+        if (slots.length === 0) {
+          els.slots.innerHTML = "<span style='color:#94a3b8;font-size:13px'>Bu gün için uygun saat yok.</span>";
+          return;
+        }
+        slots.forEach(function (slot) {
+          var el = document.createElement("div");
+          el.className = "slot" + (slot.available ? "" : " taken");
+          el.textContent = slot.time;
+          var seats = document.createElement("small");
+          seats.textContent = slot.available ? slot.seatsLeft + " koltuk" : "dolu";
+          el.appendChild(seats);
+          if (slot.available) {
+            el.addEventListener("click", function () {
+              selectedTime = slot.time;
+              els.slots.querySelectorAll(".slot").forEach(function (s) { s.classList.remove("selected"); });
+              el.classList.add("selected");
+            });
+          }
+          els.slots.appendChild(el);
+        });
+      })
+      .catch(function () { els.slots.innerHTML = "<span style='color:#dc2626'>Saatler yüklenemedi.</span>"; });
+  }
+
+  els.date.addEventListener("change", loadSlots);
+  els.boatClass.addEventListener("change", loadSlots);
+  els.phone.addEventListener("blur", loadSlots);
+  loadOptions();
+
+  document.getElementById("booking-form").addEventListener("submit", function (e) {
+    e.preventDefault();
+    if (!selectedTime) { showMsg("Lütfen bir saat seçin.", false); return; }
+
+    els.btn.disabled = true;
+    fetch(apiBase + "/appointments", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        fullName: document.getElementById("fullName").value,
+        phone: els.phone.value,
+        email: document.getElementById("email").value || null,
+        date: els.date.value,
+        time: selectedTime,
+        boatClass: els.boatClass.value || "1x",
+        note: document.getElementById("note").value || null,
+        acceptedConsents: ["swim", "health", "rules", "kvkk"],
+        reminderMinutes: parseInt(els.reminder.value, 10),
+        packageId: els.pkg.value || null
+      })
+    })
+      .then(function (r) { return r.json().then(function (b) { return { ok: r.ok, body: b }; }); })
+      .then(function (res) {
+        if (res.ok) {
+          var d = res.body.data || {};
+          var extra = [];
+          if (d.boatName) extra.push("Tekne: " + d.boatName);
+          if (d.instructorName) extra.push("Eğitmen: " + d.instructorName);
+          showMsg("Randevunuz alındı: " + els.date.value + " " + selectedTime +
+            (extra.length ? " (" + extra.join(", ") + ")" : "") +
+            ". Onay için sizinle iletişime geçilecektir.", true);
+          loadSlots();
+        } else {
+          showMsg((res.body && (res.body.message || res.body.detail)) || "Randevu oluşturulamadı.", false);
+        }
+      })
+      .catch(function () { showMsg("Bağlantı hatası. Lütfen tekrar deneyin.", false); })
+      .finally(function () { els.btn.disabled = false; });
+  });
+})();
+</script>
+</body>
+</html>

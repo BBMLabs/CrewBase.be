@@ -15,4 +15,6 @@ public sealed record RegisterCompanyResponse(
     Guid AdminUserId,
     string CompanyName,
     string AdminEmail,
+    string Subdomain,
+    string SiteUrl,
     DateTimeOffset CreatedAtUtc);

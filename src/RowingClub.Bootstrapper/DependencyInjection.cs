@@ -6,6 +6,7 @@ using RowingClub.BuildingBlocks.Observability;
 using RowingClub.BuildingBlocks.Security;
 using RowingClub.Identity.Application;
 using RowingClub.Identity.Infrastructure;
+using RowingClub.Scheduling.Infrastructure;
 
 namespace RowingClub.Bootstrapper;
 
@@ -25,12 +26,15 @@ public static class DependencyInjection
         services.AddRowingClubObservability(configuration);
 
         services.AddRowingClubApplication(
-            typeof(RowingClub.Identity.Application.DependencyInjection).Assembly);
+            typeof(RowingClub.Identity.Application.DependencyInjection).Assembly,
+            typeof(RowingClub.Scheduling.Application.Booking.BookAppointmentCommand).Assembly);
 
         services.AddIdentityApplication(configuration);
         services.AddIdentityInfrastructure(configuration);
 
-        // Clubs, Memberships, Scheduling, Packages, Notifications, Reporting: scaffolded only,
+        services.AddSchedulingInfrastructure();
+
+        // Clubs, Memberships, Packages, Notifications, Reporting: scaffolded only,
         // no Application/Infrastructure registrations yet - see docs/ARCHITECTURE.md.
 
         return services;

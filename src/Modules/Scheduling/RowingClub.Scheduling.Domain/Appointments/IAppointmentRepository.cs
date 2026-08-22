@@ -1,0 +1,19 @@
+namespace RowingClub.Scheduling.Domain.Appointments;
+
+public interface IAppointmentRepository
+{
+    Task<Appointment?> GetByIdAsync(Guid id, CancellationToken cancellationToken);
+
+    Task<List<Appointment>> GetByDateAsync(DateOnly date, CancellationToken cancellationToken);
+
+    Task<List<Appointment>> GetAllAsync(CancellationToken cancellationToken);
+
+    /// <summary>Aynı üyenin aynı slotta ikinci kez yer almasını engellemek için.</summary>
+    Task<bool> HasActiveForCustomerAtAsync(
+        Guid customerId, DateOnly date, TimeOnly startTime, CancellationToken cancellationToken);
+
+    /// <summary>Hatırlatması henüz gönderilmemiş, iptal edilmemiş, bugünden itibaren yaklaşan randevular.</summary>
+    Task<List<Appointment>> GetPendingRemindersAsync(DateOnly fromDate, CancellationToken cancellationToken);
+
+    void Add(Appointment appointment);
+}

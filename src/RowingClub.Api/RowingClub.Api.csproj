@@ -7,6 +7,7 @@
     <ProjectReference Include="..\BuildingBlocks\RowingClub.BuildingBlocks.Security\RowingClub.BuildingBlocks.Security.csproj" />
     <ProjectReference Include="..\BuildingBlocks\RowingClub.BuildingBlocks.Observability\RowingClub.BuildingBlocks.Observability.csproj" />
     <ProjectReference Include="..\Modules\Identity\RowingClub.Identity.Application\RowingClub.Identity.Application.csproj" />
+    <ProjectReference Include="..\Modules\Scheduling\RowingClub.Scheduling.Application\RowingClub.Scheduling.Application.csproj" />
   </ItemGroup>
 
   <ItemGroup>

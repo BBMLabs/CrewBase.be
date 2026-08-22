@@ -22,7 +22,6 @@ public sealed class AuthEndpointFunctionalTests(RowingClubWebApplicationFactory 
                  {
                      "/api/v1/auth/companies/register",
                      "/api/v1/auth/login",
-                     "/api/v1/auth/login/verify-2fa",
                      "/api/v1/auth/refresh",
                      "/api/v1/auth/logout",
                      "/api/v1/auth/logout-all",
@@ -30,10 +29,6 @@ public sealed class AuthEndpointFunctionalTests(RowingClubWebApplicationFactory 
                      "/api/v1/auth/reset-password",
                      "/api/v1/auth/verify-email",
                      "/api/v1/auth/send-verification-email",
-                     "/api/v1/auth/2fa/setup",
-                     "/api/v1/auth/2fa/enable",
-                     "/api/v1/auth/2fa/disable",
-                     "/api/v1/auth/2fa/recovery-codes",
                  })
         {
             paths.TryGetProperty(expected, out _).Should().BeTrue($"{expected} olmalı");
@@ -98,17 +93,14 @@ public sealed class AuthEndpointFunctionalTests(RowingClubWebApplicationFactory 
     }
 
     [Fact]
-    public async Task VerifyTwoFactor_validation_failure_returns_problem_details()
+    public async Task TwoFactor_endpoints_are_disabled()
     {
         using var client = factory.CreateClient();
 
         var response = await client.PostAsJsonAsync(
-            "/api/v1/auth/login/verify-2fa", new { PendingToken = "", Code = "" });
+            "/api/v1/auth/login/verify-2fa", new { PendingToken = "x", Code = "123456" });
 
-        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
-
-        var body = await response.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>();
-        body.GetProperty("code").GetString().Should().Be("validation_error");
+        response.StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
 
     [Fact]

@@ -10,6 +10,15 @@ using RowingClub.Identity.Domain.ValueObjects;
 
 namespace RowingClub.UnitTests.Identity.Application;
 
+internal static class CompanyTestFactory
+{
+    public static Company Create(string name = "Rowing Club")
+    {
+        var subdomain = SubdomainSlug.FromCompanyName(name);
+        return Company.Register(name, subdomain, SubdomainSlug.ToDatabaseName(subdomain), null, null, null);
+    }
+}
+
 public sealed class ApproveCompanyCommandHandlerTests
 {
     private readonly ICompanyRepository _companyRepository = Substitute.For<ICompanyRepository>();
@@ -19,9 +28,18 @@ public sealed class ApproveCompanyCommandHandlerTests
         new(_companyRepository, _userRepository);
 
     [Fact]
-    public async Task Handle_approves_pending_company()
+    public async Task Companies_are_active_immediately_after_registration()
     {
-        var company = Company.Register("Rowing Club", null, null, null);
+        var company = CompanyTestFactory.Create();
+
+        company.Status.Should().Be(CompanyStatus.Active);
+        company.ApprovedAtUtc.Should().NotBeNull();
+    }
+
+    [Fact]
+    public async Task Handle_keeps_already_active_company_active()
+    {
+        var company = CompanyTestFactory.Create();
         var adminUser = User.Register(EmailAddress.Create("admin@example.com"));
 
         _companyRepository.GetByIdAsync(company.Id, Arg.Any<CancellationToken>()).Returns(company);
@@ -31,7 +49,6 @@ public sealed class ApproveCompanyCommandHandlerTests
             new ApproveCompanyCommand(company.Id, adminUser.Id), CancellationToken.None);
 
         company.Status.Should().Be(CompanyStatus.Active);
-        company.ApprovedByUserId.Should().Be(adminUser.Id);
         _companyRepository.Received(1).Update(company);
     }
 
@@ -49,19 +66,20 @@ public sealed class ApproveCompanyCommandHandlerTests
     }
 
     [Fact]
-    public async Task Handle_throws_when_company_already_active()
+    public async Task Handle_reactivates_suspended_company()
     {
-        var company = Company.Register("Rowing Club", null, null, null);
+        var company = CompanyTestFactory.Create();
+        company.Suspend();
         var adminUser = User.Register(EmailAddress.Create("admin@example.com"));
-        company.Approve(adminUser.Id);
 
         _companyRepository.GetByIdAsync(company.Id, Arg.Any<CancellationToken>()).Returns(company);
         _userRepository.GetByIdAsync(adminUser.Id, Arg.Any<CancellationToken>()).Returns(adminUser);
 
-        var act = () => CreateHandler().Handle(
+        await CreateHandler().Handle(
             new ApproveCompanyCommand(company.Id, adminUser.Id), CancellationToken.None);
 
-        (await act.Should().ThrowAsync<DomainException>()).Which.ErrorCode.Should().Be("company_not_pending");
+        company.Status.Should().Be(CompanyStatus.Active);
+        company.ApprovedByUserId.Should().Be(adminUser.Id);
     }
 }
 
@@ -75,8 +93,7 @@ public sealed class SuspendCompanyCommandHandlerTests
     [Fact]
     public async Task Handle_suspends_active_company()
     {
-        var company = Company.Register("Rowing Club", null, null, null);
-        company.Approve(Guid.NewGuid());
+        var company = CompanyTestFactory.Create();
 
         _companyRepository.GetByIdAsync(company.Id, Arg.Any<CancellationToken>()).Returns(company);
 
@@ -108,17 +125,12 @@ public sealed class GetPendingCompaniesQueryHandlerTests
         new(_companyRepository);
 
     [Fact]
-    public async Task Handle_returns_only_pending_companies()
+    public async Task Handle_returns_companies_reported_by_repository()
     {
-        var pending = new List<Company>
-        {
-            Company.Register("Club A", null, null, null),
-            Company.Register("Club B", null, null, null),
-        };
-        pending[0].Approve(Guid.NewGuid());
+        var company = CompanyTestFactory.Create("Club A");
 
         _companyRepository.GetByStatusAsync(CompanyStatus.PendingApproval, Arg.Any<CancellationToken>())
-            .Returns(new List<Company> { pending[0] });
+            .Returns(new List<Company> { company });
 
         var result = await CreateHandler().Handle(
             new GetPendingCompaniesQuery(), CancellationToken.None);

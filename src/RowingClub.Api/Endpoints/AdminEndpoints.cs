@@ -5,6 +5,7 @@ using RowingClub.BuildingBlocks.Application.Abstractions;
 using RowingClub.Identity.Application.Companies.ApproveCompany;
 using RowingClub.Identity.Application.Companies.GetPendingCompanies;
 using RowingClub.Identity.Application.Companies.SuspendCompany;
+using RowingClub.Identity.Application.Platform;
 
 namespace RowingClub.Api.Endpoints;
 
@@ -15,6 +16,20 @@ public static class AdminEndpoints
         var platformAdminGroup = app.MapGroup("/api/v1/platform")
             .RequireAuthorization(new AuthorizeAttribute { Roles = "PlatformAdmin" })
             .WithTags("Platform Admin");
+
+        platformAdminGroup.MapGet("/companies", async (IMediator mediator) =>
+        {
+            var companies = await mediator.Send(new GetAllCompaniesQuery());
+            return Results.Ok(ApiResponse<List<PlatformCompanyDto>>.Ok(companies));
+        })
+        .WithName("GetAllCompanies");
+
+        platformAdminGroup.MapGet("/stats", async (IMediator mediator) =>
+        {
+            var stats = await mediator.Send(new GetPlatformStatsQuery());
+            return Results.Ok(ApiResponse<PlatformStatsDto>.Ok(stats));
+        })
+        .WithName("GetPlatformStats");
 
         platformAdminGroup.MapGet("/companies/pending", async (IMediator mediator) =>
         {

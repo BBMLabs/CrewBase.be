@@ -13,6 +13,12 @@ public sealed class Company : AggregateRoot<Guid>
 {
     public string Name { get; private set; } = null!;
 
+    /// <summary>Firmanın site adresi: {Subdomain}.faturebase.com (şimdilik mock domain).</summary>
+    public string Subdomain { get; private set; } = null!;
+
+    /// <summary>Firmanın kendi PostgreSQL veritabanının adı (database-per-tenant).</summary>
+    public string DatabaseName { get; private set; } = null!;
+
     public string? LogoPath { get; private set; }
 
     public string? Phone { get; private set; }
@@ -33,26 +39,36 @@ public sealed class Company : AggregateRoot<Guid>
     {
     }
 
-    private Company(Guid id, string name, string? phone, string? contactEmail, string? address)
+    private Company(
+        Guid id, string name, string subdomain, string databaseName,
+        string? phone, string? contactEmail, string? address)
         : base(id)
     {
         Name = name;
+        Subdomain = subdomain;
+        DatabaseName = databaseName;
         Phone = phone;
         ContactEmail = contactEmail;
         Address = address;
-        Status = CompanyStatus.PendingApproval;
+
+        // Firmalar artık onay beklemeden doğrudan aktif olarak açılır.
+        Status = CompanyStatus.Active;
         CreatedAtUtc = DateTimeOffset.UtcNow;
+        ApprovedAtUtc = CreatedAtUtc;
     }
 
-    public static Company Register(string name, string? phone, string? contactEmail, string? address)
+    public static Company Register(
+        string name, string subdomain, string databaseName,
+        string? phone, string? contactEmail, string? address)
     {
-        return new Company(Guid.NewGuid(), name, phone, contactEmail, address);
+        return new Company(Guid.NewGuid(), name, subdomain, databaseName, phone, contactEmail, address);
     }
 
+    /// <summary>Firmayı aktifleştirir; askıya alınmış firmayı geri açmak için de kullanılır.</summary>
     public void Approve(Guid approvedByUserId)
     {
-        if (Status != CompanyStatus.PendingApproval)
-            throw new DomainException("company_not_pending", "Şirket zaten onaylanmış veya askıya alınmış.");
+        if (Status == CompanyStatus.Active)
+            return;
 
         Status = CompanyStatus.Active;
         ApprovedAtUtc = DateTimeOffset.UtcNow;

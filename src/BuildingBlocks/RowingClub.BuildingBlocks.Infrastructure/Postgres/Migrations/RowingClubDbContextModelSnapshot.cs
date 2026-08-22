@@ -98,6 +98,11 @@ namespace RowingClub.BuildingBlocks.Infrastructure.Postgres.Migrations
                     b.Property<DateTimeOffset>("CreatedAtUtc")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<string>("DatabaseName")
+                        .IsRequired()
+                        .HasMaxLength(63)
+                        .HasColumnType("character varying(63)");
+
                     b.Property<string>("LogoPath")
                         .HasMaxLength(500)
                         .HasColumnType("character varying(500)");
@@ -116,6 +121,11 @@ namespace RowingClub.BuildingBlocks.Infrastructure.Postgres.Migrations
                         .HasMaxLength(50)
                         .HasColumnType("character varying(50)");
 
+                    b.Property<string>("Subdomain")
+                        .IsRequired()
+                        .HasMaxLength(63)
+                        .HasColumnType("character varying(63)");
+
                     b.Property<long>("Version")
                         .IsConcurrencyToken()
                         .HasColumnType("bigint");
@@ -123,6 +133,9 @@ namespace RowingClub.BuildingBlocks.Infrastructure.Postgres.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("Name")
+                        .IsUnique();
+
+                    b.HasIndex("Subdomain")
                         .IsUnique();
 
                     b.ToTable("identity_companies", (string)null);

@@ -1,8 +1,11 @@
 using FluentAssertions;
 using NSubstitute;
+using RowingClub.BuildingBlocks.Application.Abstractions;
 using RowingClub.BuildingBlocks.Domain;
 using RowingClub.BuildingBlocks.Security.Passwords;
+using RowingClub.Identity.Application.Audit;
 using RowingClub.Identity.Application.Companies.RegisterCompany;
+using RowingClub.Identity.Application.Email;
 using RowingClub.Identity.Domain.Companies;
 using RowingClub.Identity.Domain.Users;
 using RowingClub.Identity.Domain.ValueObjects;
@@ -15,9 +18,13 @@ public sealed class RegisterCompanyCommandHandlerTests
     private readonly IUserRepository _userRepository = Substitute.For<IUserRepository>();
     private readonly ICredentialRepository _credentialRepository = Substitute.For<ICredentialRepository>();
     private readonly IPasswordHasher _passwordHasher = Substitute.For<IPasswordHasher>();
+    private readonly ITenantDatabaseProvisioner _provisioner = Substitute.For<ITenantDatabaseProvisioner>();
+    private readonly IEmailSender _emailSender = Substitute.For<IEmailSender>();
+    private readonly IAuditLogger _auditLogger = Substitute.For<IAuditLogger>();
 
     private RegisterCompanyCommandHandler CreateHandler() =>
-        new(_companyRepository, _userRepository, _credentialRepository, _passwordHasher);
+        new(_companyRepository, _userRepository, _credentialRepository, _passwordHasher,
+            _provisioner, _emailSender, _auditLogger);
 
     [Fact]
     public async Task Handle_creates_company_and_company_admin()
@@ -32,7 +39,11 @@ public sealed class RegisterCompanyCommandHandlerTests
 
         response.CompanyName.Should().Be("Rowing Club");
         response.AdminEmail.Should().Be("admin@example.com");
-        _companyRepository.Received(1).Add(Arg.Is<Company>(c => c!.Name == "Rowing Club"));
+        response.Subdomain.Should().Be("rowing-club");
+        response.SiteUrl.Should().Be("https://rowing-club.faturebase.com");
+        await _provisioner.Received(1).ProvisionAsync("tenant_rowing_club", Arg.Any<CancellationToken>());
+        _companyRepository.Received(1).Add(Arg.Is<Company>(c =>
+            c!.Name == "Rowing Club" && c.Status == CompanyStatus.Active && c.Subdomain == "rowing-club"));
         _userRepository.Received(1).Add(Arg.Is<User>(u =>
             u!.Email.Value == "admin@example.com" && u.Role == UserRole.CompanyAdmin));
         _credentialRepository.Received(1).Add(Arg.Is<Credential>(c =>

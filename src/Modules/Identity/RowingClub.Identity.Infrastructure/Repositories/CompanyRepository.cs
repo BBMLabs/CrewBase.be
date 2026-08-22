@@ -9,8 +9,14 @@ public sealed class CompanyRepository(RowingClubDbContext context) : ICompanyRep
     public Task<Company?> GetByIdAsync(Guid id, CancellationToken cancellationToken) =>
         context.Set<Company>().FirstOrDefaultAsync(c => c.Id == id, cancellationToken);
 
+    public Task<Company?> GetBySubdomainAsync(string subdomain, CancellationToken cancellationToken) =>
+        context.Set<Company>().FirstOrDefaultAsync(c => c.Subdomain == subdomain, cancellationToken);
+
     public Task<bool> ExistsByNameAsync(string name, CancellationToken cancellationToken) =>
         context.Set<Company>().AnyAsync(c => c.Name == name, cancellationToken);
+
+    public Task<bool> ExistsBySubdomainAsync(string subdomain, CancellationToken cancellationToken) =>
+        context.Set<Company>().AnyAsync(c => c.Subdomain == subdomain, cancellationToken);
 
     public Task<List<Company>> GetByStatusAsync(CompanyStatus status, CancellationToken cancellationToken) =>
         context.Set<Company>().Where(c => c.Status == status).ToListAsync(cancellationToken);

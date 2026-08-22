@@ -10,10 +10,8 @@ public sealed class AuthEndpointSecurityTests(RowingClubWebApplicationFactory fa
     public static TheoryData<string, HttpMethod> ProtectedEndpoints => new()
     {
         { "/api/v1/auth/logout-all", HttpMethod.Post },
-        { "/api/v1/auth/2fa/setup", HttpMethod.Get },
-        { "/api/v1/auth/2fa/enable", HttpMethod.Post },
-        { "/api/v1/auth/2fa/disable", HttpMethod.Post },
-        { "/api/v1/auth/2fa/recovery-codes", HttpMethod.Post },
+        { "/api/v1/company/appointments", HttpMethod.Get },
+        { "/api/v1/company/customers", HttpMethod.Get },
         { "/api/v1/platform/companies/pending", HttpMethod.Get },
         { "/api/v1/platform/companies/e9a7e1b1-0000-0000-0000-000000000001/approve", HttpMethod.Post },
         { "/api/v1/platform/companies/e9a7e1b1-0000-0000-0000-000000000001/suspend", HttpMethod.Post },
@@ -27,7 +25,6 @@ public sealed class AuthEndpointSecurityTests(RowingClubWebApplicationFactory fa
     {
         { "/api/v1/auth/companies/register", new { } },
         { "/api/v1/auth/login", new { email = "", password = "" } },
-        { "/api/v1/auth/login/verify-2fa", new { PendingToken = "", Code = "" } },
         { "/api/v1/auth/refresh", new { RefreshToken = "" } },
         { "/api/v1/auth/logout", new { RefreshToken = "" } },
         { "/api/v1/auth/forgot-password", new { email = "not-an-email" } },

@@ -21,5 +21,8 @@ public sealed class UserRepository(RowingClubDbContext context) : IUserRepositor
     public Task<bool> ExistsByEmailAsync(EmailAddress email, CancellationToken cancellationToken) =>
         context.Set<User>().AnyAsync(u => u.Email == email, cancellationToken);
 
+    public Task<List<User>> GetByCompanyIdAsync(Guid companyId, CancellationToken cancellationToken) =>
+        context.Set<User>().Where(u => u.CompanyId == companyId).ToListAsync(cancellationToken);
+
     public void Add(User user) => context.Set<User>().Add(user);
 }

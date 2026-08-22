@@ -11,8 +11,6 @@ using RowingClub.Identity.Application.LogoutAll;
 using RowingClub.Identity.Application.PasswordReset;
 using RowingClub.Identity.Application.Refresh;
 using RowingClub.Identity.Application.Register;
-using RowingClub.Identity.Application.TwoFactor;
-using RowingClub.Identity.Application.TwoFactor.GenerateRecoveryCodes;
 
 namespace RowingClub.Api.Endpoints;
 
@@ -20,13 +18,10 @@ public sealed record RegisterCompanyRequest(
     string CompanyName, string AdminEmail, string AdminPassword, string? Phone, string? ContactEmail, string? Address);
 public sealed record LoginRequest(string Email, string Password);
 public sealed record RefreshRequest(string RefreshToken);
-public sealed record VerifyTwoFactorRequest(string PendingToken, string Code);
 public sealed record LogoutRequest(string RefreshToken);
 public sealed record ForgotPasswordRequest(string Email);
 public sealed record ResetPasswordRequest(string Email, string Token, string NewPassword);
 public sealed record VerifyEmailRequest(string Email, string Token);
-public sealed record EnableTwoFactorRequest(string Method, string? Code, string? Secret);
-public sealed record DisableTwoFactorRequest(string Password);
 
 public static class AuthEndpoints
 {
@@ -52,12 +47,6 @@ public static class AuthEndpoints
         group.MapPost("/login", LoginAsync)
             .WithName("Login")
             .Produces<ApiResponse<LoginResult>>(StatusCodes.Status200OK)
-            .ProducesValidationProblem()
-            .ProducesProblem(StatusCodes.Status401Unauthorized);
-
-        group.MapPost("/login/verify-2fa", VerifyTwoFactorLoginAsync)
-            .WithName("VerifyTwoFactorLogin")
-            .Produces<ApiResponse<VerifyTwoFactorLoginResponse>>(StatusCodes.Status200OK)
             .ProducesValidationProblem()
             .ProducesProblem(StatusCodes.Status401Unauthorized);
 
@@ -100,27 +89,8 @@ public static class AuthEndpoints
             .Produces<ApiResponse>(StatusCodes.Status200OK)
             .ProducesValidationProblem();
 
-        // 2FA endpoints - require authentication
-        var twoFactorGroup = group.MapGroup("")
-            .RequireAuthorization();
-
-        twoFactorGroup.MapGet("/2fa/setup", SetupTotpAsync)
-            .WithName("SetupTotp")
-            .Produces<ApiResponse<SetupTotpResponse>>(StatusCodes.Status200OK);
-
-        twoFactorGroup.MapPost("/2fa/enable", EnableTwoFactorAsync)
-            .WithName("EnableTwoFactor")
-            .Produces<ApiResponse>(StatusCodes.Status200OK)
-            .ProducesProblem(StatusCodes.Status409Conflict);
-
-        twoFactorGroup.MapPost("/2fa/disable", DisableTwoFactorAsync)
-            .WithName("DisableTwoFactor")
-            .Produces<ApiResponse>(StatusCodes.Status200OK)
-            .ProducesProblem(StatusCodes.Status409Conflict);
-
-        twoFactorGroup.MapPost("/2fa/recovery-codes", GenerateRecoveryCodesAsync)
-            .WithName("GenerateRecoveryCodes")
-            .Produces<ApiResponse<GenerateRecoveryCodesResponse>>(StatusCodes.Status200OK);
+        // 2FA endpoint'leri bilinçli olarak pasife alındı (istek üzerine). Application katmanındaki
+        // handler'lar duruyor; tekrar açmak için buradaki map'ler geri eklenmelidir.
 
         return app;
     }
@@ -141,14 +111,6 @@ public static class AuthEndpoints
         var result = await sender.Send(
             new LoginCommand(request.Email, request.Password, deviceInfo), cancellationToken);
         return Results.Ok(ApiResponse<LoginResult>.Ok(result));
-    }
-
-    private static async Task<IResult> VerifyTwoFactorLoginAsync(
-        [FromBody] VerifyTwoFactorRequest request, ISender sender, CancellationToken cancellationToken)
-    {
-        var response = await sender.Send(
-            new VerifyTwoFactorLoginCommand(request.PendingToken, request.Code), cancellationToken);
-        return Results.Ok(ApiResponse<VerifyTwoFactorLoginResponse>.Ok(response));
     }
 
     private static async Task<IResult> RefreshAsync(
@@ -197,33 +159,5 @@ public static class AuthEndpoints
     {
         await sender.Send(new SendVerificationEmailCommand(request.Email), cancellationToken);
         return Results.Ok(ApiResponse.Ok("Doğrulama e-postası gönderildi."));
-    }
-
-    private static async Task<IResult> SetupTotpAsync(
-        ISender sender, CancellationToken cancellationToken)
-    {
-        var response = await sender.Send(new SetupTotpQuery(), cancellationToken);
-        return Results.Ok(ApiResponse<SetupTotpResponse>.Ok(response));
-    }
-
-    private static async Task<IResult> EnableTwoFactorAsync(
-        [FromBody] EnableTwoFactorRequest request, ISender sender, CancellationToken cancellationToken)
-    {
-        await sender.Send(new EnableTwoFactorCommand(request.Method, request.Code, request.Secret), cancellationToken);
-        return Results.Ok(ApiResponse.Ok("İki faktörlü doğrulama etkinleştirildi."));
-    }
-
-    private static async Task<IResult> DisableTwoFactorAsync(
-        [FromBody] DisableTwoFactorRequest request, ISender sender, CancellationToken cancellationToken)
-    {
-        await sender.Send(new DisableTwoFactorCommand(request.Password), cancellationToken);
-        return Results.Ok(ApiResponse.Ok("İki faktörlü doğrulama devre dışı bırakıldı."));
-    }
-
-    private static async Task<IResult> GenerateRecoveryCodesAsync(
-        ICurrentUser user, ISender sender, CancellationToken cancellationToken)
-    {
-        var response = await sender.Send(new GenerateRecoveryCodesCommand(user.UserId), cancellationToken);
-        return Results.Ok(ApiResponse<GenerateRecoveryCodesResponse>.Ok(response));
     }
 }

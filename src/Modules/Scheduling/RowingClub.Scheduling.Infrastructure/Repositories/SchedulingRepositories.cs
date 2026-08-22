@@ -1,0 +1,93 @@
+using Microsoft.EntityFrameworkCore;
+using RowingClub.Scheduling.Domain.Boats;
+using RowingClub.Scheduling.Domain.Instructors;
+using RowingClub.Scheduling.Domain.Packages;
+using RowingClub.Scheduling.Domain.Sessions;
+using RowingClub.Scheduling.Domain.Settings;
+using RowingClub.Scheduling.Infrastructure.Persistence;
+
+namespace RowingClub.Scheduling.Infrastructure.Repositories;
+
+public sealed class BoatRepository(TenantDbContext context) : IBoatRepository
+{
+    public Task<List<Boat>> GetAllAsync(CancellationToken cancellationToken) =>
+        context.Boats.ToListAsync(cancellationToken);
+
+    public Task<Boat?> GetByIdAsync(Guid id, CancellationToken cancellationToken) =>
+        context.Boats.FirstOrDefaultAsync(b => b.Id == id, cancellationToken);
+
+    public void Add(Boat boat) => context.Boats.Add(boat);
+}
+
+public sealed class InstructorRepository(TenantDbContext context) : IInstructorRepository
+{
+    public Task<List<Instructor>> GetAllAsync(CancellationToken cancellationToken) =>
+        context.Instructors.ToListAsync(cancellationToken);
+
+    public Task<Instructor?> GetByIdAsync(Guid id, CancellationToken cancellationToken) =>
+        context.Instructors.FirstOrDefaultAsync(i => i.Id == id, cancellationToken);
+
+    public void Add(Instructor instructor) => context.Instructors.Add(instructor);
+}
+
+public sealed class LessonPackageRepository(TenantDbContext context) : ILessonPackageRepository
+{
+    public Task<List<LessonPackage>> GetAllAsync(CancellationToken cancellationToken) =>
+        context.LessonPackages.ToListAsync(cancellationToken);
+
+    public Task<LessonPackage?> GetByIdAsync(Guid id, CancellationToken cancellationToken) =>
+        context.LessonPackages.FirstOrDefaultAsync(p => p.Id == id, cancellationToken);
+
+    public void Add(LessonPackage lessonPackage) => context.LessonPackages.Add(lessonPackage);
+}
+
+public sealed class SettingsRepository(TenantDbContext context) : ISettingsRepository
+{
+    public Task<CompanySettings?> GetAsync(CancellationToken cancellationToken) =>
+        context.Settings.FirstOrDefaultAsync(cancellationToken);
+
+    public void Add(CompanySettings settings) => context.Settings.Add(settings);
+}
+
+public sealed class TrainingSessionRepository(TenantDbContext context) : ITrainingSessionRepository
+{
+    public async Task<TrainingSession?> FindJoinableAsync(
+        DateOnly date, TimeOnly startTime, BoatClass boatClass, int level, CancellationToken cancellationToken)
+    {
+        // Kapasite (iptaller hariç aktif üye sayısı) hesabı domain'de; adaylar çekilip bellekte süzülür.
+        var candidates = await context.TrainingSessions
+            .Include(s => s.Appointments)
+            .Include(s => s.Boat)
+            .Include(s => s.Instructor)
+            .Where(s => s.Date == date && s.StartTime == startTime &&
+                        s.BoatClass == boatClass && s.Level == level)
+            .ToListAsync(cancellationToken);
+
+        return candidates.FirstOrDefault(s => s.HasFreeSeat);
+    }
+
+    public Task<List<TrainingSession>> GetBySlotAsync(
+        DateOnly date, TimeOnly startTime, CancellationToken cancellationToken) =>
+        context.TrainingSessions
+            .Where(s => s.Date == date && s.StartTime == startTime)
+            .ToListAsync(cancellationToken);
+
+    public Task<List<TrainingSession>> GetByDateAsync(DateOnly date, CancellationToken cancellationToken) =>
+        context.TrainingSessions
+            .Include(s => s.Appointments)
+            .ThenInclude(a => a.Customer)
+            .Include(s => s.Boat)
+            .Include(s => s.Instructor)
+            .Where(s => s.Date == date)
+            .ToListAsync(cancellationToken);
+
+    public Task<TrainingSession?> GetByIdAsync(Guid id, CancellationToken cancellationToken) =>
+        context.TrainingSessions
+            .Include(s => s.Appointments)
+            .ThenInclude(a => a.Customer)
+            .Include(s => s.Boat)
+            .Include(s => s.Instructor)
+            .FirstOrDefaultAsync(s => s.Id == id, cancellationToken);
+
+    public void Add(TrainingSession session) => context.TrainingSessions.Add(session);
+}

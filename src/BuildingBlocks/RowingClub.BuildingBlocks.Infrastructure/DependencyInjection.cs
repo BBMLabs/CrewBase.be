@@ -9,6 +9,7 @@ using RowingClub.BuildingBlocks.Application.Abstractions;
 using RowingClub.BuildingBlocks.Infrastructure.Idempotency;
 using RowingClub.BuildingBlocks.Infrastructure.Observability;
 using RowingClub.BuildingBlocks.Infrastructure.Postgres;
+using RowingClub.BuildingBlocks.Infrastructure.Tenancy;
 using StackExchange.Redis;
 
 namespace RowingClub.BuildingBlocks.Infrastructure;
@@ -68,6 +69,8 @@ public static class DependencyInjection
 
         services.AddDbContext<RowingClubDbContext>((provider, options) =>
             options.UseNpgsql(provider.GetRequiredService<NpgsqlDataSource>()));
+
+        services.AddScoped<ITenantDatabase, CurrentTenantDatabase>();
 
         services.AddScoped<IUnitOfWork, EfUnitOfWork>();
         services.AddHostedService<EfMigrationHostedService>();
