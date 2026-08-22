@@ -24,6 +24,7 @@ public sealed class CompanyConfiguration : IEntityTypeConfiguration<Company>
         builder.Property(c => c.Phone).HasMaxLength(20);
         builder.Property(c => c.ContactEmail).HasMaxLength(254);
         builder.Property(c => c.Address).HasMaxLength(500);
+        builder.Property(c => c.TaxNumber).HasMaxLength(11);
         builder.Property(c => c.Status).HasConversion<string>().HasMaxLength(50);
     }
 }

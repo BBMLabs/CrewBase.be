@@ -75,7 +75,10 @@ public sealed class AuthEndpointFunctionalTests(RowingClubWebApplicationFactory 
         body.GetProperty("code").GetString().Should().Be("validation_error");
         body.GetProperty("errors").TryGetProperty("CompanyName", out _).Should().BeTrue();
         body.GetProperty("errors").TryGetProperty("AdminEmail", out _).Should().BeTrue();
-        body.GetProperty("errors").TryGetProperty("AdminPassword", out _).Should().BeTrue();
+        body.GetProperty("errors").TryGetProperty("TaxNumber", out _).Should().BeTrue();
+        body.GetProperty("errors").TryGetProperty("Phone", out _).Should().BeTrue();
+        body.GetProperty("errors").TryGetProperty("ContactEmail", out _).Should().BeTrue();
+        body.GetProperty("errors").TryGetProperty("Address", out _).Should().BeTrue();
     }
 
     [Fact]

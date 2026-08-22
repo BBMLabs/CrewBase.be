@@ -27,6 +27,9 @@ public sealed class Company : AggregateRoot<Guid>
 
     public string? Address { get; private set; }
 
+    /// <summary>Vergi kimlik no (10 hane) veya T.C. kimlik no (11 hane, şahıs işletmesi için).</summary>
+    public string? TaxNumber { get; private set; }
+
     public CompanyStatus Status { get; private set; }
 
     public DateTimeOffset CreatedAtUtc { get; private set; }
@@ -41,7 +44,7 @@ public sealed class Company : AggregateRoot<Guid>
 
     private Company(
         Guid id, string name, string subdomain, string databaseName,
-        string? phone, string? contactEmail, string? address)
+        string? phone, string? contactEmail, string? address, string? taxNumber)
         : base(id)
     {
         Name = name;
@@ -50,6 +53,7 @@ public sealed class Company : AggregateRoot<Guid>
         Phone = phone;
         ContactEmail = contactEmail;
         Address = address;
+        TaxNumber = taxNumber;
 
         // Firmalar artık onay beklemeden doğrudan aktif olarak açılır.
         Status = CompanyStatus.Active;
@@ -59,9 +63,9 @@ public sealed class Company : AggregateRoot<Guid>
 
     public static Company Register(
         string name, string subdomain, string databaseName,
-        string? phone, string? contactEmail, string? address)
+        string? phone, string? contactEmail, string? address, string? taxNumber)
     {
-        return new Company(Guid.NewGuid(), name, subdomain, databaseName, phone, contactEmail, address);
+        return new Company(Guid.NewGuid(), name, subdomain, databaseName, phone, contactEmail, address, taxNumber);
     }
 
     /// <summary>Firmayı aktifleştirir; askıya alınmış firmayı geri açmak için de kullanılır.</summary>

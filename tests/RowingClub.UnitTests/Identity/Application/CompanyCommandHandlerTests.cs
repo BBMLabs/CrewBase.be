@@ -15,7 +15,7 @@ internal static class CompanyTestFactory
     public static Company Create(string name = "Rowing Club")
     {
         var subdomain = SubdomainSlug.FromCompanyName(name);
-        return Company.Register(name, subdomain, SubdomainSlug.ToDatabaseName(subdomain), null, null, null);
+        return Company.Register(name, subdomain, SubdomainSlug.ToDatabaseName(subdomain), null, null, null, null);
     }
 }
 

@@ -1,8 +1,10 @@
 using FluentAssertions;
+using Microsoft.Extensions.Configuration;
 using NSubstitute;
 using RowingClub.BuildingBlocks.Domain;
 using RowingClub.BuildingBlocks.Security.Passwords;
 using RowingClub.BuildingBlocks.Security.Tokens;
+using RowingClub.Identity.Application.Audit;
 using RowingClub.Identity.Application.Email;
 using RowingClub.Identity.Application.PasswordReset;
 using RowingClub.Identity.Domain.Tokens;
@@ -18,9 +20,11 @@ public sealed class ForgotPasswordCommandHandlerTests
     private readonly IOpaqueTokenGenerator _tokenGenerator = Substitute.For<IOpaqueTokenGenerator>();
     private readonly IRefreshTokenHasher _hasher = Substitute.For<IRefreshTokenHasher>();
     private readonly IEmailSender _emailSender = Substitute.For<IEmailSender>();
+    private readonly IConfiguration _configuration = Substitute.For<IConfiguration>();
+    private readonly IAuditLogger _auditLogger = Substitute.For<IAuditLogger>();
 
     private ForgotPasswordCommandHandler CreateHandler() =>
-        new(_userRepository, _tokenRepository, _tokenGenerator, _hasher, _emailSender);
+        new(_userRepository, _tokenRepository, _tokenGenerator, _hasher, _emailSender, _configuration, _auditLogger);
 
     [Fact]
     public async Task Handle_creates_token_when_user_exists()
