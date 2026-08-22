@@ -1,11 +1,9 @@
 # RowingClub API — İstemci Entegrasyon Rehberi
 
-Bu proje **yalnızca bir backend API'dir**; ayrı bir frontend uygulaması bulunmaz. Firma sitesi
-tek bir sunucu-render HTML şablonu olarak API içinden servis edilir
-(`GET /site/{subdomain}` — bkz. `docs/API_ENDPOINTS.md` §4). Bu doküman, API'yi tüketecek herhangi
-bir istemci (mobil uygulama, üçüncü parti entegrasyon, iç test aracı) için akış odaklı pratik bir
-rehberdir. Alan bazında eksiksiz referans için `docs/API_ENDPOINTS.md`, rol/yetki tablosu için
-`docs/AUTHORIZATION_MATRIX.md`'ye bakın.
+Bu depo **yalnızca bir backend API'dir**; frontend `CrewBase.fe` reposundadır. Bu doküman,
+API'yi tüketecek herhangi bir istemci (mobil uygulama, üçüncü parti entegrasyon, iç test aracı)
+için akış odaklı pratik bir rehberdir. Alan bazında eksiksiz referans için
+`docs/API_ENDPOINTS.md`, rol/yetki tablosu için `docs/AUTHORIZATION_MATRIX.md`'ye bakın.
 
 ## 1. Genel Bilgiler
 

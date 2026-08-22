@@ -7,10 +7,9 @@ derslerini, randevularını, ders paketlerini ve kulüp operasyonlarını yönet
 için proje kökündeki `kurek-kulubu-claude-code-gelistirme-talimatlari.md` ana geliştirme talimatı
 geçerlidir; bu dizindeki dokümanlar o talimatın mevcut kod tabanına yansıyan halini açıklar.
 
-> **Bu proje yalnızca bir backend API'dir.** Ayrı bir frontend/web uygulaması bulunmaz. Her
-> firmanın kayıt-randevu sitesi tek bir sunucu-render HTML şablonu olarak API içinden servis
-> edilir (`GET /site/{subdomain}`). Bir istemci (mobil uygulama, üçüncü parti entegrasyon vb.)
-> geliştirecekseniz `API-DOKUMANTASYONU.md`'den başlayın.
+> **Bu depo yalnızca bir backend API'dir.** Frontend `CrewBase.fe` reposundadır. Bir istemci
+> (mobil uygulama, üçüncü parti entegrasyon vb.) geliştirecekseniz `API-DOKUMANTASYONU.md`'den
+> başlayın.
 
 ## Mevcut Durum (Özet)
 

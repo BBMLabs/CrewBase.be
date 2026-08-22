@@ -13,29 +13,15 @@ public sealed record PublicBookingRequest(
     string? BoatClass, string? Note, int? ReminderMinutes, List<string>? AcceptedConsents);
 
 /// <summary>
-/// Her firmanın müşterilere açık randevu sitesi. Gerçekte {subdomain}.faturebase.com'dan servis
-/// edilir; domain şimdilik mock olduğundan aynı sayfa /site/{subdomain} yolundan da açılır ve
-/// Host başlığında gerçek bir subdomain varsa kök adres de otomatik siteye gider.
+/// Her firmanın müşterilere açık randevu akışı. Gerçekte {subdomain}.faturebase.com'dan servis
+/// edilir; domain şimdilik mock olduğundan subdomain, path parametresi olarak da alınabilir.
 /// </summary>
 public static class PublicSiteEndpoints
 {
     public static IEndpointRouteBuilder MapPublicSiteEndpoints(this IEndpointRouteBuilder app)
     {
-        // Mock subdomain görünümü: /site/{subdomain} == https://{subdomain}.faturebase.com
-        app.MapGet("/site/{subdomain}", RenderSiteAsync)
-            .WithName("TenantSite")
+        app.MapGet("/", () => Results.Ok(ApiResponse.Ok("CrewBase API.")))
             .ExcludeFromDescription();
-
-        // Gerçek subdomain host'u geldiğinde kökten aynı siteyi döndür.
-        app.MapGet("/", async (HttpContext httpContext, TenantResolver resolver,
-            TenantSiteRenderer renderer, CancellationToken cancellationToken) =>
-        {
-            var subdomain = TenantResolver.FromHost(httpContext.Request.Host.Value ?? string.Empty);
-            if (subdomain is null)
-                return Results.Ok(ApiResponse.Ok("CrewBase API. Firma siteleri: /site/{subdomain}"));
-
-            return await RenderSiteAsync(subdomain, resolver, renderer, cancellationToken);
-        }).ExcludeFromDescription();
 
         var group = app.MapGroup("/api/v1/public/{subdomain}")
             .WithTags("Public Site");
@@ -132,16 +118,6 @@ public static class PublicSiteEndpoints
         }).WithName("PublicBookAppointment");
 
         return app;
-    }
-
-    private static async Task<IResult> RenderSiteAsync(
-        string subdomain, TenantResolver resolver, TenantSiteRenderer renderer,
-        CancellationToken cancellationToken)
-    {
-        var company = await resolver.ResolveBySubdomainAsync(subdomain, cancellationToken);
-        return company is null
-            ? Results.NotFound("Böyle bir firma sitesi yok.")
-            : Results.Content(renderer.Render(company), "text/html; charset=utf-8");
     }
 
     private static bool TryParseDate(string? raw, out DateOnly date)

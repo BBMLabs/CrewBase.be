@@ -3,9 +3,8 @@
 Bu dosya, geliştirme sürecinin merkezi endpoint dokümantasyonudur. Endpoint kodu değiştirilip bu
 dosya güncellenmezse geliştirme tamamlanmış kabul edilmez.
 
-> **Not:** Bu proje artık yalnızca bir **backend API**'dir; ayrı bir frontend uygulaması yoktur.
-> Firma sitesi tek bir sunucu-render HTML şablonu (`GET /site/{subdomain}`) olarak API içinde
-> servis edilir. Aşağıdaki tüm route'lar `RowingClub.Api` projesinde tanımlıdır
+> **Not:** Bu depo yalnızca bir **backend API**'dir; frontend `CrewBase.fe` reposundadır.
+> Aşağıdaki tüm route'lar `RowingClub.Api` projesinde tanımlıdır
 > (`src/RowingClub.Api/Endpoints/*.cs`).
 
 ## Global Sözleşmeler
@@ -92,13 +91,14 @@ Platform ve firma kullanıcılarının kimlik akışı. Endpoint kaynağı: `Aut
 {
   "companyName": "Örnek Kürek Kulübü",
   "adminEmail": "admin@sirket.com",
-  "adminPassword": "GucluParola123!",
+  "taxNumber": "1234567890",
   "phone": "+905551234567",
   "contactEmail": "iletisim@sirket.com",
   "address": "İstanbul"
 }
 ```
-`phone`, `contactEmail`, `address` isteğe bağlıdır.
+`taxNumber` 10 haneli vergi kimlik no veya 11 haneli T.C. kimlik no olmalıdır. `phone`,
+`contactEmail`, `address`, `taxNumber` **zorunludur** — istekte **parola alanı yoktur**.
 
 **Başarılı yanıt `201 Created`:**
 ```json
@@ -118,8 +118,12 @@ Platform ve firma kullanıcılarının kimlik akışı. Endpoint kaynağı: `Aut
 - Bu isimle **ayrı bir PostgreSQL veritabanı** (`tenant_<subdomain>`) provision edilir ve EF
   migration'ları uygulanır (`ITenantDatabaseProvisioner`) — kayıt bu işlem bitene kadar tamamlanmaz.
 - Firma **doğrudan `Active`** durumunda açılır; platform admin onayı gerekmez.
-- Kayıt sonrası site adresi + yönetici e-postası hoş geldin maili olarak gönderilir (şifre **asla**
-  e-postaya yazılmaz).
+- **Kayıt parolasız tamamlanır**: yönetici hesabı, kullanıcının hiçbir zaman bilmediği rastgele bir
+  parola hash'iyle açılır. Kayıt sonrası gönderilen hoş geldin e-postası, parolayı belirlemesi için
+  `/reset-password` ile aynı `PasswordResetToken` mekanizmasını kullanan **48 saat geçerli** bir
+  bağlantı içerir (`{PUBLIC_APP_URL}/parola-sifirla?token=&email=`). Bağlantı ulaşmaz/kaybolursa
+  kullanıcı `/forgot-password` ile aynı akışı yeniden tetikleyebilir — ayrı bir "aktivasyon" ucu
+  yoktur. Parola belirlenene kadar `/login` denemeleri doğal biçimde `401 unauthorized` döner.
 - Hata: `409 company_name_taken`, `409 email_already_registered`.
 
 ### 1.2 Giriş — `POST /login`
@@ -157,7 +161,7 @@ sinyali sayılır: aynı `familyId`'ye sahip **tüm** token'lar ve ilişkili otu
 |---|---|---|
 | `POST /logout` | `{ "refreshToken": "..." }` | `{ "message": "Oturum kapatıldı." }` — idempotent |
 | `POST /logout-all` | (yok, Bearer zorunlu) | `{ "message": "Tüm oturumlar kapatıldı." }` |
-| `POST /forgot-password` | `{ "email": "..." }` | `{ "message": "Parola sıfırlama bağlantısı e-posta adresinize gönderildi." }` |
+| `POST /forgot-password` | `{ "email": "..." }` | `{ "message": "Parola sıfırlama bağlantısı e-posta adresinize gönderildi." }` — link `{PUBLIC_APP_URL}/parola-sifirla?token=&email=` şeklinde kurulur (`PUBLIC_APP_URL` env, varsayılan `https://faturebase.com`) |
 | `POST /reset-password` | `{ "email", "token", "newPassword" }` | `{ "message": "Parolanız başarıyla sıfırlandı." }` |
 | `POST /verify-email` | `{ "email", "token" }` — `token` = e-postaya giden **6 haneli kod** | `{ "message": "E-posta adresiniz başarıyla doğrulandı." }` |
 | `POST /send-verification-email` | `{ "email": "..." }` | `{ "message": "Doğrulama e-postası gönderildi." }` |
@@ -208,8 +212,7 @@ Kaynak: `PublicSiteEndpoints.cs`. Kayıtsız ziyaretçilerin firma sitesinden ra
 
 | Metot | Route | Açıklama |
 |---|---|---|
-| GET | `/site/{subdomain}` | Firmanın HTML randevu sitesini render eder (tek şablon, firma verisiyle doldurulur) |
-| GET | `/` (kök) | Host başlığında gerçek bir `{sub}.faturebase.com` varsa yukarıdaki ile aynı sayfayı döner; yoksa API karşılama mesajı |
+| GET | `/` (kök) | API karşılama mesajı |
 | GET | `/api/v1/public/{subdomain}/info` | Firma adı/telefon/e-posta/adres/site URL'i |
 | GET | `/api/v1/public/{subdomain}/options` | Dinamik randevu kuralları: çalışma saatleri, tekne sınıfları+kapasiteleri, hatırlatma seçenekleri, aktif paketler, derece etiketleri |
 | GET | `/api/v1/public/{subdomain}/consents` | Beyan kataloğu (bkz. §7.4) — üye kimliği olmadan, yalnızca metinler |
