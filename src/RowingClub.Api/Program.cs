@@ -28,7 +28,6 @@ builder.Services
     .AddOpenApi();
 
 builder.Services.AddScoped<TenantResolver>();
-builder.Services.AddSingleton<TenantSiteRenderer>();
 builder.Services.AddScoped<RowingClub.Scheduling.Application.Reminders.IAppointmentReminderSender,
     EmailAppointmentReminderSender>();
 builder.Services.AddSingleton<MemberTokenIssuer>();

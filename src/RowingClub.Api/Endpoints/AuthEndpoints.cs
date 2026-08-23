@@ -15,7 +15,7 @@ using RowingClub.Identity.Application.Register;
 namespace RowingClub.Api.Endpoints;
 
 public sealed record RegisterCompanyRequest(
-    string CompanyName, string AdminEmail, string AdminPassword, string? Phone, string? ContactEmail, string? Address);
+    string CompanyName, string AdminEmail, string TaxNumber, string Phone, string ContactEmail, string Address);
 public sealed record LoginRequest(string Email, string Password);
 public sealed record RefreshRequest(string RefreshToken);
 public sealed record LogoutRequest(string RefreshToken);
@@ -99,7 +99,7 @@ public static class AuthEndpoints
         [FromBody] RegisterCompanyRequest request, ISender sender, CancellationToken cancellationToken)
     {
         var response = await sender.Send(new RegisterCompanyCommand(
-            request.CompanyName, request.AdminEmail, request.AdminPassword,
+            request.CompanyName, request.AdminEmail, request.TaxNumber,
             request.Phone, request.ContactEmail, request.Address), cancellationToken);
         return Results.Created($"/api/v1/companies/{response.CompanyId}", ApiResponse<RegisterCompanyResponse>.Ok(response));
     }

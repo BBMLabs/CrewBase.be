@@ -1,12 +1,15 @@
 using FluentAssertions;
+using Microsoft.Extensions.Configuration;
 using NSubstitute;
 using RowingClub.BuildingBlocks.Application.Abstractions;
 using RowingClub.BuildingBlocks.Domain;
 using RowingClub.BuildingBlocks.Security.Passwords;
+using RowingClub.BuildingBlocks.Security.Tokens;
 using RowingClub.Identity.Application.Audit;
 using RowingClub.Identity.Application.Companies.RegisterCompany;
 using RowingClub.Identity.Application.Email;
 using RowingClub.Identity.Domain.Companies;
+using RowingClub.Identity.Domain.Tokens;
 using RowingClub.Identity.Domain.Users;
 using RowingClub.Identity.Domain.ValueObjects;
 
@@ -21,21 +24,32 @@ public sealed class RegisterCompanyCommandHandlerTests
     private readonly ITenantDatabaseProvisioner _provisioner = Substitute.For<ITenantDatabaseProvisioner>();
     private readonly IEmailSender _emailSender = Substitute.For<IEmailSender>();
     private readonly IAuditLogger _auditLogger = Substitute.For<IAuditLogger>();
+    private readonly IOpaqueTokenGenerator _tokenGenerator = Substitute.For<IOpaqueTokenGenerator>();
+    private readonly IRefreshTokenHasher _tokenHasher = Substitute.For<IRefreshTokenHasher>();
+    private readonly IPasswordResetTokenRepository _passwordResetTokenRepository = Substitute.For<IPasswordResetTokenRepository>();
+    private readonly IConfiguration _configuration = Substitute.For<IConfiguration>();
 
     private RegisterCompanyCommandHandler CreateHandler() =>
         new(_companyRepository, _userRepository, _credentialRepository, _passwordHasher,
-            _provisioner, _emailSender, _auditLogger);
+            _provisioner, _emailSender, _auditLogger, _tokenGenerator, _tokenHasher,
+            _passwordResetTokenRepository, _configuration);
+
+    public RegisterCompanyCommandHandlerTests()
+    {
+        _tokenGenerator.Generate().Returns("random-opaque-token");
+        _passwordHasher.Hash(Arg.Any<string>()).Returns("hashed-password");
+        _tokenHasher.Hash(Arg.Any<string>()).Returns("hashed-token");
+    }
 
     [Fact]
     public async Task Handle_creates_company_and_company_admin()
     {
         _companyRepository.ExistsByNameAsync("Rowing Club", Arg.Any<CancellationToken>()).Returns(false);
         _userRepository.ExistsByEmailAsync(Arg.Any<EmailAddress>(), Arg.Any<CancellationToken>()).Returns(false);
-        _passwordHasher.Hash("SecurePass123").Returns("hashed-password");
 
         var response = await CreateHandler().Handle(
-            new RegisterCompanyCommand("Rowing Club", "admin@example.com", "SecurePass123",
-                null, null, null), CancellationToken.None);
+            new RegisterCompanyCommand("Rowing Club", "admin@example.com", "1234567890",
+                "+905551234567", "contact@example.com", "İstanbul"), CancellationToken.None);
 
         response.CompanyName.Should().Be("Rowing Club");
         response.AdminEmail.Should().Be("admin@example.com");
@@ -43,11 +57,14 @@ public sealed class RegisterCompanyCommandHandlerTests
         response.SiteUrl.Should().Be("https://rowing-club.faturebase.com");
         await _provisioner.Received(1).ProvisionAsync("tenant_rowing_club", Arg.Any<CancellationToken>());
         _companyRepository.Received(1).Add(Arg.Is<Company>(c =>
-            c!.Name == "Rowing Club" && c.Status == CompanyStatus.Active && c.Subdomain == "rowing-club"));
+            c!.Name == "Rowing Club" && c.Status == CompanyStatus.Active && c.Subdomain == "rowing-club"
+            && c.TaxNumber == "1234567890"));
         _userRepository.Received(1).Add(Arg.Is<User>(u =>
             u!.Email.Value == "admin@example.com" && u.Role == UserRole.CompanyAdmin));
-        _credentialRepository.Received(1).Add(Arg.Is<Credential>(c =>
-            c!.PasswordHash == "hashed-password"));
+        // Parola kayıtta alınmaz: kullanıcının hiç bilmediği rastgele bir hash ile Credential açılır.
+        _credentialRepository.Received(1).Add(Arg.Any<Credential>());
+        // Parolayı belirlemesi için ForgotPassword ile aynı token mekanizması devreye girer.
+        _passwordResetTokenRepository.Received(1).Add(Arg.Any<PasswordResetToken>());
     }
 
     [Fact]
@@ -56,8 +73,8 @@ public sealed class RegisterCompanyCommandHandlerTests
         _companyRepository.ExistsByNameAsync("Rowing Club", Arg.Any<CancellationToken>()).Returns(true);
 
         var act = () => CreateHandler().Handle(
-            new RegisterCompanyCommand("Rowing Club", "admin@example.com", "SecurePass123",
-                null, null, null), CancellationToken.None);
+            new RegisterCompanyCommand("Rowing Club", "admin@example.com", "1234567890",
+                "+905551234567", "contact@example.com", "İstanbul"), CancellationToken.None);
 
         var ex = await act.Should().ThrowAsync<DomainException>();
         ex.Which!.ErrorCode.Should().Be("company_name_taken");
@@ -70,8 +87,8 @@ public sealed class RegisterCompanyCommandHandlerTests
         _userRepository.ExistsByEmailAsync(Arg.Any<EmailAddress>(), Arg.Any<CancellationToken>()).Returns(true);
 
         var act = () => CreateHandler().Handle(
-            new RegisterCompanyCommand("Rowing Club", "admin@example.com", "SecurePass123",
-                null, null, null), CancellationToken.None);
+            new RegisterCompanyCommand("Rowing Club", "admin@example.com", "1234567890",
+                "+905551234567", "contact@example.com", "İstanbul"), CancellationToken.None);
 
         var ex = await act.Should().ThrowAsync<DomainException>();
         ex.Which!.ErrorCode.Should().Be("email_already_registered");

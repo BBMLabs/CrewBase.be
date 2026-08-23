@@ -16,26 +16,23 @@ public sealed class RegisterCompanyCommandValidator : AbstractValidator<Register
             .MaximumLength(254)
             .Matches(EmailAddress.Pattern).WithMessage("Geçerli bir e-posta adresi giriniz.");
 
-        RuleFor(x => x.AdminPassword)
-            .NotEmpty().WithMessage("Parola zorunludur.")
-            .MinimumLength(10).WithMessage("Parola en az 10 karakter olmalıdır.")
-            .MaximumLength(128)
-            .Matches("[A-Z]").WithMessage("Parola en az bir büyük harf içermelidir.")
-            .Matches("[a-z]").WithMessage("Parola en az bir küçük harf içermelidir.")
-            .Matches("[0-9]").WithMessage("Parola en az bir rakam içermelidir.")
-            .Matches("[^a-zA-Z0-9]").WithMessage("Parola en az bir özel karakter içermelidir.");
+        RuleFor(x => x.TaxNumber)
+            .NotEmpty().WithMessage("Vergi numarası zorunludur.")
+            .Matches(@"^\d{10}$|^\d{11}$")
+            .WithMessage("Geçerli bir vergi numarası veya T.C. kimlik numarası giriniz (10 veya 11 haneli).");
 
         RuleFor(x => x.Phone)
+            .NotEmpty().WithMessage("Telefon zorunludur.")
             .MaximumLength(20)
-            .Matches(@"^\+?[0-9\s\-\(\)]{7,20}$").When(x => x.Phone is not null)
-            .WithMessage("Geçerli bir telefon numarası giriniz.");
+            .Matches(@"^\+?[0-9\s\-\(\)]{7,20}$").WithMessage("Geçerli bir telefon numarası giriniz.");
 
         RuleFor(x => x.ContactEmail)
+            .NotEmpty().WithMessage("İletişim e-postası zorunludur.")
             .MaximumLength(254)
-            .Matches(EmailAddress.Pattern).When(x => x.ContactEmail is not null)
-            .WithMessage("Geçerli bir iletişim e-posta adresi giriniz.");
+            .Matches(EmailAddress.Pattern).WithMessage("Geçerli bir iletişim e-posta adresi giriniz.");
 
         RuleFor(x => x.Address)
+            .NotEmpty().WithMessage("Adres zorunludur.")
             .MaximumLength(500);
     }
 }
