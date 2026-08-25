@@ -1,0 +1,441 @@
+/* CrewBase design system — "Gece Seyri" dual-theme core.
+   Light palette lives on :root (Tailwind @theme); the identical token NAMES are
+   re-declared under [data-theme="dark"], so every semantic utility
+   (bg-surface, text-ink, border-line …) flips automatically per subtree.
+   Motion primitives animate compositor-friendly properties only. */
+@import "tailwindcss";
+
+@theme {
+  /* ── Premium marine theme: sea, sky, glass surfaces ─── */
+  --color-canvas: #edf4f8;
+  --color-surface: rgba(255, 255, 255, 0.78);
+  --color-surface-2: #edf5fb;
+  --color-line: #dfeaf4;
+  --color-line-strong: #bfcedd;
+
+  /* ── Ink (cool slate ramp) ─────────────────────────── */
+  --color-ink: #142636;
+  --color-ink-2: #475d73;
+  --color-ink-3: #73879b;
+
+  /* ── Brand — premium deep-water blue ──────────────── */
+  --color-brand-50: #edf8ff;
+  --color-brand-100: #dff1ff;
+  --color-brand-200: #bfe3ff;
+  --color-brand-300: #88c9ff;
+  --color-brand-400: #4ea4f1;
+  --color-brand-500: #1d74c9;
+  --color-brand-600: #135ea8;
+  --color-brand-700: #104f8c;
+  --color-brand-800: #0c3f6e;
+  --color-brand-900: #0a2d4e;
+
+  /* Sidebar rail */
+  --color-rail: #081d2d;
+  --color-rail-hover: #12314a;
+  --color-rail-active: #154666;
+  --color-rail-text: #9bb5c9;
+  --color-rail-text-active: #ffffff;
+
+  /* ── Accent — warm zenith glow (sparse highlights) ─── */
+  --color-oar-100: #fff2e7;
+  --color-oar-300: #f6c59c;
+  --color-oar-500: #ef8d4a;
+  --color-oar-600: #d67136;
+  --color-oar-700: #b75a29;
+
+  /* ── Semantic ──────────────────────────────────────── */
+  --color-success: #157347;
+  --color-success-bg: #e3f4ea;
+  --color-warning: #8f6100;
+  --color-warning-bg: #fdf2d3;
+  --color-danger: #bb2d24;
+  --color-danger-bg: #fcebe9;
+  --color-info: #0d587f;
+  --color-info-bg: #e8f1f7;
+
+  /* Status lifecycle (appointments) */
+  --color-status-pending-fg: #8f6100;
+  --color-status-pending-bg: #fdf2d3;
+  --color-status-confirmed-fg: #0d587f;
+  --color-status-confirmed-bg: #e8f1f7;
+  --color-status-completed-fg: #157347;
+  --color-status-completed-bg: #e3f4ea;
+  --color-status-cancelled-fg: #a13329;
+  --color-status-cancelled-bg: #fae6e4;
+
+  /* ── Radii & depth ─────────────────────────────────── */
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 20px;
+  --shadow-xs: 0 1px 2px rgb(13 27 42 / 0.05);
+  --shadow-sm: 0 1px 2px rgb(13 27 42 / 0.06), 0 1px 3px rgb(13 27 42 / 0.08);
+  --shadow-md: 0 12px 32px -12px rgb(13 27 42 / 0.18), 0 2px 6px -2px rgb(13 27 42 / 0.06);
+  --shadow-lg: 0 24px 60px -20px rgb(13 27 42 / 0.28);
+
+  /* ── Typography ────────────────────────────────────── */
+  --font-display: "Manrope", "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", monospace;
+
+  /* ── Motion ────────────────────────────────────────── */
+  --animate-duration-fast: 140ms;
+  --animate-duration-base: 200ms;
+}
+
+/* ══════════════════════════════════════════════════════
+   GECE SEYRİ — dark maritime override scope.
+   Same token names; every utility below this attribute flips.
+   ══════════════════════════════════════════════════════ */
+[data-theme="dark"] {
+  /* Surfaces: night-sea depth ladder */
+  --color-canvas: #071922;
+  --color-surface: rgba(13, 27, 37, 0.8);
+  --color-surface-2: #112a3d;
+  --color-line: rgb(190 213 231 / 0.14);
+  --color-line-strong: rgb(190 213 231 / 0.22);
+
+  /* Ink: moonlit ramp */
+  --color-ink: #ebf4fb;
+  --color-ink-2: #a2bccf;
+  --color-ink-3: #7d97ac;
+
+  /* Brand: brighter sea-blue accents */
+  --color-brand-50: #0d2940;
+  --color-brand-100: #113555;
+  --color-brand-200: #1a4a74;
+  --color-brand-300: #4ea4f1;
+  --color-brand-400: #61b6ff;
+  --color-brand-500: #2d90ef;
+  --color-brand-600: #2275c7;
+  --color-brand-700: #1a5f9e;
+  --color-brand-800: #15477b;
+  --color-brand-900: #113866;
+
+  /* Rail stays deepest */
+  --color-rail: #040e17;
+  --color-rail-hover: #112a3d;
+  --color-rail-active: #1a3c57;
+  --color-rail-text: #9db7c8;
+  --color-rail-text-active: #ffffff;
+
+  /* Cedar glows in the dark */
+  --color-oar-100: #332719;
+  --color-oar-300: #f6c59c;
+  --color-oar-500: #ef8d4a;
+  --color-oar-600: #d67136;
+  --color-oar-700: #ffb168;
+
+  /* Semantic: translucent fills + lifted text tones (AA on dark) */
+  --color-success: #4cc48d;
+  --color-success-bg: rgb(76 196 141 / 0.13);
+  --color-warning: #e5b84b;
+  --color-warning-bg: rgb(229 184 75 / 0.12);
+  --color-danger: #f28b81;
+  --color-danger-bg: rgb(242 139 129 / 0.12);
+  --color-info: #58afdf;
+  --color-info-bg: rgb(88 175 223 / 0.13);
+
+  /* Status lifecycle pairs */
+  --color-status-pending-fg: #e5b84b;
+  --color-status-pending-bg: rgb(229 184 75 / 0.12);
+  --color-status-confirmed-fg: #58afdf;
+  --color-status-confirmed-bg: rgb(88 175 223 / 0.13);
+  --color-status-completed-fg: #4cc48d;
+  --color-status-completed-bg: rgb(76 196 141 / 0.13);
+  --color-status-cancelled-fg: #f28b81;
+  --color-status-cancelled-bg: rgb(242 139 129 / 0.12);
+
+  /* Depth: borders carry elevation; shadows go deep */
+  --shadow-xs: 0 0 0 1px rgb(255 255 255 / 0.03);
+  --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.4), 0 0 0 1px rgb(255 255 255 / 0.04);
+  --shadow-md: 0 16px 40px -16px rgb(0 0 0 / 0.6), 0 0 0 1px rgb(255 255 255 / 0.05);
+  --shadow-lg: 0 28px 64px -24px rgb(0 0 0 / 0.7), 0 0 0 1px rgb(255 255 255 / 0.06);
+}
+
+/* Focus ring + motion tokens (theme-aware) */
+:root {
+  --focus-ring: 0 0 0 3px rgb(31 114 168 / 0.25);
+
+  /* ── Motion system (small, standardized) ─────────────── */
+  --motion-instant: 0ms;
+  --motion-fast: 140ms;
+  --motion-normal: 220ms;
+  --motion-slow: 380ms;
+  --ease-out-soft: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+[data-theme="dark"] {
+  --focus-ring: 0 0 0 3px rgb(74 163 216 / 0.4);
+}
+
+/* Ambient marine glows behind all content */
+html[data-theme="dark"] body {
+  background-color: var(--color-canvas);
+  background-image:
+    radial-gradient(78rem 44rem at 88% -10%, rgb(31 114 168 / 0.2) 0%, transparent 52%),
+    radial-gradient(60rem 38rem at -12% 110%, rgb(239 141 74 / 0.09) 0%, transparent 55%);
+  background-attachment: fixed;
+}
+
+/* Premium gradient title treatment */
+.page-title {
+  background: linear-gradient(110deg, var(--color-ink) 0%, var(--color-brand-600) 42%, var(--color-oar-600) 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+html[data-theme="dark"] .page-title {
+  background: linear-gradient(110deg, #f4fbff 0%, #8ed0ff 38%, #ffc995 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+/* Shared premium shell helpers */
+.app-shell-surface {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.58), rgba(255, 255, 255, 0.12));
+  border: 1px solid rgb(191 206 221 / 0.7);
+  backdrop-filter: blur(8px);
+}
+
+html[data-theme="dark"] .app-shell-surface {
+  background: linear-gradient(180deg, rgba(16, 29, 41, 0.75), rgba(9, 18, 28, 0.35));
+  border-color: rgb(190 213 231 / 0.12);
+}
+
+.glass-panel {
+  background: linear-gradient(180deg, rgba(255,255,255,0.62), rgba(255,255,255,0.18));
+  border: 1px solid rgb(191 206 221 / 0.72);
+  box-shadow: 0 18px 38px -30px rgba(10, 27, 41, 0.42);
+}
+
+html[data-theme="dark"] .glass-panel {
+  background: linear-gradient(180deg, rgba(11, 20, 28, 0.78), rgba(11, 20, 28, 0.55));
+  border-color: rgb(190 213 231 / 0.12);
+  box-shadow: 0 18px 38px -30px rgba(2, 6, 10, 0.9);
+}
+
+@layer base {
+  html {
+    font-family: var(--font-sans);
+    font-size: 15px;
+    color: var(--color-ink);
+    background:
+      radial-gradient(circle at top, rgb(31 114 168 / 0.08), transparent 32%),
+      linear-gradient(180deg, #f7f9fb 0%, var(--color-canvas) 24%, var(--color-canvas) 100%);
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+    scroll-behavior: smooth;
+    color-scheme: light;
+  }
+
+  html[data-theme="dark"],
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    background:
+      radial-gradient(circle at top, rgb(46 134 188 / 0.16), transparent 30%),
+      linear-gradient(180deg, #09151f 0%, var(--color-canvas) 28%, var(--color-canvas) 100%);
+  }
+
+  body {
+    min-height: 100vh;
+    background: transparent;
+  }
+
+  #root {
+    min-height: 100vh;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    html {
+      scroll-behavior: auto;
+    }
+  }
+
+  ::selection {
+    background: rgb(31 114 168 / 0.18);
+  }
+
+  [data-theme="dark"] ::selection {
+    background: rgb(74 163 216 / 0.32);
+  }
+
+  :focus-visible {
+    outline: none;
+    box-shadow: var(--focus-ring);
+    border-radius: var(--radius-sm);
+  }
+
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-line-strong) transparent;
+  }
+  *::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  *::-webkit-scrollbar-thumb {
+    background: var(--color-line-strong);
+    border-radius: 999px;
+    border: 2px solid transparent;
+    background-clip: content-box;
+  }
+  *::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+}
+
+/* Numeric data alignment helper */
+.tnum {
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── Motion primitives (compositor-friendly) ─────────────── */
+@keyframes cb-fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes cb-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* Seamless horizontal drift: element contains the pattern twice; slide -50% loops. */
+@keyframes cb-wave-x {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+@keyframes cb-bob-y {
+  0%,
+  100% {
+    transform: translateY(-1.5px);
+  }
+  50% {
+    transform: translateY(2.5px);
+  }
+}
+
+@keyframes cb-grow-y {
+  from {
+    transform: scaleY(0.05);
+    opacity: 0.4;
+  }
+  to {
+    transform: scaleY(1);
+    opacity: 1;
+  }
+}
+
+@keyframes cb-rotate-slow {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.cb-page-enter {
+  animation: cb-fade-up var(--motion-normal) var(--ease-out-soft) both;
+}
+
+.cb-rise {
+  animation: cb-fade-up var(--motion-slow) var(--ease-out-soft) both;
+}
+
+.cb-fade {
+  animation: cb-fade-in var(--motion-normal) ease-out both;
+}
+
+/* Stagger children (caps at 12 rows/lists) */
+.cb-stagger > * {
+  animation: cb-fade-up var(--motion-normal) var(--ease-out-soft) both;
+}
+.cb-stagger > *:nth-child(1) { animation-delay: 20ms; }
+.cb-stagger > *:nth-child(2) { animation-delay: 60ms; }
+.cb-stagger > *:nth-child(3) { animation-delay: 100ms; }
+.cb-stagger > *:nth-child(4) { animation-delay: 140ms; }
+.cb-stagger > *:nth-child(5) { animation-delay: 180ms; }
+.cb-stagger > *:nth-child(6) { animation-delay: 220ms; }
+.cb-stagger > *:nth-child(7) { animation-delay: 260ms; }
+.cb-stagger > *:nth-child(8) { animation-delay: 300ms; }
+.cb-stagger > *:nth-child(n + 9) { animation-delay: 340ms; }
+
+/* Chart bars grow from their baseline */
+.cb-grow-y {
+  transform-origin: bottom;
+  animation: cb-grow-y var(--motion-slow) var(--ease-out-soft) both;
+}
+
+/* Very slow instrument rotation (compass rose watermark) */
+.compass-spin {
+  animation: cb-rotate-slow 180s linear infinite;
+  will-change: transform;
+}
+
+/* Cinematic ambient blobs (transform-only drift, blur baked into gradients) */
+@keyframes cb-mesh-a {
+  0%, 100% { transform: translate3d(-4%, -3%, 0) scale(1); }
+  50% { transform: translate3d(5%, 4%, 0) scale(1.12); }
+}
+@keyframes cb-mesh-b {
+  0%, 100% { transform: translate3d(5%, 6%, 0) scale(1.05); }
+  50% { transform: translate3d(-6%, -4%, 0) scale(0.95); }
+}
+.mesh-a { animation: cb-mesh-a 22s ease-in-out infinite; will-change: transform; }
+.mesh-b { animation: cb-mesh-b 26s ease-in-out infinite; will-change: transform; }
+
+.wave-drift {
+  animation: cb-wave-x var(--wave-duration, 16s) linear infinite;
+  will-change: transform;
+}
+
+.boat-bob {
+  animation: cb-bob-y 5.5s ease-in-out infinite;
+  will-change: transform;
+}
+
+.pennant-sway {
+  animation: cb-bob-y 7s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cb-page-enter,
+  .cb-rise,
+  .cb-fade,
+  .wave-drift,
+  .boat-bob,
+  .pennant-sway,
+  .compass-spin,
+  .cb-grow-y,
+  .mesh-a,
+  .mesh-b,
+  .cb-stagger > * {
+    animation: none !important;
+  }
+}

@@ -1,0 +1,5 @@
+@import "@crewbase/design-system/styles.css";
+
+/* Scan shared design-system sources for class usage (workspace packages are outside
+   Tailwind's automatic detection). */
+@source "../../node_modules/@crewbase/design-system/src";
