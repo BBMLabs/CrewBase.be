@@ -49,6 +49,10 @@ public static class EnvironmentConfigurationExtensions
             ["Smtp:Host"] = Get("SMTP_HOST"),
             ["Smtp:Username"] = Get("SMTP_USERNAME"),
             ["Smtp:Password"] = Get("SMTP_PASSWORD"),
+            ["Smtp:FromAddress"] = Get("SMTP_FROM_ADDRESS"),
+            ["Smtp:FromName"] = Get("SMTP_FROM_NAME"),
+
+            ["Recaptcha:SecretKey"] = Get("RECAPTCHA_SECRET_KEY"),
 
             ["OTEL_EXPORTER_OTLP_ENDPOINT"] = Get("OTEL_EXPORTER_OTLP_ENDPOINT"),
         };

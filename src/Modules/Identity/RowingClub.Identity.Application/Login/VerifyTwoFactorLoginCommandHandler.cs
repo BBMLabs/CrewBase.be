@@ -59,9 +59,9 @@ public sealed class VerifyTwoFactorLoginCommandHandler(
 
             if (remaining <= 2)
             {
-                var msg = new EmailMessage(user.Email.Value,
-                    "Kurtarma Kodlarınız Tükeniyor",
-                    $"<p>Merhaba,</p><p>{remaining} adet kurtarma kodunuz kaldı. Yeni kod üretmek için hesap ayarlarınızı ziyaret edin.</p><p>RowingClub</p>");
+                var bodyHtml = $"<p>{remaining} adet kurtarma kodunuz kaldı. Yeni kod üretmek için hesap ayarlarınızı ziyaret edin.</p>";
+                var htmlBody = EmailTemplate.Render("Kurtarma Kodlarınız Tükeniyor", bodyHtml);
+                var msg = new EmailMessage(user.Email.Value, "Kurtarma Kodlarınız Tükeniyor", htmlBody);
                 await emailSender.SendAsync(msg, cancellationToken);
             }
         }

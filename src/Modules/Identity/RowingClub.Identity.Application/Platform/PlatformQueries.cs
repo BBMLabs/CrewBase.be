@@ -7,12 +7,19 @@ using RowingClub.Identity.Domain.ValueObjects;
 
 namespace RowingClub.Identity.Application.Platform;
 
-/// <summary>Master admin: tüm firmalar (durumlarıyla).</summary>
-public sealed record GetAllCompaniesQuery : IRequest<List<PlatformCompanyDto>>;
+/// <summary>Master admin: tüm firmalar (durumlarıyla). Varsayılan olarak silinmiş firmalar hariçtir.</summary>
+public sealed record GetAllCompaniesQuery(
+    bool IncludeDeleted = false,
+    string? Search = null,
+    string? Status = null,
+    string? SortBy = null,
+    bool SortDescending = true)
+    : IRequest<List<PlatformCompanyDto>>;
 
 public sealed record PlatformCompanyDto(
     Guid Id, string Name, string Subdomain, string Status,
-    string? Phone, string? ContactEmail, DateTimeOffset CreatedAtUtc);
+    string? Phone, string? ContactEmail, string? Address, string? TaxNumber,
+    DateTimeOffset CreatedAtUtc, DateTimeOffset? LastLoginAtUtc, bool IsDeleted, DateTimeOffset? DeletedAtUtc);
 
 /// <summary>Master admin: platform geneli sayılar.</summary>
 public sealed record GetPlatformStatsQuery : IRequest<PlatformStatsDto>;
@@ -26,7 +33,7 @@ public sealed record PlatformStatsDto(
 /// </summary>
 public sealed record EnsurePlatformAdminCommand(string Email, string Password) : ICommand<Unit>;
 
-public sealed class GetAllCompaniesQueryHandler(ICompanyRepository companyRepository)
+public sealed class GetAllCompaniesQueryHandler(ICompanyRepository companyRepository, IUserRepository userRepository)
     : IRequestHandler<GetAllCompaniesQuery, List<PlatformCompanyDto>>
 {
     public async Task<List<PlatformCompanyDto>> Handle(
@@ -36,11 +43,50 @@ public sealed class GetAllCompaniesQueryHandler(ICompanyRepository companyReposi
         foreach (var status in Enum.GetValues<CompanyStatus>())
             all.AddRange(await companyRepository.GetByStatusAsync(status, cancellationToken));
 
-        return all
-            .OrderByDescending(c => c.CreatedAtUtc)
-            .Select(c => new PlatformCompanyDto(
-                c.Id, c.Name, c.Subdomain, c.Status.ToString(), c.Phone, c.ContactEmail, c.CreatedAtUtc))
-            .ToList();
+        if (!request.IncludeDeleted)
+            all = all.Where(c => !c.IsDeleted).ToList();
+
+        if (!string.IsNullOrWhiteSpace(request.Search))
+        {
+            var term = request.Search.Trim();
+            all = all
+                .Where(c =>
+                    c.Name.Contains(term, StringComparison.OrdinalIgnoreCase) ||
+                    c.Subdomain.Contains(term, StringComparison.OrdinalIgnoreCase) ||
+                    (c.ContactEmail?.Contains(term, StringComparison.OrdinalIgnoreCase) ?? false))
+                .ToList();
+        }
+
+        if (!string.IsNullOrWhiteSpace(request.Status) &&
+            Enum.TryParse<CompanyStatus>(request.Status, ignoreCase: true, out var statusFilter))
+        {
+            all = all.Where(c => c.Status == statusFilter).ToList();
+        }
+
+        var dtos = new List<PlatformCompanyDto>();
+        foreach (var c in all)
+        {
+            var companyUsers = await userRepository.GetByCompanyIdAsync(c.Id, cancellationToken);
+            var admin = companyUsers.FirstOrDefault(u => u.Role == UserRole.CompanyAdmin);
+
+            dtos.Add(new PlatformCompanyDto(
+                c.Id, c.Name, c.Subdomain, c.Status.ToString(), c.Phone, c.ContactEmail, c.Address, c.TaxNumber,
+                c.CreatedAtUtc, admin?.LastLoginAtUtc, c.IsDeleted, c.DeletedAtUtc));
+        }
+
+        IOrderedEnumerable<PlatformCompanyDto> sorted = request.SortBy?.ToLowerInvariant() switch
+        {
+            "name" => request.SortDescending ? dtos.OrderByDescending(d => d.Name) : dtos.OrderBy(d => d.Name),
+            "status" => request.SortDescending ? dtos.OrderByDescending(d => d.Status) : dtos.OrderBy(d => d.Status),
+            "lastlogin" => request.SortDescending
+                ? dtos.OrderByDescending(d => d.LastLoginAtUtc)
+                : dtos.OrderBy(d => d.LastLoginAtUtc),
+            _ => request.SortDescending
+                ? dtos.OrderByDescending(d => d.CreatedAtUtc)
+                : dtos.OrderBy(d => d.CreatedAtUtc),
+        };
+
+        return sorted.ToList();
     }
 }
 
@@ -52,6 +98,7 @@ public sealed class GetPlatformStatsQueryHandler(ICompanyRepository companyRepos
         var all = new List<Company>();
         foreach (var status in Enum.GetValues<CompanyStatus>())
             all.AddRange(await companyRepository.GetByStatusAsync(status, cancellationToken));
+        all = all.Where(c => !c.IsDeleted).ToList();
 
         var now = DateTimeOffset.UtcNow;
         return new PlatformStatsDto(

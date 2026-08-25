@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using RowingClub.Scheduling.Domain.Boats;
+using RowingClub.Scheduling.Domain.Branches;
 using RowingClub.Scheduling.Domain.Instructors;
 using RowingClub.Scheduling.Domain.Packages;
 using RowingClub.Scheduling.Domain.Sessions;
@@ -17,6 +18,17 @@ public sealed class BoatRepository(TenantDbContext context) : IBoatRepository
         context.Boats.FirstOrDefaultAsync(b => b.Id == id, cancellationToken);
 
     public void Add(Boat boat) => context.Boats.Add(boat);
+}
+
+public sealed class BranchRepository(TenantDbContext context) : IBranchRepository
+{
+    public Task<List<Branch>> GetAllAsync(CancellationToken cancellationToken) =>
+        context.Branches.ToListAsync(cancellationToken);
+
+    public Task<Branch?> GetByIdAsync(Guid id, CancellationToken cancellationToken) =>
+        context.Branches.FirstOrDefaultAsync(b => b.Id == id, cancellationToken);
+
+    public void Add(Branch branch) => context.Branches.Add(branch);
 }
 
 public sealed class InstructorRepository(TenantDbContext context) : IInstructorRepository

@@ -22,21 +22,20 @@ public sealed class SendVerificationEmailCommandHandler(
         if (user is null || user.EmailVerified)
             return Unit.Value;
 
-        // OTP akışı: bağlantı yerine 15 dakika geçerli 6 haneli kod; kod hash'lenerek saklanır.
-        // Kaba kuvvet, auth uçlarındaki IP bazlı rate limit ve kısa geçerlilikle sınırlanır.
         var code = System.Security.Cryptography.RandomNumberGenerator.GetInt32(0, 1_000_000).ToString("D6");
         var verificationToken = EmailVerificationToken.Issue(
-            user.Id, tokenHasher.Hash(code), TimeSpan.FromMinutes(15));
+            user.Id, tokenHasher.Hash(code), TimeSpan.FromMinutes(1));
         verificationTokenRepository.Add(verificationToken);
 
+        var bodyHtml = $"""
+            <p>E-posta adresinizi doğrulamak için kodunuz:</p>
+            <p style="font-size:32px;font-weight:700;letter-spacing:8px;font-family:monospace;color:#155e75;margin:20px 0;">{code}</p>
+            <p>Bu kod 1 dakika geçerlidir. İşlemi siz başlatmadıysanız bu e-postayı yok sayın.</p>
+            """;
         await emailSender.SendAsync(new EmailMessage(
             request.Email,
             "E-posta Doğrulama Kodu",
-            $"""
-            <p>E-posta adresinizi doğrulamak için kodunuz:</p>
-            <p style="font-size:32px;font-weight:700;letter-spacing:8px;font-family:monospace">{code}</p>
-            <p>Bu kod 15 dakika geçerlidir. İşlemi siz başlatmadıysanız bu e-postayı yok sayın.</p>
-            """), cancellationToken);
+            EmailTemplate.Render("E-postanızı Doğrulayın", bodyHtml)), cancellationToken);
 
         return Unit.Value;
     }

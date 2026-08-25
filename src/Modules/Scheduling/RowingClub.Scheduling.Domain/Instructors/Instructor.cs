@@ -13,27 +13,31 @@ public sealed class Instructor
 
     public bool IsActive { get; private set; }
 
+    public Guid? BranchId { get; private set; }
+
     public DateTimeOffset CreatedAtUtc { get; private set; }
 
     private Instructor()
     {
     }
 
-    public static Instructor Create(string fullName, string? phone, string? email) => new()
+    public static Instructor Create(string fullName, string? phone, string? email, Guid? branchId = null) => new()
     {
         Id = Guid.NewGuid(),
         FullName = fullName.Trim(),
         Phone = string.IsNullOrWhiteSpace(phone) ? null : phone.Trim(),
         Email = string.IsNullOrWhiteSpace(email) ? null : email.Trim().ToLowerInvariant(),
         IsActive = true,
+        BranchId = branchId,
         CreatedAtUtc = DateTimeOffset.UtcNow,
     };
 
-    public void Update(string fullName, string? phone, string? email, bool isActive)
+    public void Update(string fullName, string? phone, string? email, bool isActive, Guid? branchId = null)
     {
         FullName = fullName.Trim();
         Phone = string.IsNullOrWhiteSpace(phone) ? null : phone.Trim();
         Email = string.IsNullOrWhiteSpace(email) ? null : email.Trim().ToLowerInvariant();
         IsActive = isActive;
+        BranchId = branchId;
     }
 }

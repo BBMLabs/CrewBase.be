@@ -13,13 +13,15 @@ public sealed class EmailAppointmentReminderSender(IEmailSender emailSender) : I
         string email, string customerName, string companyName,
         DateOnly date, TimeOnly startTime, CancellationToken cancellationToken)
     {
-        var htmlBody = $"""
-            <h3>Randevu Hatırlatması</h3>
+        var bodyHtml = $"""
             <p>Sayın {customerName},</p>
             <p><b>{companyName}</b> firmasındaki randevunuz yaklaşıyor:</p>
-            <p><b>{date:dd.MM.yyyy}</b> günü saat <b>{startTime:HH\:mm}</b></p>
+            <p style="margin:16px 0;padding:14px 16px;background:#f4f6f8;border-radius:8px;font-size:17px;">
+              <b>{date:dd.MM.yyyy}</b> günü saat <b>{startTime:HH\:mm}</b>
+            </p>
             <p>Görüşmek üzere!</p>
             """;
+        var htmlBody = EmailTemplate.Render("Randevu Hatırlatması", bodyHtml);
 
         return emailSender.SendAsync(
             new EmailMessage(email, $"{companyName} - Randevu Hatırlatması", htmlBody), cancellationToken);

@@ -38,6 +38,10 @@ public sealed class Company : AggregateRoot<Guid>
 
     public Guid? ApprovedByUserId { get; private set; }
 
+    public bool IsDeleted { get; private set; }
+
+    public DateTimeOffset? DeletedAtUtc { get; private set; }
+
     private Company()
     {
     }
@@ -90,5 +94,32 @@ public sealed class Company : AggregateRoot<Guid>
     public void SetLogo(string logoPath)
     {
         LogoPath = logoPath;
+    }
+
+    public void UpdateDetails(string name, string? phone, string? contactEmail, string? address, string? taxNumber)
+    {
+        Name = name;
+        Phone = phone;
+        ContactEmail = contactEmail;
+        Address = address;
+        TaxNumber = taxNumber;
+    }
+
+    public void Delete()
+    {
+        if (IsDeleted)
+            return;
+
+        IsDeleted = true;
+        DeletedAtUtc = DateTimeOffset.UtcNow;
+    }
+
+    public void Restore()
+    {
+        if (!IsDeleted)
+            return;
+
+        IsDeleted = false;
+        DeletedAtUtc = null;
     }
 }

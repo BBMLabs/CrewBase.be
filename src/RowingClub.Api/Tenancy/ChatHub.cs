@@ -43,13 +43,15 @@ public sealed class SignalRChatNotifier(
 public sealed class EmailOtpSender(RowingClub.Identity.Application.Email.IEmailSender emailSender)
     : IOtpSender
 {
-    public Task SendAsync(string emailTo, string purposeLabel, string code, CancellationToken cancellationToken) =>
-        emailSender.SendAsync(new RowingClub.Identity.Application.Email.EmailMessage(
-            emailTo,
-            $"{purposeLabel} Kodu",
-            $"""
+    public Task SendAsync(string emailTo, string purposeLabel, string code, CancellationToken cancellationToken)
+    {
+        var bodyHtml = $"""
             <p>{purposeLabel} için kodunuz:</p>
-            <p style="font-size:32px;font-weight:700;letter-spacing:8px;font-family:monospace">{code}</p>
+            <p style="font-size:32px;font-weight:700;letter-spacing:8px;font-family:monospace;color:#155e75;margin:20px 0;">{code}</p>
             <p>Bu kod 10 dakika geçerlidir. İşlemi siz başlatmadıysanız bu e-postayı yok sayın.</p>
-            """), cancellationToken);
+            """;
+        var htmlBody = RowingClub.Identity.Application.Email.EmailTemplate.Render($"{purposeLabel} Kodu", bodyHtml);
+        return emailSender.SendAsync(new RowingClub.Identity.Application.Email.EmailMessage(
+            emailTo, $"{purposeLabel} Kodu", htmlBody), cancellationToken);
+    }
 }

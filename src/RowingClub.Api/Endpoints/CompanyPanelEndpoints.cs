@@ -12,8 +12,9 @@ namespace RowingClub.Api.Endpoints;
 
 public sealed record SetAppointmentStatusRequest(string Status);
 public sealed record SetCustomerLevelRequest(int Level);
-public sealed record InstructorRequest(string FullName, string? Phone, string? Email, bool? IsActive);
-public sealed record BoatRequest(string Name, string BoatClass, bool? IsActive);
+public sealed record InstructorRequest(string FullName, string? Phone, string? Email, bool? IsActive, Guid? BranchId);
+public sealed record BoatRequest(string Name, string BoatClass, bool? IsActive, Guid? BranchId);
+public sealed record BranchRequest(string Name, string? Address, string? Phone, bool? IsActive);
 public sealed record PackageRequest(string Name, string? Description, int SessionCount, decimal Price, bool? IsActive);
 public sealed record AssignSessionRequest(Guid? BoatId, Guid? InstructorId);
 public sealed record UpdateSettingsRequest(
@@ -275,7 +276,7 @@ public static class CompanyPanelEndpoints
                 return CompanyNotFound();
 
             var instructor = await sender.Send(
-                new CreateInstructorCommand(request.FullName, request.Phone, request.Email), ct);
+                new CreateInstructorCommand(request.FullName, request.Phone, request.Email, request.BranchId), ct);
             return Results.Created($"/api/v1/company/instructors/{instructor.Id}",
                 ApiResponse<InstructorDto>.Ok(instructor));
         }).WithName("CompanyCreateInstructor");
@@ -288,9 +289,44 @@ public static class CompanyPanelEndpoints
                 return CompanyNotFound();
 
             var instructor = await sender.Send(new UpdateInstructorCommand(
-                instructorId, request.FullName, request.Phone, request.Email, request.IsActive ?? true), ct);
+                instructorId, request.FullName, request.Phone, request.Email, request.IsActive ?? true, request.BranchId), ct);
             return Results.Ok(ApiResponse<InstructorDto>.Ok(instructor));
         }).WithName("CompanyUpdateInstructor");
+
+        // ---- Şubeler ----
+
+        group.MapGet("/branches", async (
+            ICurrentUser user, TenantResolver resolver, ISender sender, CancellationToken ct) =>
+        {
+            if (await ResolveOwnCompanyAsync(user, resolver, ct) is null)
+                return CompanyNotFound();
+
+            var branches = await sender.Send(new GetBranchesQuery(), ct);
+            return Results.Ok(ApiResponse<List<BranchDto>>.Ok(branches));
+        }).WithName("CompanyBranches");
+
+        group.MapPost("/branches", async (
+            [FromBody] BranchRequest request, ICurrentUser user, TenantResolver resolver,
+            ISender sender, CancellationToken ct) =>
+        {
+            if (await ResolveOwnCompanyAsync(user, resolver, ct) is null)
+                return CompanyNotFound();
+
+            var branch = await sender.Send(new CreateBranchCommand(request.Name, request.Address, request.Phone), ct);
+            return Results.Created($"/api/v1/company/branches/{branch.Id}", ApiResponse<BranchDto>.Ok(branch));
+        }).WithName("CompanyCreateBranch");
+
+        group.MapPut("/branches/{branchId:guid}", async (
+            Guid branchId, [FromBody] BranchRequest request, ICurrentUser user,
+            TenantResolver resolver, ISender sender, CancellationToken ct) =>
+        {
+            if (await ResolveOwnCompanyAsync(user, resolver, ct) is null)
+                return CompanyNotFound();
+
+            var branch = await sender.Send(new UpdateBranchCommand(
+                branchId, request.Name, request.Address, request.Phone, request.IsActive ?? true), ct);
+            return Results.Ok(ApiResponse<BranchDto>.Ok(branch));
+        }).WithName("CompanyUpdateBranch");
 
         // ---- Tekneler ----
 
@@ -311,7 +347,7 @@ public static class CompanyPanelEndpoints
             if (await ResolveOwnCompanyAsync(user, resolver, ct) is null)
                 return CompanyNotFound();
 
-            var boat = await sender.Send(new CreateBoatCommand(request.Name, request.BoatClass), ct);
+            var boat = await sender.Send(new CreateBoatCommand(request.Name, request.BoatClass, request.BranchId), ct);
             return Results.Created($"/api/v1/company/boats/{boat.Id}", ApiResponse<BoatDto>.Ok(boat));
         }).WithName("CompanyCreateBoat");
 
@@ -323,7 +359,7 @@ public static class CompanyPanelEndpoints
                 return CompanyNotFound();
 
             var boat = await sender.Send(new UpdateBoatCommand(
-                boatId, request.Name, request.BoatClass, request.IsActive ?? true), ct);
+                boatId, request.Name, request.BoatClass, request.IsActive ?? true, request.BranchId), ct);
             return Results.Ok(ApiResponse<BoatDto>.Ok(boat));
         }).WithName("CompanyUpdateBoat");
 

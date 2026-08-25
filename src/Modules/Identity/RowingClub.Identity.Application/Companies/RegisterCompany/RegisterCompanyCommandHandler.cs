@@ -95,18 +95,17 @@ public sealed class RegisterCompanyCommandHandler(
         var publicAppUrl = (configuration["PUBLIC_APP_URL"] ?? DefaultPublicAppUrl).TrimEnd('/');
         var activationLink =
             $"{publicAppUrl}/parola-sifirla?token={Uri.EscapeDataString(rawActivationToken)}&email={Uri.EscapeDataString(adminEmail)}";
-        var htmlBody = $"""
-            <h2>{company.Name} - Hoş Geldiniz!</h2>
+        var bodyHtml = $"""
             <p>Firmanız başarıyla oluşturuldu ve hemen kullanıma hazır.</p>
-            <ul>
-              <li><b>Randevu siteniz:</b> <a href="{siteUrl}">{siteUrl}</a></li>
-              <li><b>Yönetici kullanıcı adınız:</b> {adminEmail}</li>
-            </ul>
-            <p>Giriş yapabilmek için önce parolanızı belirlemeniz gerekiyor:
-            <a href="{activationLink}">parolamı belirle</a>. Bu bağlantı 48 saat geçerlidir.</p>
+            <p style="margin:16px 0;padding:14px 16px;background:#f4f6f8;border-radius:8px;">
+              <b>Randevu siteniz:</b> <a href="{siteUrl}" style="color:#155e75;">{siteUrl}</a><br/>
+              <b>Yönetici kullanıcı adınız:</b> {adminEmail}
+            </p>
+            <p>Giriş yapabilmek için önce parolanızı belirlemeniz gerekiyor. Aşağıdaki bağlantı 48 saat geçerlidir.</p>
             <p>Yönetim panelinizden çalışma saatlerinizi, eğitmenlerinizi, teknelerinizi, ders
             paketlerinizi ve hatırlatma kurallarınızı özelleştirebilirsiniz.</p>
             """;
+        var htmlBody = EmailTemplate.Render($"{company.Name} — Hoş Geldiniz!", bodyHtml, "Parolamı Belirle", activationLink);
 
         try
         {

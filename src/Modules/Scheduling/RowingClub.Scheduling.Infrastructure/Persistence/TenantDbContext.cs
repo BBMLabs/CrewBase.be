@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using RowingClub.BuildingBlocks.Security.Encryption;
 using RowingClub.Scheduling.Domain.Appointments;
 using RowingClub.Scheduling.Domain.Boats;
+using RowingClub.Scheduling.Domain.Branches;
 using RowingClub.Scheduling.Domain.Cards;
 using RowingClub.Scheduling.Domain.Community;
 using RowingClub.Scheduling.Domain.Consents;
@@ -41,6 +42,8 @@ public sealed class TenantDbContext(
     public DbSet<TrainingSession> TrainingSessions => Set<TrainingSession>();
 
     public DbSet<Boat> Boats => Set<Boat>();
+
+    public DbSet<Branch> Branches => Set<Branch>();
 
     public DbSet<Instructor> Instructors => Set<Instructor>();
 
@@ -272,6 +275,15 @@ public sealed class TenantDbContext(
             builder.HasIndex(c => c.Date).IsUnique();
         });
 
+        modelBuilder.Entity<Branch>(builder =>
+        {
+            builder.ToTable("branches");
+            builder.HasKey(b => b.Id);
+            builder.Property(b => b.Name).HasMaxLength(200).IsRequired();
+            builder.Property(b => b.Address).HasMaxLength(500);
+            builder.Property(b => b.Phone).HasMaxLength(50);
+        });
+
         modelBuilder.Entity<Instructor>(builder =>
         {
             builder.ToTable("instructors");
@@ -279,6 +291,11 @@ public sealed class TenantDbContext(
             builder.Property(i => i.FullName).HasMaxLength(200).IsRequired();
             builder.Property(i => i.Phone).HasConversion(encrypted!);
             builder.Property(i => i.Email).HasConversion(encrypted!);
+
+            builder.HasOne<Branch>()
+                .WithMany()
+                .HasForeignKey(i => i.BranchId)
+                .OnDelete(DeleteBehavior.SetNull);
         });
 
         modelBuilder.Entity<Boat>(builder =>
@@ -287,6 +304,11 @@ public sealed class TenantDbContext(
             builder.HasKey(b => b.Id);
             builder.Property(b => b.Name).HasMaxLength(200).IsRequired();
             builder.Property(b => b.Class).HasConversion<string>().HasMaxLength(20);
+
+            builder.HasOne<Branch>()
+                .WithMany()
+                .HasForeignKey(b => b.BranchId)
+                .OnDelete(DeleteBehavior.SetNull);
         });
 
         modelBuilder.Entity<LessonPackage>(builder =>

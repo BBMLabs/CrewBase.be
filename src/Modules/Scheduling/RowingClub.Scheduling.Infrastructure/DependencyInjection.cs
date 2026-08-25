@@ -4,6 +4,7 @@ using RowingClub.BuildingBlocks.Application.Abstractions;
 using RowingClub.Scheduling.Domain;
 using RowingClub.Scheduling.Domain.Appointments;
 using RowingClub.Scheduling.Domain.Boats;
+using RowingClub.Scheduling.Domain.Branches;
 using RowingClub.Scheduling.Domain.Customers;
 using RowingClub.Scheduling.Domain.Cards;
 using RowingClub.Scheduling.Domain.Community;
@@ -47,6 +48,7 @@ public static class DependencyInjection
         services.AddScoped<ICustomerRepository, CustomerRepository>();
         services.AddScoped<ITrainingSessionRepository, TrainingSessionRepository>();
         services.AddScoped<IBoatRepository, BoatRepository>();
+        services.AddScoped<IBranchRepository, BranchRepository>();
         services.AddScoped<IInstructorRepository, InstructorRepository>();
         services.AddScoped<ILessonPackageRepository, LessonPackageRepository>();
         services.AddScoped<ISettingsRepository, SettingsRepository>();

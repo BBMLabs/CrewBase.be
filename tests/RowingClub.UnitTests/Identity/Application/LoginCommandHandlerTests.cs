@@ -8,6 +8,7 @@ using RowingClub.BuildingBlocks.Security.Tokens;
 using RowingClub.Identity.Application;
 using RowingClub.Identity.Application.Audit;
 using RowingClub.Identity.Application.Login;
+using RowingClub.Identity.Application.Recaptcha;
 using RowingClub.Identity.Application.Tokens;
 using RowingClub.Identity.Application.TwoFactor;
 using RowingClub.Identity.Domain.Tokens;
@@ -27,6 +28,7 @@ public sealed class LoginCommandHandlerTests
     private readonly IAuditLogger _auditLogger = Substitute.For<IAuditLogger>();
     private readonly IOpaqueTokenGenerator _opaqueTokenGenerator = Substitute.For<IOpaqueTokenGenerator>();
     private readonly IRefreshTokenHasher _refreshTokenHasher = Substitute.For<IRefreshTokenHasher>();
+    private readonly IRecaptchaVerifier _recaptchaVerifier = Substitute.For<IRecaptchaVerifier>();
 
     private readonly IdentityOptions _identityOptions = new()
     {
@@ -45,6 +47,8 @@ public sealed class LoginCommandHandlerTests
             _refreshTokenRepository,
             Options.Create(_identityOptions));
 
+        _recaptchaVerifier.VerifyAsync(Arg.Any<string?>(), Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns(true);
+
         return new LoginCommandHandler(
             _userRepository,
             _credentialRepository,
@@ -52,7 +56,8 @@ public sealed class LoginCommandHandlerTests
             _passwordHasher,
             tokenPairIssuer,
             Options.Create(_identityOptions),
-            _auditLogger);
+            _auditLogger,
+            _recaptchaVerifier);
     }
 
     private static User CreateActiveUser() => User.Register(EmailAddress.Create("test@example.com"));
@@ -72,7 +77,7 @@ public sealed class LoginCommandHandlerTests
         _refreshTokenHasher.Hash("raw-refresh-token").Returns("hashed-refresh-token");
 
         var result = await CreateHandler().Handle(
-            new LoginCommand("test@example.com", "correct-password", "unit-test-device"), CancellationToken.None);
+            new LoginCommand("test@example.com", "correct-password", "unit-test-device", null), CancellationToken.None);
 
         result.RequiresTwoFactor.Should().BeFalse();
         result.AccessToken.Should().Be("access-token");
@@ -92,7 +97,7 @@ public sealed class LoginCommandHandlerTests
         _passwordHasher.Verify("wrong-password", "hashed-password").Returns(false);
 
         var act = () => CreateHandler().Handle(
-            new LoginCommand("test@example.com", "wrong-password", null), CancellationToken.None);
+            new LoginCommand("test@example.com", "wrong-password", null, null), CancellationToken.None);
 
         await act.Should().ThrowAsync<AuthenticationFailedException>();
         user.FailedLoginAttemptCount.Should().Be(1);
@@ -105,7 +110,7 @@ public sealed class LoginCommandHandlerTests
             .Returns((User?)null);
 
         var act = () => CreateHandler().Handle(
-            new LoginCommand("missing@example.com", "whatever", null), CancellationToken.None);
+            new LoginCommand("missing@example.com", "whatever", null, null), CancellationToken.None);
 
         await act.Should().ThrowAsync<AuthenticationFailedException>();
     }
@@ -124,7 +129,7 @@ public sealed class LoginCommandHandlerTests
             .Returns(new IssuedAccessToken("access-token", DateTimeOffset.UtcNow.AddMinutes(15), "jti"));
 
         var result = await CreateHandler().Handle(
-            new LoginCommand("test@example.com", "correct-password", "unit-test-device"), CancellationToken.None);
+            new LoginCommand("test@example.com", "correct-password", "unit-test-device", null), CancellationToken.None);
 
         result.RequiresTwoFactor.Should().BeFalse();
         result.AccessToken.Should().Be("access-token");

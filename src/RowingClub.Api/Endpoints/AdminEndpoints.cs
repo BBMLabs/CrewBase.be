@@ -4,10 +4,16 @@ using Microsoft.AspNetCore.Mvc;
 using RowingClub.BuildingBlocks.Application.Abstractions;
 using RowingClub.Identity.Application.Companies.ApproveCompany;
 using RowingClub.Identity.Application.Companies.GetPendingCompanies;
+using RowingClub.Identity.Application.Companies.ResetCompanyAdminPassword;
+using RowingClub.Identity.Application.Companies.RestoreCompany;
+using RowingClub.Identity.Application.Companies.SoftDeleteCompany;
 using RowingClub.Identity.Application.Companies.SuspendCompany;
+using RowingClub.Identity.Application.Companies.UpdateCompany;
 using RowingClub.Identity.Application.Platform;
 
 namespace RowingClub.Api.Endpoints;
+
+public sealed record UpdateCompanyRequest(string Name, string? Phone, string? ContactEmail, string? Address, string? TaxNumber);
 
 public static class AdminEndpoints
 {
@@ -17,9 +23,12 @@ public static class AdminEndpoints
             .RequireAuthorization(new AuthorizeAttribute { Roles = "PlatformAdmin" })
             .WithTags("Platform Admin");
 
-        platformAdminGroup.MapGet("/companies", async (IMediator mediator) =>
+        platformAdminGroup.MapGet("/companies", async (
+            bool? includeDeleted, string? search, string? status, string? sortBy, bool? sortDescending,
+            IMediator mediator) =>
         {
-            var companies = await mediator.Send(new GetAllCompaniesQuery());
+            var companies = await mediator.Send(new GetAllCompaniesQuery(
+                includeDeleted ?? false, search, status, sortBy, sortDescending ?? true));
             return Results.Ok(ApiResponse<List<PlatformCompanyDto>>.Ok(companies));
         })
         .WithName("GetAllCompanies");
@@ -53,6 +62,39 @@ public static class AdminEndpoints
             return Results.Ok(ApiResponse.Ok("Şirket askıya alındı."));
         })
         .WithName("SuspendCompany");
+
+        platformAdminGroup.MapPut("/companies/{companyId:guid}", async (
+            Guid companyId, [FromBody] UpdateCompanyRequest request, [FromServices] IMediator mediator) =>
+        {
+            await mediator.Send(new UpdateCompanyCommand(
+                companyId, request.Name, request.Phone, request.ContactEmail, request.Address, request.TaxNumber));
+            return Results.Ok(ApiResponse.Ok("Şirket bilgileri güncellendi."));
+        })
+        .WithName("UpdateCompany");
+
+        platformAdminGroup.MapPost("/companies/{companyId:guid}/delete", async (
+            Guid companyId, [FromServices] IMediator mediator) =>
+        {
+            await mediator.Send(new SoftDeleteCompanyCommand(companyId));
+            return Results.Ok(ApiResponse.Ok("Şirket silindi."));
+        })
+        .WithName("SoftDeleteCompany");
+
+        platformAdminGroup.MapPost("/companies/{companyId:guid}/restore", async (
+            Guid companyId, [FromServices] IMediator mediator) =>
+        {
+            await mediator.Send(new RestoreCompanyCommand(companyId));
+            return Results.Ok(ApiResponse.Ok("Şirket geri yüklendi."));
+        })
+        .WithName("RestoreCompany");
+
+        platformAdminGroup.MapPost("/companies/{companyId:guid}/reset-password", async (
+            Guid companyId, [FromServices] IMediator mediator) =>
+        {
+            await mediator.Send(new ResetCompanyAdminPasswordCommand(companyId));
+            return Results.Ok(ApiResponse.Ok("Parola sıfırlama bağlantısı gönderildi."));
+        })
+        .WithName("ResetCompanyAdminPassword");
 
         var companyGroup = app.MapGroup("/api/v1/admin/{companyId:guid}")
             .RequireAuthorization(new AuthorizeAttribute { Policy = "SameCompany" })

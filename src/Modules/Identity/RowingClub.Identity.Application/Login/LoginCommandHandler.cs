@@ -4,6 +4,7 @@ using RowingClub.BuildingBlocks.Domain;
 using RowingClub.BuildingBlocks.Security.Passwords;
 using RowingClub.BuildingBlocks.Security.Tokens;
 using RowingClub.Identity.Application.Audit;
+using RowingClub.Identity.Application.Recaptcha;
 using RowingClub.Identity.Application.Tokens;
 using RowingClub.Identity.Domain.Tokens;
 using RowingClub.Identity.Domain.Users;
@@ -18,16 +19,26 @@ public sealed class LoginCommandHandler(
     IPasswordHasher passwordHasher,
     TokenPairIssuer tokenPairIssuer,
     IOptions<IdentityOptions> identityOptions,
-    IAuditLogger auditLogger)
+    IAuditLogger auditLogger,
+    IRecaptchaVerifier recaptchaVerifier)
     : IRequestHandler<LoginCommand, LoginResult>
 {
     private static readonly AuthenticationFailedException InvalidCredentials =
         new("E-posta veya parola hatalı.");
 
+    private static readonly AuthenticationFailedException RecaptchaFailed =
+        new("Doğrulama başarısız oldu, lütfen tekrar deneyin.");
+
     private readonly IdentityOptions _options = identityOptions.Value;
 
     public async Task<LoginResult> Handle(LoginCommand request, CancellationToken cancellationToken)
     {
+        if (!await recaptchaVerifier.VerifyAsync(request.RecaptchaToken, "login", cancellationToken))
+        {
+            auditLogger.Log("LOGIN_RECAPTCHA_FAILED", request.Email, "reCAPTCHA doğrulaması başarısız.");
+            throw RecaptchaFailed;
+        }
+
         var email = EmailAddress.Create(request.Email);
 
         var user = await userRepository.GetByEmailAsync(email, cancellationToken)

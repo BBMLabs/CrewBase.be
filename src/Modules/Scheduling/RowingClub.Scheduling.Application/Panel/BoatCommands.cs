@@ -6,13 +6,14 @@ using RowingClub.Scheduling.Domain.Boats;
 
 namespace RowingClub.Scheduling.Application.Panel;
 
-public sealed record BoatDto(Guid Id, string Name, string Class, int Capacity, bool IsActive);
+public sealed record BoatDto(Guid Id, string Name, string Class, int Capacity, bool IsActive, Guid? BranchId);
 
 public sealed record GetBoatsQuery : IRequest<List<BoatDto>>;
 
-public sealed record CreateBoatCommand(string Name, string BoatClass) : ICommand<BoatDto>;
+public sealed record CreateBoatCommand(string Name, string BoatClass, Guid? BranchId) : ICommand<BoatDto>;
 
-public sealed record UpdateBoatCommand(Guid Id, string Name, string BoatClass, bool IsActive) : ICommand<BoatDto>;
+public sealed record UpdateBoatCommand(Guid Id, string Name, string BoatClass, bool IsActive, Guid? BranchId)
+    : ICommand<BoatDto>;
 
 public sealed class GetBoatsQueryHandler(IBoatRepository repository)
     : IRequestHandler<GetBoatsQuery, List<BoatDto>>
@@ -36,7 +37,7 @@ public sealed class CreateBoatCommandHandler(
         if (string.IsNullOrWhiteSpace(request.Name))
             throw new DomainException("invalid_name", "Tekne adı boş olamaz.");
 
-        var boat = Boat.Create(request.Name, BoatClassExtensions.Parse(request.BoatClass));
+        var boat = Boat.Create(request.Name, BoatClassExtensions.Parse(request.BoatClass), request.BranchId);
         repository.Add(boat);
         await unitOfWork.SaveChangesAsync(cancellationToken);
 
@@ -53,7 +54,7 @@ public sealed class UpdateBoatCommandHandler(
         var boat = await repository.GetByIdAsync(request.Id, cancellationToken)
             ?? throw new NotFoundException("Boat", request.Id.ToString());
 
-        boat.Update(request.Name, BoatClassExtensions.Parse(request.BoatClass), request.IsActive);
+        boat.Update(request.Name, BoatClassExtensions.Parse(request.BoatClass), request.IsActive, request.BranchId);
         await unitOfWork.SaveChangesAsync(cancellationToken);
 
         return BoatMapper.ToDto(boat);
@@ -63,5 +64,5 @@ public sealed class UpdateBoatCommandHandler(
 internal static class BoatMapper
 {
     public static BoatDto ToDto(Boat boat) =>
-        new(boat.Id, boat.Name, boat.Class.Label(), boat.Class.Capacity(), boat.IsActive);
+        new(boat.Id, boat.Name, boat.Class.Label(), boat.Class.Capacity(), boat.IsActive, boat.BranchId);
 }

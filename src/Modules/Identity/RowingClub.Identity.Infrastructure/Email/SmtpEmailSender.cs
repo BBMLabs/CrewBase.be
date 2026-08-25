@@ -29,7 +29,9 @@ public sealed class SmtpEmailSender(IOptions<SmtpOptions> options) : IEmailSende
         mime.From.Add(new MailboxAddress(_options.FromName, _options.FromAddress));
         mime.To.Add(new MailboxAddress(message.To, message.To));
         mime.Subject = message.Subject;
-        mime.Body = new TextPart("html") { Text = message.HtmlBody };
+        var textPart = new TextPart("html") { Text = message.HtmlBody };
+        textPart.ContentType.Charset = "utf-8";
+        mime.Body = textPart;
 
         using var client = new SmtpClient();
         await client.ConnectAsync(_options.Host, _options.Port,

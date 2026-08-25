@@ -16,7 +16,7 @@ namespace RowingClub.Api.Endpoints;
 
 public sealed record RegisterCompanyRequest(
     string CompanyName, string AdminEmail, string TaxNumber, string Phone, string ContactEmail, string Address);
-public sealed record LoginRequest(string Email, string Password);
+public sealed record LoginRequest(string Email, string Password, string? RecaptchaToken);
 public sealed record RefreshRequest(string RefreshToken);
 public sealed record LogoutRequest(string RefreshToken);
 public sealed record ForgotPasswordRequest(string Email);
@@ -109,7 +109,7 @@ public static class AuthEndpoints
     {
         var deviceInfo = httpContext.Request.Headers.UserAgent.ToString();
         var result = await sender.Send(
-            new LoginCommand(request.Email, request.Password, deviceInfo), cancellationToken);
+            new LoginCommand(request.Email, request.Password, deviceInfo, request.RecaptchaToken), cancellationToken);
         return Results.Ok(ApiResponse<LoginResult>.Ok(result));
     }
 

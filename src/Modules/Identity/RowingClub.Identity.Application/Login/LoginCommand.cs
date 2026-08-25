@@ -2,7 +2,7 @@ using RowingClub.BuildingBlocks.Application.Messaging;
 
 namespace RowingClub.Identity.Application.Login;
 
-public sealed record LoginCommand(string Email, string Password, string? DeviceInfo) : ICommand<LoginResult>;
+public sealed record LoginCommand(string Email, string Password, string? DeviceInfo, string? RecaptchaToken) : ICommand<LoginResult>;
 
 public sealed record LoginResult(
     bool RequiresTwoFactor,

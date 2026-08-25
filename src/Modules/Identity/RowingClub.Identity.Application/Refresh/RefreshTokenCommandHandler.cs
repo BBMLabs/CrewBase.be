@@ -39,9 +39,9 @@ public sealed class RefreshTokenCommandHandler(
             var theftUser = await userRepository.GetByIdAsync(presentedToken.UserId, cancellationToken);
             if (theftUser is not null)
             {
-                var msg = new EmailMessage(theftUser.Email.Value,
-                    "Hesabınızda Şüpheli Aktivite Tespit Edildi",
-                    "<h1>Güvenlik Uyarısı</h1><p>Hesabınızda şüpheli aktivite tespit edildi. Tüm oturumlarınız güvenlik amacıyla kapatılmıştır.</p><p>Eğer bu siz değilseniz, lütfen hemen şifrenizi değiştirin.</p><p>RowingClub</p>");
+                var bodyHtml = "<p>Hesabınızda şüpheli aktivite tespit edildi. Tüm oturumlarınız güvenlik amacıyla kapatılmıştır.</p><p>Eğer bu siz değilseniz, lütfen hemen şifrenizi değiştirin.</p>";
+                var htmlBody = EmailTemplate.Render("Güvenlik Uyarısı", bodyHtml);
+                var msg = new EmailMessage(theftUser.Email.Value, "Hesabınızda Şüpheli Aktivite Tespit Edildi", htmlBody);
                 await emailSender.SendAsync(msg, cancellationToken);
             }
 

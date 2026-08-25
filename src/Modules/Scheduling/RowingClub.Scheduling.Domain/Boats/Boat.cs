@@ -47,25 +47,29 @@ public sealed class Boat
 
     public bool IsActive { get; private set; }
 
+    public Guid? BranchId { get; private set; }
+
     public DateTimeOffset CreatedAtUtc { get; private set; }
 
     private Boat()
     {
     }
 
-    public static Boat Create(string name, BoatClass boatClass) => new()
+    public static Boat Create(string name, BoatClass boatClass, Guid? branchId = null) => new()
     {
         Id = Guid.NewGuid(),
         Name = name.Trim(),
         Class = boatClass,
         IsActive = true,
+        BranchId = branchId,
         CreatedAtUtc = DateTimeOffset.UtcNow,
     };
 
-    public void Update(string name, BoatClass boatClass, bool isActive)
+    public void Update(string name, BoatClass boatClass, bool isActive, Guid? branchId = null)
     {
         Name = name.Trim();
         Class = boatClass;
         IsActive = isActive;
+        BranchId = branchId;
     }
 }

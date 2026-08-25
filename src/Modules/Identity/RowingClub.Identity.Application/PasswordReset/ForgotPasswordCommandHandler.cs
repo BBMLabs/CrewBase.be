@@ -37,14 +37,11 @@ public sealed class ForgotPasswordCommandHandler(
         var publicAppUrl = (configuration["PUBLIC_APP_URL"] ?? DefaultPublicAppUrl).TrimEnd('/');
         var resetLink = $"{publicAppUrl}/parola-sifirla?token={Uri.EscapeDataString(rawToken)}&email={Uri.EscapeDataString(request.Email)}";
 
-        // E-posta gönderimi başarısız olsa bile (SMTP kapalı/erişilemez) istek başarılı dönmelidir:
-        // aksi halde var/yok olan e-postalar hata davranışıyla birbirinden ayırt edilebilir hale gelir.
         try
         {
-            await emailSender.SendAsync(new EmailMessage(
-                request.Email,
-                "Parola Sıfırlama",
-                $"<p>Parolanızı sıfırlamak için <a href='{resetLink}'>bu bağlantıya tıklayın</a>. Bu bağlantı 1 saat geçerlidir.</p>"), cancellationToken);
+            var bodyHtml = "<p>Hesabınız için bir parola sıfırlama talebi aldık. Aşağıdaki bağlantı 1 saat geçerlidir.</p>";
+            var htmlBody = EmailTemplate.Render("Parola Sıfırlama", bodyHtml, "Parolamı Sıfırla", resetLink);
+            await emailSender.SendAsync(new EmailMessage(request.Email, "Parola Sıfırlama", htmlBody), cancellationToken);
         }
         catch (Exception ex)
         {

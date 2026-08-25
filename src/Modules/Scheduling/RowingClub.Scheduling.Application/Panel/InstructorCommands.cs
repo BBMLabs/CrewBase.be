@@ -6,14 +6,15 @@ using RowingClub.Scheduling.Domain.Instructors;
 
 namespace RowingClub.Scheduling.Application.Panel;
 
-public sealed record InstructorDto(Guid Id, string FullName, string? Phone, string? Email, bool IsActive);
+public sealed record InstructorDto(Guid Id, string FullName, string? Phone, string? Email, bool IsActive, Guid? BranchId);
 
 public sealed record GetInstructorsQuery : IRequest<List<InstructorDto>>;
 
-public sealed record CreateInstructorCommand(string FullName, string? Phone, string? Email)
+public sealed record CreateInstructorCommand(string FullName, string? Phone, string? Email, Guid? BranchId)
     : ICommand<InstructorDto>;
 
-public sealed record UpdateInstructorCommand(Guid Id, string FullName, string? Phone, string? Email, bool IsActive)
+public sealed record UpdateInstructorCommand(
+    Guid Id, string FullName, string? Phone, string? Email, bool IsActive, Guid? BranchId)
     : ICommand<InstructorDto>;
 
 public sealed class GetInstructorsQueryHandler(IInstructorRepository repository)
@@ -24,7 +25,7 @@ public sealed class GetInstructorsQueryHandler(IInstructorRepository repository)
         var instructors = await repository.GetAllAsync(cancellationToken);
         return instructors
             .OrderBy(i => i.FullName)
-            .Select(i => new InstructorDto(i.Id, i.FullName, i.Phone, i.Email, i.IsActive))
+            .Select(i => new InstructorDto(i.Id, i.FullName, i.Phone, i.Email, i.IsActive, i.BranchId))
             .ToList();
     }
 }
@@ -38,11 +39,12 @@ public sealed class CreateInstructorCommandHandler(
         if (string.IsNullOrWhiteSpace(request.FullName))
             throw new DomainException("invalid_name", "Eğitmen adı boş olamaz.");
 
-        var instructor = Instructor.Create(request.FullName, request.Phone, request.Email);
+        var instructor = Instructor.Create(request.FullName, request.Phone, request.Email, request.BranchId);
         repository.Add(instructor);
         await unitOfWork.SaveChangesAsync(cancellationToken);
 
-        return new InstructorDto(instructor.Id, instructor.FullName, instructor.Phone, instructor.Email, instructor.IsActive);
+        return new InstructorDto(
+            instructor.Id, instructor.FullName, instructor.Phone, instructor.Email, instructor.IsActive, instructor.BranchId);
     }
 }
 
@@ -55,9 +57,10 @@ public sealed class UpdateInstructorCommandHandler(
         var instructor = await repository.GetByIdAsync(request.Id, cancellationToken)
             ?? throw new NotFoundException("Instructor", request.Id.ToString());
 
-        instructor.Update(request.FullName, request.Phone, request.Email, request.IsActive);
+        instructor.Update(request.FullName, request.Phone, request.Email, request.IsActive, request.BranchId);
         await unitOfWork.SaveChangesAsync(cancellationToken);
 
-        return new InstructorDto(instructor.Id, instructor.FullName, instructor.Phone, instructor.Email, instructor.IsActive);
+        return new InstructorDto(
+            instructor.Id, instructor.FullName, instructor.Phone, instructor.Email, instructor.IsActive, instructor.BranchId);
     }
 }
