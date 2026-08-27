@@ -80,6 +80,10 @@ public sealed class User : AggregateRoot<Guid>
         Role = newRole;
     }
 
+    public void Block() => Status = UserStatus.Deactivated;
+
+    public void Unblock() => Status = UserStatus.Active;
+
     public void EnableTwoFactor(string method, string? secret = null)
     {
         TwoFactorEnabled = true;

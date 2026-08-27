@@ -19,21 +19,11 @@ public sealed class RegisterCompanyCommandHandler(
     ICredentialRepository credentialRepository,
     IPasswordHasher passwordHasher,
     ITenantDatabaseProvisioner tenantDatabaseProvisioner,
-    IEmailSender emailSender,
-    IAuditLogger auditLogger,
-    IOpaqueTokenGenerator tokenGenerator,
-    IRefreshTokenHasher tokenHasher,
-    IPasswordResetTokenRepository passwordResetTokenRepository,
-    IConfiguration configuration)
+    IOpaqueTokenGenerator tokenGenerator)
     : IRequestHandler<RegisterCompanyCommand, RegisterCompanyResponse>
 {
     /// <summary>Mock ana domain: her firmaya {subdomain}.faturebase.com adresi verilmiş gibi davranılır.</summary>
     public const string BaseDomain = "faturebase.com";
-
-    private const string DefaultPublicAppUrl = "https://faturebase.com";
-
-    /// <summary>İlk parola belirleme bağlantısının ömrü — unutma akışındaki 1 saatten daha geniş bir pencere.</summary>
-    private static readonly TimeSpan ActivationTokenLifetime = TimeSpan.FromHours(48);
 
     public async Task<RegisterCompanyResponse> Handle(
         RegisterCompanyCommand request, CancellationToken cancellationToken)
@@ -70,53 +60,14 @@ public sealed class RegisterCompanyCommandHandler(
         userRepository.Add(adminUser);
         credentialRepository.Add(credential);
 
-        var rawActivationToken = tokenGenerator.Generate();
-        var activationTokenHash = tokenHasher.Hash(rawActivationToken);
-        var activationToken = PasswordResetToken.Issue(adminUser.Id, activationTokenHash, ActivationTokenLifetime);
-        passwordResetTokenRepository.Add(activationToken);
-
-        await SendWelcomeEmailAsync(company, adminUser.Email.Value, rawActivationToken, cancellationToken);
+        // Aktivasyon bağlantısı (parola belirleme e-postası) burada GÖNDERİLMEZ: yönetici e-postası
+        // henüz doğrulanmadı. VerifyEmailCommandHandler, e-posta doğrulama kodu onaylandıktan sonra
+        // taze bir aktivasyon token'ı üretip o e-postayı gönderir - böylece sahibi olmadığı bir
+        // adresle firma "aktive edilmiş" gibi görünmez.
 
         return new RegisterCompanyResponse(
             company.Id, adminUser.Id, company.Name, adminUser.Email.Value,
             company.Subdomain, $"https://{company.Subdomain}.{BaseDomain}", company.CreatedAtUtc);
-    }
-
-    /// <summary>
-    /// Site bilgilerini, yönetici kullanıcı adını ve parola belirleme bağlantısını e-postayla iletir.
-    /// Parola GÜVENLİK GEREĞİ hiçbir zaman e-postaya yazılmaz; kullanıcı bağlantıdan kendi parolasını
-    /// belirler. E-posta gönderilemezse kayıt geri alınmaz, sadece loglanır — kullanıcı bağlantıyı
-    /// "Şifremi Unuttum" akışından yeniden isteyebilir.
-    /// </summary>
-    private async Task SendWelcomeEmailAsync(
-        Company company, string adminEmail, string rawActivationToken, CancellationToken cancellationToken)
-    {
-        var siteUrl = $"https://{company.Subdomain}.{BaseDomain}";
-        var publicAppUrl = (configuration["PUBLIC_APP_URL"] ?? DefaultPublicAppUrl).TrimEnd('/');
-        var activationLink =
-            $"{publicAppUrl}/parola-sifirla?token={Uri.EscapeDataString(rawActivationToken)}&email={Uri.EscapeDataString(adminEmail)}";
-        var bodyHtml = $"""
-            <p>Firmanız başarıyla oluşturuldu ve hemen kullanıma hazır.</p>
-            <p style="margin:16px 0;padding:14px 16px;background:#f4f6f8;border-radius:8px;">
-              <b>Randevu siteniz:</b> <a href="{siteUrl}" style="color:#155e75;">{siteUrl}</a><br/>
-              <b>Yönetici kullanıcı adınız:</b> {adminEmail}
-            </p>
-            <p>Giriş yapabilmek için önce parolanızı belirlemeniz gerekiyor. Aşağıdaki bağlantı 48 saat geçerlidir.</p>
-            <p>Yönetim panelinizden çalışma saatlerinizi, eğitmenlerinizi, teknelerinizi, ders
-            paketlerinizi ve hatırlatma kurallarınızı özelleştirebilirsiniz.</p>
-            """;
-        var htmlBody = EmailTemplate.Render($"{company.Name} — Hoş Geldiniz!", bodyHtml, "Parolamı Belirle", activationLink);
-
-        try
-        {
-            await emailSender.SendAsync(
-                new EmailMessage(adminEmail, $"{company.Name} - FatureBase hesabınız hazır", htmlBody),
-                cancellationToken);
-        }
-        catch (Exception ex)
-        {
-            auditLogger.Log("WELCOME_EMAIL_FAILED", adminEmail, $"Hoş geldin e-postası gönderilemedi: {ex.Message}");
-        }
     }
 
     private async Task<string> ResolveUniqueSubdomainAsync(string companyName, CancellationToken cancellationToken)

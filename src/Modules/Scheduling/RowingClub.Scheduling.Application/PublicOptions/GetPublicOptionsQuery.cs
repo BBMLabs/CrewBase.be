@@ -1,4 +1,5 @@
 using MediatR;
+using RowingClub.Scheduling.Application.Panel;
 using RowingClub.Scheduling.Domain.Boats;
 using RowingClub.Scheduling.Domain.Customers;
 using RowingClub.Scheduling.Domain.Packages;
@@ -14,10 +15,8 @@ public sealed record BoatClassOptionDto(string Value, string Label, int Capacity
 public sealed record PackageOptionDto(Guid Id, string Name, string? Description, int SessionCount, decimal Price);
 
 public sealed record PublicOptionsDto(
-    string OpeningTime,
-    string ClosingTime,
+    List<DayScheduleDto> WorkingHours,
     int SlotMinutes,
-    List<int> OpenDays,
     int MinNoticeHours,
     int MaxAdvanceDays,
     List<int> ReminderOptions,
@@ -54,10 +53,12 @@ public sealed class GetPublicOptionsQueryHandler(
             .ToList();
 
         return new PublicOptionsDto(
-            settings.OpeningTime.ToString("HH:mm"),
-            settings.ClosingTime.ToString("HH:mm"),
+            settings.DaySchedules
+                .OrderBy(d => (int)d.Day)
+                .Select(d => new DayScheduleDto(
+                    (int)d.Day, d.IsOpen, d.OpeningTime.ToString("HH:mm"), d.ClosingTime.ToString("HH:mm")))
+                .ToList(),
             settings.SlotMinutes,
-            Enumerable.Range(0, 7).Where(d => settings.IsOpenOn((DayOfWeek)d)).ToList(),
             settings.MinNoticeHours,
             settings.MaxAdvanceDays,
             settings.ReminderOptions().ToList(),

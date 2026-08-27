@@ -5,30 +5,34 @@ using RowingClub.Scheduling.Domain.Settings;
 
 namespace RowingClub.Scheduling.Application.Panel;
 
+public sealed record DayScheduleDto(int Day, bool IsOpen, string OpeningTime, string ClosingTime);
+
 public sealed record CompanySettingsDto(
-    string OpeningTime,
-    string ClosingTime,
+    List<DayScheduleDto> WorkingHours,
     int SlotMinutes,
-    List<int> OpenDays,
     int MinNoticeHours,
     int MaxAdvanceDays,
     List<int> ReminderOptions,
     int DefaultReminderMinutes,
-    string TimeZoneId);
+    string TimeZoneId,
+    bool NotifyOnNewAppointment,
+    bool NotifyOnCancellation,
+    bool SendCustomerReminders);
 
 public sealed record GetSettingsQuery : IRequest<CompanySettingsDto>;
 
-/// <summary>Firma çalışma düzenini ve randevu/hatırlatma kurallarını günceller (tamamı dinamik).</summary>
+/// <summary>Firma çalışma düzenini ve randevu/hatırlatma/bildirim kurallarını günceller (tamamı dinamik).</summary>
 public sealed record UpdateSettingsCommand(
-    string OpeningTime,
-    string ClosingTime,
+    List<DayScheduleDto> WorkingHours,
     int SlotMinutes,
-    List<int> OpenDays,
     int MinNoticeHours,
     int MaxAdvanceDays,
     List<int> ReminderOptions,
     int DefaultReminderMinutes,
-    string TimeZoneId) : ICommand<CompanySettingsDto>;
+    string TimeZoneId,
+    bool NotifyOnNewAppointment,
+    bool NotifyOnCancellation,
+    bool SendCustomerReminders) : ICommand<CompanySettingsDto>;
 
 public sealed class GetSettingsQueryHandler(ISettingsRepository settingsRepository)
     : IRequestHandler<GetSettingsQuery, CompanySettingsDto>
@@ -54,12 +58,16 @@ public sealed class UpdateSettingsCommandHandler(
             settingsRepository.Add(settings);
         }
 
-        var openDaysMask = request.OpenDays.Aggregate(0, (mask, day) => mask | (1 << day));
+        var days = request.WorkingHours
+            .Select(d => ((DayOfWeek)d.Day, d.IsOpen, ParseTime(d.OpeningTime), ParseTime(d.ClosingTime)))
+            .ToList();
 
-        settings.Update(
-            ParseTime(request.OpeningTime), ParseTime(request.ClosingTime), request.SlotMinutes,
-            openDaysMask, request.MinNoticeHours, request.MaxAdvanceDays,
-            request.ReminderOptions, request.DefaultReminderMinutes, request.TimeZoneId);
+        settings.UpdateWorkingHours(days, request.SlotMinutes);
+        settings.UpdateBookingRules(
+            request.MinNoticeHours, request.MaxAdvanceDays, request.ReminderOptions, request.DefaultReminderMinutes,
+            request.TimeZoneId);
+        settings.UpdateNotifications(
+            request.NotifyOnNewAppointment, request.NotifyOnCancellation, request.SendCustomerReminders);
 
         await unitOfWork.SaveChangesAsync(cancellationToken);
         return SettingsMapper.ToDto(settings);
@@ -75,13 +83,18 @@ public sealed class UpdateSettingsCommandHandler(
 internal static class SettingsMapper
 {
     public static CompanySettingsDto ToDto(CompanySettings settings) => new(
-        settings.OpeningTime.ToString("HH:mm"),
-        settings.ClosingTime.ToString("HH:mm"),
+        settings.DaySchedules
+            .OrderBy(d => (int)d.Day)
+            .Select(d => new DayScheduleDto(
+                (int)d.Day, d.IsOpen, d.OpeningTime.ToString("HH:mm"), d.ClosingTime.ToString("HH:mm")))
+            .ToList(),
         settings.SlotMinutes,
-        Enumerable.Range(0, 7).Where(d => settings.IsOpenOn((DayOfWeek)d)).ToList(),
         settings.MinNoticeHours,
         settings.MaxAdvanceDays,
         settings.ReminderOptions().ToList(),
         settings.DefaultReminderMinutes,
-        settings.TimeZoneId);
+        settings.TimeZoneId,
+        settings.NotifyOnNewAppointment,
+        settings.NotifyOnCancellation,
+        settings.SendCustomerReminders);
 }

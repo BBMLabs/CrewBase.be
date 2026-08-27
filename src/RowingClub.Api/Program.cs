@@ -30,6 +30,8 @@ builder.Services
 builder.Services.AddScoped<TenantResolver>();
 builder.Services.AddScoped<RowingClub.Scheduling.Application.Reminders.IAppointmentReminderSender,
     EmailAppointmentReminderSender>();
+builder.Services.AddScoped<RowingClub.Scheduling.Application.Members.IMemberWelcomeEmailSender,
+    EmailMemberWelcomeSender>();
 builder.Services.AddSingleton<MemberTokenIssuer>();
 builder.Services.AddSignalR();
 builder.Services.AddSingleton<Microsoft.AspNetCore.SignalR.IUserIdProvider, TenantUserIdProvider>();

@@ -31,10 +31,15 @@ public sealed class ResetPasswordCommandHandler(
 
         resetToken.MarkUsed();
 
-        var credential = await credentialRepository.GetByUserIdAsync(user.Id, cancellationToken)
-            ?? throw new DomainException("invalid_reset", "Kullanıcı bilgileri bulunamadı.");
+        // Normalde her User'ın bir Credential'ı vardır; ancak elle/eski bir yoldan oluşturulmuş
+        // (örn. Credential'sız) bir hesap varsa parola sıfırlama akışının çıkmaz sokağa girmemesi
+        // için burada oluşturulur - reset bağlantısı zaten sahiplik kanıtıdır (e-postaya erişim).
+        var credential = await credentialRepository.GetByUserIdAsync(user.Id, cancellationToken);
+        if (credential is null)
+            credentialRepository.Add(Credential.Create(user.Id, passwordHasher.Hash(request.NewPassword)));
+        else
+            credential.ChangePasswordHash(passwordHasher.Hash(request.NewPassword));
 
-        credential.ChangePasswordHash(passwordHasher.Hash(request.NewPassword));
         return Unit.Value;
     }
 }

@@ -43,6 +43,33 @@ public static class PublicSiteEndpoints
                 }));
         }).WithName("PublicCompanyInfo");
 
+        // Kök site (/): birden fazla şube varsa seçim listesi için aktif şubeler.
+        group.MapGet("/branches", async (
+            string subdomain, TenantResolver resolver, ISender sender, CancellationToken cancellationToken) =>
+        {
+            var company = await resolver.ResolveBySubdomainAsync(subdomain, cancellationToken);
+            if (company is null)
+                return Results.NotFound(ApiResponse.Fail("company_not_found", "Firma bulunamadı."));
+
+            var branches = await sender.Send(new GetPublicBranchListQuery(), cancellationToken);
+            return Results.Ok(ApiResponse<List<PublicBranchSummaryDto>>.Ok(branches));
+        }).WithName("PublicBranchList");
+
+        // Şubenin kendi tekil sitesi (/sube/{code}): şube adı/adres/telefon burada, randevu
+        // akışının geri kalanı (options/availability/appointments) firma genelinde kalır.
+        group.MapGet("/branches/{code}", async (
+            string subdomain, string code, TenantResolver resolver, ISender sender, CancellationToken cancellationToken) =>
+        {
+            var company = await resolver.ResolveBySubdomainAsync(subdomain, cancellationToken);
+            if (company is null)
+                return Results.NotFound(ApiResponse.Fail("company_not_found", "Firma bulunamadı."));
+
+            var branch = await sender.Send(new GetPublicBranchQuery(code), cancellationToken);
+            return branch is null
+                ? Results.NotFound(ApiResponse.Fail("branch_not_found", "Şube bulunamadı."))
+                : Results.Ok(ApiResponse<PublicBranchDto>.Ok(branch));
+        }).WithName("PublicBranch");
+
         // Firmanın dinamik kuralları: çalışma saatleri, tekne sınıfları, paketler, hatırlatma
         // seçenekleri - site bunlarla çizilir.
         group.MapGet("/options", async (

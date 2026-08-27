@@ -40,6 +40,30 @@ public sealed class MemberLogRepository(TenantDbContext context) : IMemberLogRep
     public void Add(MemberLog log) => context.MemberLogs.Add(log);
 }
 
+public sealed class ActivityLogRepository(TenantDbContext context) : IActivityLogRepository
+{
+    public Task<List<ActivityLog>> GetRecentAsync(int take, CancellationToken cancellationToken) =>
+        context.ActivityLogs
+            .OrderByDescending(l => l.AtUtc)
+            .Take(take)
+            .ToListAsync(cancellationToken);
+
+    public void Add(ActivityLog log) => context.ActivityLogs.Add(log);
+}
+
+public sealed class BlockedIpAddressRepository(TenantDbContext context) : IBlockedIpAddressRepository
+{
+    public Task<BlockedIpAddress?> GetByIpAsync(string ipAddress, CancellationToken cancellationToken) =>
+        context.BlockedIpAddresses.FirstOrDefaultAsync(b => b.IpAddress == ipAddress, cancellationToken);
+
+    public Task<List<BlockedIpAddress>> GetAllAsync(CancellationToken cancellationToken) =>
+        context.BlockedIpAddresses.OrderByDescending(b => b.BlockedAtUtc).ToListAsync(cancellationToken);
+
+    public void Add(BlockedIpAddress entry) => context.BlockedIpAddresses.Add(entry);
+
+    public void Remove(BlockedIpAddress entry) => context.BlockedIpAddresses.Remove(entry);
+}
+
 public sealed class ClosedDateRepository(TenantDbContext context) : IClosedDateRepository
 {
     public Task<List<ClosedDate>> GetFromAsync(DateOnly from, CancellationToken cancellationToken) =>

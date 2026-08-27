@@ -1,7 +1,6 @@
-using System.Net;
 using System.Threading.RateLimiting;
-using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.RateLimiting;
+using RowingClub.Api.Security;
 
 namespace RowingClub.Api.RateLimiting;
 
@@ -19,7 +18,7 @@ public static class RateLimitingSetup
 
             options.AddPolicy(AuthPolicy, httpContext =>
                 RateLimitPartition.GetFixedWindowLimiter(
-                    partitionKey: ResolveClientIp(httpContext),
+                    partitionKey: ClientIp.Resolve(httpContext),
                     factory: _ => new FixedWindowRateLimiterOptions
                     {
                         PermitLimit = authPermitLimit,
@@ -35,18 +34,5 @@ public static class RateLimitingSetup
     {
         var envValue = Environment.GetEnvironmentVariable("AUTH_RATE_LIMIT");
         return int.TryParse(envValue, out var limit) ? limit : 10;
-    }
-
-    private static string ResolveClientIp(HttpContext httpContext)
-    {
-        var forwardedFor = httpContext.Request.Headers["X-Forwarded-For"].FirstOrDefault();
-        if (!string.IsNullOrWhiteSpace(forwardedFor))
-        {
-            var ip = forwardedFor.Split(',')[0].Trim();
-            if (IPAddress.TryParse(ip, out _))
-                return ip;
-        }
-
-        return httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
     }
 }

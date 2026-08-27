@@ -35,5 +35,16 @@ public sealed class CustomerRepository(TenantDbContext context) : ICustomerRepos
     public Task<List<Customer>> GetAllAsync(CancellationToken cancellationToken) =>
         context.Customers.ToListAsync(cancellationToken);
 
+    public Task<int> CountAsync(CancellationToken cancellationToken) =>
+        context.Customers.CountAsync(cancellationToken);
+
     public void Add(Customer customer) => context.Customers.Add(customer);
+}
+
+public sealed class MemberPasswordSetupTokenRepository(TenantDbContext context) : IMemberPasswordSetupTokenRepository
+{
+    public Task<MemberPasswordSetupToken?> GetByTokenHashAsync(string tokenHash, CancellationToken cancellationToken) =>
+        context.MemberPasswordSetupTokens.FirstOrDefaultAsync(t => t.TokenHash == tokenHash, cancellationToken);
+
+    public void Add(MemberPasswordSetupToken token) => context.MemberPasswordSetupTokens.Add(token);
 }

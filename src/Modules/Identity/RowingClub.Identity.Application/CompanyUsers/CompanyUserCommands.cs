@@ -25,6 +25,10 @@ public sealed record CreateCompanyUserCommand(
 public sealed record ChangeCompanyUserRoleCommand(
     Guid CallerUserId, Guid TargetUserId, string Role) : ICommand<CompanyUserDto>;
 
+public sealed record BlockCompanyUserCommand(Guid CallerUserId, Guid TargetUserId) : ICommand<CompanyUserDto>;
+
+public sealed record UnblockCompanyUserCommand(Guid CallerUserId, Guid TargetUserId) : ICommand<CompanyUserDto>;
+
 internal static class CompanyUserGuards
 {
     /// <summary>Çağıranın aktif bir CompanyAdmin olduğunu ve bir firmaya bağlı olduğunu doğrular.</summary>
@@ -133,6 +137,59 @@ public sealed class ChangeCompanyUserRoleCommandHandler(
         auditLogger.Log(
             "COMPANY_USER_ROLE_CHANGED", target.Id.ToString(),
             $"{caller.Email.Value} tarafından rol {role} yapıldı.");
+
+        return new CompanyUserDto(
+            target.Id, target.Email.Value, target.Role.ToString(), target.Status.ToString(), target.CreatedAtUtc);
+    }
+}
+
+public sealed class BlockCompanyUserCommandHandler(
+    IUserRepository userRepository,
+    IAuditLogger auditLogger)
+    : IRequestHandler<BlockCompanyUserCommand, CompanyUserDto>
+{
+    public async Task<CompanyUserDto> Handle(BlockCompanyUserCommand request, CancellationToken cancellationToken)
+    {
+        var (caller, companyId) = await CompanyUserGuards.EnsureCallerIsCompanyAdminAsync(
+            userRepository, request.CallerUserId, cancellationToken);
+
+        var target = await userRepository.GetByIdAsync(request.TargetUserId, cancellationToken)
+            ?? throw new DomainException("user_not_found", "Kullanıcı bulunamadı.");
+
+        if (target.CompanyId != companyId)
+            throw new DomainException("forbidden", "Bu kullanıcı sizin firmanıza bağlı değil.");
+
+        if (target.Id == caller.Id)
+            throw new DomainException("cannot_block_self", "Kendi hesabınızı engelleyemezsiniz.");
+
+        target.Block();
+
+        auditLogger.Log("COMPANY_USER_BLOCKED", target.Id.ToString(), $"{caller.Email.Value} tarafından engellendi.");
+
+        return new CompanyUserDto(
+            target.Id, target.Email.Value, target.Role.ToString(), target.Status.ToString(), target.CreatedAtUtc);
+    }
+}
+
+public sealed class UnblockCompanyUserCommandHandler(
+    IUserRepository userRepository,
+    IAuditLogger auditLogger)
+    : IRequestHandler<UnblockCompanyUserCommand, CompanyUserDto>
+{
+    public async Task<CompanyUserDto> Handle(UnblockCompanyUserCommand request, CancellationToken cancellationToken)
+    {
+        var (caller, companyId) = await CompanyUserGuards.EnsureCallerIsCompanyAdminAsync(
+            userRepository, request.CallerUserId, cancellationToken);
+
+        var target = await userRepository.GetByIdAsync(request.TargetUserId, cancellationToken)
+            ?? throw new DomainException("user_not_found", "Kullanıcı bulunamadı.");
+
+        if (target.CompanyId != companyId)
+            throw new DomainException("forbidden", "Bu kullanıcı sizin firmanıza bağlı değil.");
+
+        target.Unblock();
+
+        auditLogger.Log("COMPANY_USER_UNBLOCKED", target.Id.ToString(), $"{caller.Email.Value} tarafından engeli kaldırıldı.");
 
         return new CompanyUserDto(
             target.Id, target.Email.Value, target.Role.ToString(), target.Status.ToString(), target.CreatedAtUtc);

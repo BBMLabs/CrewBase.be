@@ -11,15 +11,13 @@ public sealed class CompanySettings
 {
     public Guid Id { get; private set; }
 
-    public TimeOnly OpeningTime { get; private set; }
+    private readonly List<DaySchedule> _daySchedules = new();
 
-    public TimeOnly ClosingTime { get; private set; }
+    /// <summary>Haftanın 7 günü için ayrı çalışma saatleri (Pazar=0 ... Cumartesi=6).</summary>
+    public IReadOnlyList<DaySchedule> DaySchedules => _daySchedules;
 
     /// <summary>Slot uzunluğu dakika cinsinden (ders süresi).</summary>
     public int SlotMinutes { get; private set; }
-
-    /// <summary>Açık günler bit maskesi: 1 &lt;&lt; (int)DayOfWeek (Pazar=0 ... Cumartesi=6).</summary>
-    public int OpenDaysMask { get; private set; }
 
     /// <summary>Randevu en geç, ders başlangıcından bu kadar saat önce alınabilir.</summary>
     public int MinNoticeHours { get; private set; }
@@ -35,38 +33,65 @@ public sealed class CompanySettings
     /// <summary>Çalışma saatleri ve kısıtlar bu saat dilimindeki yerel saate göre yorumlanır.</summary>
     public string TimeZoneId { get; private set; } = null!;
 
+    /// <summary>Yeni randevu oluşunca firma personeline bildirim gönderilsin mi.</summary>
+    public bool NotifyOnNewAppointment { get; private set; } = true;
+
+    /// <summary>Randevu iptalinde firma personeline bildirim gönderilsin mi.</summary>
+    public bool NotifyOnCancellation { get; private set; } = true;
+
+    /// <summary>Üyelere/misafirlere randevu hatırlatması gönderilsin mi.</summary>
+    public bool SendCustomerReminders { get; private set; } = true;
+
     private CompanySettings()
     {
     }
 
-    public static CompanySettings Default() => new()
+    public static CompanySettings Default()
     {
-        Id = Guid.NewGuid(),
-        OpeningTime = new TimeOnly(9, 0),
-        ClosingTime = new TimeOnly(18, 0),
-        SlotMinutes = 60,
-        OpenDaysMask = 0b1111111, // her gün açık
-        MinNoticeHours = 2,
-        MaxAdvanceDays = 30,
-        ReminderOptionsMinutes = "60,120,1440",
-        DefaultReminderMinutes = 120,
-        TimeZoneId = "Europe/Istanbul",
-    };
+        var settings = new CompanySettings
+        {
+            Id = Guid.NewGuid(),
+            SlotMinutes = 60,
+            MinNoticeHours = 2,
+            MaxAdvanceDays = 30,
+            ReminderOptionsMinutes = "60,120,1440",
+            DefaultReminderMinutes = 120,
+            TimeZoneId = "Europe/Istanbul",
+            NotifyOnNewAppointment = true,
+            NotifyOnCancellation = true,
+            SendCustomerReminders = true,
+        };
 
-    public void Update(
-        TimeOnly openingTime, TimeOnly closingTime, int slotMinutes, int openDaysMask,
-        int minNoticeHours, int maxAdvanceDays, IReadOnlyCollection<int> reminderOptionsMinutes,
-        int defaultReminderMinutes, string timeZoneId)
+        foreach (DayOfWeek day in Enum.GetValues<DayOfWeek>())
+            settings._daySchedules.Add(DaySchedule.Create(settings.Id, day, true, new TimeOnly(9, 0), new TimeOnly(18, 0)));
+
+        return settings;
+    }
+
+    public void UpdateWorkingHours(
+        IReadOnlyCollection<(DayOfWeek Day, bool IsOpen, TimeOnly OpeningTime, TimeOnly ClosingTime)> days,
+        int slotMinutes)
     {
-        if (closingTime <= openingTime)
-            throw new DomainException("invalid_hours", "Kapanış saati açılış saatinden sonra olmalıdır.");
+        if (days.Count != 7 || days.Select(d => d.Day).Distinct().Count() != 7)
+            throw new DomainException("invalid_days", "Haftanın 7 günü için de çalışma saati tanımlanmalıdır.");
+
+        if (!days.Any(d => d.IsOpen))
+            throw new DomainException("no_open_days", "En az bir gün açık olmalıdır.");
 
         if (slotMinutes is < 15 or > 240)
             throw new DomainException("invalid_slot_length", "Slot süresi 15-240 dakika arasında olmalıdır.");
 
-        if ((openDaysMask & 0b1111111) == 0)
-            throw new DomainException("no_open_days", "En az bir gün açık olmalıdır.");
+        _daySchedules.Clear();
+        foreach (var d in days)
+            _daySchedules.Add(DaySchedule.Create(Id, d.Day, d.IsOpen, d.OpeningTime, d.ClosingTime));
 
+        SlotMinutes = slotMinutes;
+    }
+
+    public void UpdateBookingRules(
+        int minNoticeHours, int maxAdvanceDays, IReadOnlyCollection<int> reminderOptionsMinutes,
+        int defaultReminderMinutes, string timeZoneId)
+    {
         if (minNoticeHours < 0 || maxAdvanceDays < 1)
             throw new DomainException("invalid_booking_window", "Randevu kısıtları geçersiz.");
 
@@ -85,10 +110,6 @@ public sealed class CompanySettings
             throw new DomainException("invalid_timezone", "Geçersiz saat dilimi.");
         }
 
-        OpeningTime = openingTime;
-        ClosingTime = closingTime;
-        SlotMinutes = slotMinutes;
-        OpenDaysMask = openDaysMask & 0b1111111;
         MinNoticeHours = minNoticeHours;
         MaxAdvanceDays = maxAdvanceDays;
         ReminderOptionsMinutes = string.Join(',', reminderOptionsMinutes.Distinct().OrderBy(m => m));
@@ -96,19 +117,31 @@ public sealed class CompanySettings
         TimeZoneId = timeZoneId;
     }
 
-    public bool IsOpenOn(DayOfWeek day) => (OpenDaysMask & (1 << (int)day)) != 0;
-
-    public IEnumerable<TimeOnly> Slots()
+    public void UpdateNotifications(bool notifyOnNewAppointment, bool notifyOnCancellation, bool sendCustomerReminders)
     {
-        for (var slot = OpeningTime; slot.AddMinutes(SlotMinutes, out var wrapped) <= ClosingTime && wrapped == 0;
+        NotifyOnNewAppointment = notifyOnNewAppointment;
+        NotifyOnCancellation = notifyOnCancellation;
+        SendCustomerReminders = sendCustomerReminders;
+    }
+
+    public DaySchedule ScheduleFor(DayOfWeek day) => _daySchedules.First(d => d.Day == day);
+
+    public bool IsOpenOn(DayOfWeek day) => ScheduleFor(day).IsOpen;
+
+    public IEnumerable<TimeOnly> Slots(DayOfWeek day)
+    {
+        var schedule = ScheduleFor(day);
+        if (!schedule.IsOpen)
+            yield break;
+
+        for (var slot = schedule.OpeningTime; slot.AddMinutes(SlotMinutes, out var wrapped) <= schedule.ClosingTime && wrapped == 0;
              slot = slot.AddMinutes(SlotMinutes))
         {
             yield return slot;
         }
     }
 
-    public bool IsValidSlot(DateOnly date, TimeOnly time) =>
-        IsOpenOn(date.DayOfWeek) && Slots().Contains(time);
+    public bool IsValidSlot(DateOnly date, TimeOnly time) => Slots(date.DayOfWeek).Contains(time);
 
     public IReadOnlyList<int> ReminderOptions() =>
         ReminderOptionsMinutes
@@ -125,13 +158,14 @@ public sealed class CompanySettings
     /// <summary>Slot geçerliliği + min/max rezervasyon penceresi; ihlalde DomainException fırlatır.</summary>
     public void EnsureBookable(DateOnly date, TimeOnly time)
     {
-        if (!IsOpenOn(date.DayOfWeek))
+        var schedule = ScheduleFor(date.DayOfWeek);
+        if (!schedule.IsOpen)
             throw new DomainException("closed_day", "Seçtiğiniz gün firma kapalıdır.");
 
-        if (!Slots().Contains(time))
+        if (!Slots(date.DayOfWeek).Contains(time))
             throw new DomainException(
                 "invalid_slot",
-                $"Randevu saati {OpeningTime:HH\\:mm}-{ClosingTime:HH\\:mm} arasında {SlotMinutes} dakikalık dilimlere denk gelmelidir.");
+                $"Randevu saati {schedule.OpeningTime:HH\\:mm}-{schedule.ClosingTime:HH\\:mm} arasında {SlotMinutes} dakikalık dilimlere denk gelmelidir.");
 
         var nowLocal = NowLocal();
         var startsAt = date.ToDateTime(time);

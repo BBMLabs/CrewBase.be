@@ -1,4 +1,5 @@
 using MediatR;
+using RowingClub.BuildingBlocks.Application.Abstractions;
 using RowingClub.BuildingBlocks.Application.Messaging;
 using RowingClub.BuildingBlocks.Domain;
 using RowingClub.Scheduling.Domain;
@@ -8,7 +9,7 @@ namespace RowingClub.Scheduling.Application.Panel;
 
 public sealed record BoatDto(Guid Id, string Name, string Class, int Capacity, bool IsActive, Guid? BranchId);
 
-public sealed record GetBoatsQuery : IRequest<List<BoatDto>>;
+public sealed record GetBoatsQuery(string? Search = null, Guid? BranchId = null, bool? IsActive = null) : IRequest<List<BoatDto>>;
 
 public sealed record CreateBoatCommand(string Name, string BoatClass, Guid? BranchId) : ICommand<BoatDto>;
 
@@ -21,6 +22,19 @@ public sealed class GetBoatsQueryHandler(IBoatRepository repository)
     public async Task<List<BoatDto>> Handle(GetBoatsQuery request, CancellationToken cancellationToken)
     {
         var boats = await repository.GetAllAsync(cancellationToken);
+
+        if (request.BranchId is { } branchId)
+            boats = boats.Where(b => b.BranchId == branchId).ToList();
+
+        if (request.IsActive is { } isActive)
+            boats = boats.Where(b => b.IsActive == isActive).ToList();
+
+        if (!string.IsNullOrWhiteSpace(request.Search))
+        {
+            var term = request.Search.Trim();
+            boats = boats.Where(b => b.Name.Contains(term, StringComparison.OrdinalIgnoreCase)).ToList();
+        }
+
         return boats
             .OrderBy(b => (int)b.Class).ThenBy(b => b.Name)
             .Select(BoatMapper.ToDto)
@@ -29,13 +43,17 @@ public sealed class GetBoatsQueryHandler(IBoatRepository repository)
 }
 
 public sealed class CreateBoatCommandHandler(
-    IBoatRepository repository, ISchedulingUnitOfWork unitOfWork)
+    IBoatRepository repository, ISchedulingUnitOfWork unitOfWork, ITenantDatabase tenantDatabase)
     : IRequestHandler<CreateBoatCommand, BoatDto>
 {
     public async Task<BoatDto> Handle(CreateBoatCommand request, CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(request.Name))
             throw new DomainException("invalid_name", "Tekne adı boş olamaz.");
+
+        if (await repository.CountActiveAsync(cancellationToken) >= tenantDatabase.MaxBoats)
+            throw new DomainException("boat_limit_reached",
+                $"Tekne limitine ulaşıldı. Mevcut paketiniz en fazla {tenantDatabase.MaxBoats} tekneye izin verir; devam etmek için paketinizi yükseltin.");
 
         var boat = Boat.Create(request.Name, BoatClassExtensions.Parse(request.BoatClass), request.BranchId);
         repository.Add(boat);

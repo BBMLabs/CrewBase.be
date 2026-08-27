@@ -15,9 +15,14 @@ public sealed class GetActiveCompanySitesQueryHandler(ICompanyRepository company
         var companies = await companyRepository.GetByStatusAsync(CompanyStatus.Active, cancellationToken);
 
         return companies
-            .Select(c => new CompanySiteDto(
-                c.Id, c.Name, c.Subdomain, c.DatabaseName,
-                c.Phone, c.ContactEmail, c.Address, c.Status.ToString()))
+            .Select(c =>
+            {
+                var limits = c.PlanLimits;
+                return new CompanySiteDto(
+                    c.Id, c.Name, c.Subdomain, c.DatabaseName,
+                    c.Phone, c.ContactEmail, c.Address, c.TaxNumber, c.Status.ToString(),
+                    c.Plan.ToString(), limits.MaxBranches, limits.MaxMembers, limits.MaxBoats);
+            })
             .ToList();
     }
 }

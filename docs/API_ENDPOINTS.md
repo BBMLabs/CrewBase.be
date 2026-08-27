@@ -459,7 +459,7 @@ veriler yalnızca o firmanın **kendi tenant veritabanından** okunur/yazılır.
 
 | Metot | Route | Açıklama |
 |---|---|---|
-| GET | `/settings` | Çalışma saatleri, slot süresi, açık günler, min/max rezervasyon penceresi, hatırlatma seçenekleri, saat dilimi |
+| GET | `/settings` | Güne özel çalışma saatleri, slot süresi, min/max rezervasyon penceresi, hatırlatma seçenekleri, saat dilimi, bildirim ayarları |
 | PUT | `/settings` | Aynı alanları günceller — **tamamen firmaya özeldir**, tüm public/member akışları buradan beslenir |
 | GET | `/closed-dates` | Kapalı (bayram/bakım) günler |
 | POST | `/closed-dates` | `{ date, reason? }` ile tekil gün kapatır |
@@ -468,13 +468,18 @@ veriler yalnızca o firmanın **kendi tenant veritabanından** okunur/yazılır.
 **PUT /settings request:**
 ```json
 {
-  "openingTime": "08:00", "closingTime": "20:00", "slotMinutes": 60,
-  "openDays": [1,2,3,4,5,6], "minNoticeHours": 1, "maxAdvanceDays": 14,
+  "workingHours": [
+    { "day": 0, "isOpen": false, "openingTime": "09:00", "closingTime": "18:00" },
+    { "day": 1, "isOpen": true, "openingTime": "08:00", "closingTime": "20:00" }
+  ],
+  "slotMinutes": 60, "minNoticeHours": 1, "maxAdvanceDays": 14,
   "reminderOptions": [30,60,120,1440], "defaultReminderMinutes": 60,
-  "timeZoneId": "Europe/Istanbul"
+  "timeZoneId": "Europe/Istanbul",
+  "notifyOnNewAppointment": true, "notifyOnCancellation": true, "sendCustomerReminders": true
 }
 ```
-`openDays`: 0=Pazar ... 6=Cumartesi.
+`workingHours`: her gün için ayrı çalışma saati, tam olarak 7 gün girilmeli (`day`: 0=Pazar ... 6=Cumartesi).
+GET aynı şekli döner.
 
 ### 6.6 Kulüp akışı (moderasyon)
 

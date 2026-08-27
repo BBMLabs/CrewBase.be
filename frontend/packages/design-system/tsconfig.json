@@ -1,4 +1,0 @@
-{
-  "extends": "@crewbase/config/tsconfig",
-  "include": ["src"]
-}

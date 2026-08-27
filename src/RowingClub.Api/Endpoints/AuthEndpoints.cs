@@ -2,6 +2,7 @@ using Asp.Versioning;
 using MediatR;
 using Microsoft.AspNetCore.Mvc;
 using RowingClub.Api.RateLimiting;
+using RowingClub.Api.Tenancy;
 using RowingClub.BuildingBlocks.Application.Abstractions;
 using RowingClub.Identity.Application.Companies.RegisterCompany;
 using RowingClub.Identity.Application.EmailVerification;
@@ -11,6 +12,7 @@ using RowingClub.Identity.Application.LogoutAll;
 using RowingClub.Identity.Application.PasswordReset;
 using RowingClub.Identity.Application.Refresh;
 using RowingClub.Identity.Application.Register;
+using RowingClub.Scheduling.Application.Panel;
 
 namespace RowingClub.Api.Endpoints;
 
@@ -96,11 +98,24 @@ public static class AuthEndpoints
     }
 
     private static async Task<IResult> RegisterCompanyAsync(
-        [FromBody] RegisterCompanyRequest request, ISender sender, CancellationToken cancellationToken)
+        [FromBody] RegisterCompanyRequest request, ISender sender, TenantResolver resolver, CancellationToken cancellationToken)
     {
         var response = await sender.Send(new RegisterCompanyCommand(
             request.CompanyName, request.AdminEmail, request.TaxNumber,
             request.Phone, request.ContactEmail, request.Address), cancellationToken);
+
+        if (await resolver.ResolveByCompanyIdAsync(response.CompanyId, cancellationToken) is not null)
+        {
+            try
+            {
+                await sender.Send(new CreateBranchCommand(
+                    $"{response.CompanyName} Şube 1", null, null, null, null, null, null, null), cancellationToken);
+            }
+            catch
+            {
+            }
+        }
+
         return Results.Created($"/api/v1/companies/{response.CompanyId}", ApiResponse<RegisterCompanyResponse>.Ok(response));
     }
 

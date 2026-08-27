@@ -23,6 +23,7 @@ public sealed class SetCustomerLevelCommandHandler(
         await unitOfWork.SaveChangesAsync(cancellationToken);
 
         return new CustomerDto(
-            customer.Id, customer.FullName, customer.Phone, customer.Email, customer.Level, customer.CreatedAtUtc);
+            customer.Id, customer.FullName, customer.Phone, customer.Email, customer.Level,
+            customer.BranchId, customer.IsBlocked, customer.CreatedAtUtc);
     }
 }

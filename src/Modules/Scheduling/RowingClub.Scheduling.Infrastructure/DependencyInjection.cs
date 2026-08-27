@@ -46,6 +46,7 @@ public static class DependencyInjection
 
         services.AddScoped<IAppointmentRepository, AppointmentRepository>();
         services.AddScoped<ICustomerRepository, CustomerRepository>();
+        services.AddScoped<IMemberPasswordSetupTokenRepository, MemberPasswordSetupTokenRepository>();
         services.AddScoped<ITrainingSessionRepository, TrainingSessionRepository>();
         services.AddScoped<IBoatRepository, BoatRepository>();
         services.AddScoped<IBranchRepository, BranchRepository>();
@@ -54,6 +55,10 @@ public static class DependencyInjection
         services.AddScoped<ISettingsRepository, SettingsRepository>();
         services.AddScoped<ICustomerPackageRepository, CustomerPackageRepository>();
         services.AddScoped<IMemberLogRepository, MemberLogRepository>();
+        services.AddScoped<IActivityLogRepository, ActivityLogRepository>();
+        services.AddScoped<IActivityLogWriter, ActivityLogWriter>();
+        services.AddScoped<IBlockedIpAddressRepository, BlockedIpAddressRepository>();
+        services.AddScoped<IBlockedIpChecker, BlockedIpChecker>();
         services.AddScoped<IClosedDateRepository, ClosedDateRepository>();
         services.AddScoped<IFriendshipRepository, FriendshipRepository>();
         services.AddScoped<IDirectMessageRepository, DirectMessageRepository>();

@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Mvc;
 using RowingClub.Api.Tenancy;
 using RowingClub.BuildingBlocks.Application.Abstractions;
 using RowingClub.Identity.Application.Companies.GetCompanySite;
+using RowingClub.Identity.Application.Companies.UpgradeCompanyPlan;
 using RowingClub.Identity.Application.CompanyUsers;
 using RowingClub.Scheduling.Application.Community;
 using RowingClub.Scheduling.Application.Panel;
@@ -14,18 +15,25 @@ public sealed record SetAppointmentStatusRequest(string Status);
 public sealed record SetCustomerLevelRequest(int Level);
 public sealed record InstructorRequest(string FullName, string? Phone, string? Email, bool? IsActive, Guid? BranchId);
 public sealed record BoatRequest(string Name, string BoatClass, bool? IsActive, Guid? BranchId);
-public sealed record BranchRequest(string Name, string? Address, string? Phone, bool? IsActive);
+public sealed record BranchRequest(
+    string Name, string? Address, string? Phone, bool? IsActive,
+    string? ManagerName, string? ManagerPhone, string? ManagerEmail,
+    string? TaxNumber, string? Description);
+public sealed record SetCustomerBranchRequest(Guid? BranchId);
 public sealed record PackageRequest(string Name, string? Description, int SessionCount, decimal Price, bool? IsActive);
 public sealed record AssignSessionRequest(Guid? BoatId, Guid? InstructorId);
 public sealed record UpdateSettingsRequest(
-    string OpeningTime, string ClosingTime, int SlotMinutes, List<int> OpenDays,
+    List<DayScheduleDto> WorkingHours, int SlotMinutes,
     int MinNoticeHours, int MaxAdvanceDays, List<int> ReminderOptions,
-    int DefaultReminderMinutes, string TimeZoneId);
+    int DefaultReminderMinutes, string TimeZoneId,
+    bool NotifyOnNewAppointment, bool NotifyOnCancellation, bool SendCustomerReminders);
 public sealed record CreateCompanyUserRequest(string Email, string Password, string Role);
+public sealed record UpgradePlanRequest(string Plan);
 public sealed record ChangeUserRoleRequest(string Role);
-public sealed record CreateMemberRequest(string FullName, string Phone, string? Email, int Level);
+public sealed record CreateMemberRequest(string FullName, string Phone, string? Email, int Level, Guid? BranchId);
 public sealed record AssignPackageRequest(Guid LessonPackageId);
 public sealed record ClosedDateRequest(string Date, string? Reason);
+public sealed record BlockIpAddressRequest(string IpAddress, string? Reason);
 
 /// <summary>
 /// Firma yöneticisinin paneli: randevular, seanslar (tekne/hoca atamaları), üye dereceleri,
@@ -52,10 +60,39 @@ public static class CompanyPanelEndpoints
                 {
                     company.Name,
                     company.Subdomain,
+                    company.TaxNumber,
                     SiteUrl = $"https://{company.Subdomain}.{TenantResolver.BaseDomain}",
                     MockPath = $"/site/{company.Subdomain}",
                 }));
         }).WithName("CompanySiteInfo");
+
+        // ---- Abonelik paketi ----
+
+        group.MapGet("/plan", async (
+            ICurrentUser user, TenantResolver resolver, ISender sender, CancellationToken ct) =>
+        {
+            if (await ResolveOwnCompanyAsync(user, resolver, ct) is null)
+                return CompanyNotFound();
+
+            var plan = await sender.Send(new GetCompanyPlanQuery(), ct);
+            return Results.Ok(ApiResponse<CompanyPlanDto>.Ok(plan));
+        }).WithName("CompanyPlan");
+
+        group.MapPost("/plan/upgrade", async (
+            [FromBody] UpgradePlanRequest request, ICurrentUser user, TenantResolver resolver,
+            ISender sender, CancellationToken ct) =>
+        {
+            var company = await ResolveOwnCompanyAsync(user, resolver, ct);
+            if (company is null)
+                return CompanyNotFound();
+
+            var usage = await sender.Send(new GetCompanyPlanQuery(), ct);
+            var result = await sender.Send(
+                new UpgradeCompanyPlanCommand(
+                    company.CompanyId, request.Plan, usage.UsedBranches, usage.UsedMembers, usage.UsedBoats),
+                ct);
+            return Results.Ok(ApiResponse<UpgradeCompanyPlanResult>.Ok(result, "Paketiniz güncellendi."));
+        }).WithName("CompanyUpgradePlan");
 
         // ---- Randevular ----
 
@@ -120,12 +157,12 @@ public static class CompanyPanelEndpoints
         // ---- Üyeler ve dereceleri ----
 
         group.MapGet("/customers", async (
-            ICurrentUser user, TenantResolver resolver, ISender sender, CancellationToken ct) =>
+            string? search, Guid? branchId, ICurrentUser user, TenantResolver resolver, ISender sender, CancellationToken ct) =>
         {
             if (await ResolveOwnCompanyAsync(user, resolver, ct) is null)
                 return CompanyNotFound();
 
-            var customers = await sender.Send(new GetCustomersQuery(), ct);
+            var customers = await sender.Send(new GetCustomersQuery(search, branchId), ct);
             return Results.Ok(ApiResponse<List<CustomerDto>>.Ok(customers));
         }).WithName("CompanyCustomers");
 
@@ -133,14 +170,59 @@ public static class CompanyPanelEndpoints
             [FromBody] CreateMemberRequest request, ICurrentUser user, TenantResolver resolver,
             ISender sender, CancellationToken ct) =>
         {
-            if (await ResolveOwnCompanyAsync(user, resolver, ct) is null)
+            var site = await ResolveOwnCompanyAsync(user, resolver, ct);
+            if (site is null)
                 return CompanyNotFound();
 
             var customer = await sender.Send(new CreateMemberCommand(
-                request.FullName, request.Phone, request.Email, request.Level), ct);
+                request.FullName, request.Phone, request.Email, request.Level, request.BranchId,
+                site.Name, site.Subdomain), ct);
             return Results.Created($"/api/v1/company/customers/{customer.Id}",
                 ApiResponse<CustomerDto>.Ok(customer, "Üye eklendi."));
         }).WithName("CompanyCreateMember");
+
+        group.MapPost("/customers/{customerId:guid}/branch", async (
+            Guid customerId, [FromBody] SetCustomerBranchRequest request, ICurrentUser user,
+            TenantResolver resolver, ISender sender, CancellationToken ct) =>
+        {
+            if (await ResolveOwnCompanyAsync(user, resolver, ct) is null)
+                return CompanyNotFound();
+
+            var customer = await sender.Send(new SetCustomerBranchCommand(customerId, request.BranchId), ct);
+            return Results.Ok(ApiResponse<CustomerDto>.Ok(customer, "Üyenin şubesi güncellendi."));
+        }).WithName("CompanySetCustomerBranch");
+
+        group.MapPost("/customers/{customerId:guid}/send-password-reset", async (
+            Guid customerId, ICurrentUser user, TenantResolver resolver, ISender sender, CancellationToken ct) =>
+        {
+            var site = await ResolveOwnCompanyAsync(user, resolver, ct);
+            if (site is null)
+                return CompanyNotFound();
+
+            var customer = await sender.Send(
+                new SendMemberPasswordResetCommand(customerId, site.Name, site.Subdomain), ct);
+            return Results.Ok(ApiResponse<CustomerDto>.Ok(customer, "Şifre sıfırlama bağlantısı gönderildi."));
+        }).WithName("CompanySendMemberPasswordReset");
+
+        group.MapPost("/customers/{customerId:guid}/block", async (
+            Guid customerId, ICurrentUser user, TenantResolver resolver, ISender sender, CancellationToken ct) =>
+        {
+            if (await ResolveOwnCompanyAsync(user, resolver, ct) is null)
+                return CompanyNotFound();
+
+            var customer = await sender.Send(new BlockMemberCommand(customerId), ct);
+            return Results.Ok(ApiResponse<CustomerDto>.Ok(customer, "Üye engellendi."));
+        }).WithName("CompanyBlockMember");
+
+        group.MapPost("/customers/{customerId:guid}/unblock", async (
+            Guid customerId, ICurrentUser user, TenantResolver resolver, ISender sender, CancellationToken ct) =>
+        {
+            if (await ResolveOwnCompanyAsync(user, resolver, ct) is null)
+                return CompanyNotFound();
+
+            var customer = await sender.Send(new UnblockMemberCommand(customerId), ct);
+            return Results.Ok(ApiResponse<CustomerDto>.Ok(customer, "Üyenin engeli kaldırıldı."));
+        }).WithName("CompanyUnblockMember");
 
         group.MapPost("/customers/{customerId:guid}/packages", async (
             Guid customerId, [FromBody] AssignPackageRequest request, ICurrentUser user,
@@ -195,6 +277,17 @@ public static class CompanyPanelEndpoints
             var logs = await sender.Send(new GetMemberLogsQuery(null, take ?? 100), ct);
             return Results.Ok(ApiResponse<List<MemberLogDto>>.Ok(logs));
         }).WithName("CompanyLogs");
+
+        group.MapGet("/activity-logs", async (
+            [FromQuery] int? take, string? search, ICurrentUser user, TenantResolver resolver,
+            ISender sender, CancellationToken ct) =>
+        {
+            if (await ResolveOwnCompanyAsync(user, resolver, ct) is null)
+                return CompanyNotFound();
+
+            var logs = await sender.Send(new GetActivityLogsQuery(take ?? 100, search), ct);
+            return Results.Ok(ApiResponse<List<ActivityLogDto>>.Ok(logs));
+        }).WithName("CompanyActivityLogs");
 
         group.MapGet("/stats", async (
             ICurrentUser user, TenantResolver resolver, ISender sender, CancellationToken ct) =>
@@ -259,12 +352,13 @@ public static class CompanyPanelEndpoints
         // ---- Eğitmenler ----
 
         group.MapGet("/instructors", async (
-            ICurrentUser user, TenantResolver resolver, ISender sender, CancellationToken ct) =>
+            string? search, Guid? branchId, bool? isActive, ICurrentUser user, TenantResolver resolver,
+            ISender sender, CancellationToken ct) =>
         {
             if (await ResolveOwnCompanyAsync(user, resolver, ct) is null)
                 return CompanyNotFound();
 
-            var instructors = await sender.Send(new GetInstructorsQuery(), ct);
+            var instructors = await sender.Send(new GetInstructorsQuery(search, branchId, isActive), ct);
             return Results.Ok(ApiResponse<List<InstructorDto>>.Ok(instructors));
         }).WithName("CompanyInstructors");
 
@@ -296,12 +390,12 @@ public static class CompanyPanelEndpoints
         // ---- Şubeler ----
 
         group.MapGet("/branches", async (
-            ICurrentUser user, TenantResolver resolver, ISender sender, CancellationToken ct) =>
+            string? search, bool? isActive, ICurrentUser user, TenantResolver resolver, ISender sender, CancellationToken ct) =>
         {
             if (await ResolveOwnCompanyAsync(user, resolver, ct) is null)
                 return CompanyNotFound();
 
-            var branches = await sender.Send(new GetBranchesQuery(), ct);
+            var branches = await sender.Send(new GetBranchesQuery(search, isActive), ct);
             return Results.Ok(ApiResponse<List<BranchDto>>.Ok(branches));
         }).WithName("CompanyBranches");
 
@@ -312,7 +406,10 @@ public static class CompanyPanelEndpoints
             if (await ResolveOwnCompanyAsync(user, resolver, ct) is null)
                 return CompanyNotFound();
 
-            var branch = await sender.Send(new CreateBranchCommand(request.Name, request.Address, request.Phone), ct);
+            var branch = await sender.Send(new CreateBranchCommand(
+                request.Name, request.Address, request.Phone,
+                request.ManagerName, request.ManagerPhone, request.ManagerEmail,
+                request.TaxNumber, request.Description), ct);
             return Results.Created($"/api/v1/company/branches/{branch.Id}", ApiResponse<BranchDto>.Ok(branch));
         }).WithName("CompanyCreateBranch");
 
@@ -324,19 +421,32 @@ public static class CompanyPanelEndpoints
                 return CompanyNotFound();
 
             var branch = await sender.Send(new UpdateBranchCommand(
-                branchId, request.Name, request.Address, request.Phone, request.IsActive ?? true), ct);
+                branchId, request.Name, request.Address, request.Phone, request.IsActive ?? true,
+                request.ManagerName, request.ManagerPhone, request.ManagerEmail,
+                request.TaxNumber, request.Description), ct);
             return Results.Ok(ApiResponse<BranchDto>.Ok(branch));
         }).WithName("CompanyUpdateBranch");
 
-        // ---- Tekneler ----
-
-        group.MapGet("/boats", async (
-            ICurrentUser user, TenantResolver resolver, ISender sender, CancellationToken ct) =>
+        group.MapGet("/branches/{branchId:guid}/detail", async (
+            Guid branchId, ICurrentUser user, TenantResolver resolver, ISender sender, CancellationToken ct) =>
         {
             if (await ResolveOwnCompanyAsync(user, resolver, ct) is null)
                 return CompanyNotFound();
 
-            var boats = await sender.Send(new GetBoatsQuery(), ct);
+            var detail = await sender.Send(new GetBranchDetailQuery(branchId), ct);
+            return Results.Ok(ApiResponse<BranchDetailDto>.Ok(detail));
+        }).WithName("CompanyBranchDetail");
+
+        // ---- Tekneler ----
+
+        group.MapGet("/boats", async (
+            string? search, Guid? branchId, bool? isActive, ICurrentUser user, TenantResolver resolver,
+            ISender sender, CancellationToken ct) =>
+        {
+            if (await ResolveOwnCompanyAsync(user, resolver, ct) is null)
+                return CompanyNotFound();
+
+            var boats = await sender.Send(new GetBoatsQuery(search, branchId, isActive), ct);
             return Results.Ok(ApiResponse<List<BoatDto>>.Ok(boats));
         }).WithName("CompanyBoats");
 
@@ -420,9 +530,10 @@ public static class CompanyPanelEndpoints
                 return CompanyNotFound();
 
             var settings = await sender.Send(new UpdateSettingsCommand(
-                request.OpeningTime, request.ClosingTime, request.SlotMinutes, request.OpenDays,
+                request.WorkingHours, request.SlotMinutes,
                 request.MinNoticeHours, request.MaxAdvanceDays, request.ReminderOptions,
-                request.DefaultReminderMinutes, request.TimeZoneId), ct);
+                request.DefaultReminderMinutes, request.TimeZoneId,
+                request.NotifyOnNewAppointment, request.NotifyOnCancellation, request.SendCustomerReminders), ct);
             return Results.Ok(ApiResponse<CompanySettingsDto>.Ok(settings, "Ayarlar güncellendi."));
         }).WithName("CompanyUpdateSettings");
 
@@ -522,6 +633,53 @@ public static class CompanyPanelEndpoints
                 new ChangeCompanyUserRoleCommand(user.UserId, userId, request.Role), ct);
             return Results.Ok(ApiResponse<CompanyUserDto>.Ok(updated, "Kullanıcı rolü güncellendi."));
         }).WithName("CompanyChangeUserRole");
+
+        group.MapPost("/users/{userId:guid}/block", async (
+            Guid userId, ICurrentUser user, ISender sender, CancellationToken ct) =>
+        {
+            var updated = await sender.Send(new BlockCompanyUserCommand(user.UserId, userId), ct);
+            return Results.Ok(ApiResponse<CompanyUserDto>.Ok(updated, "Kullanıcı engellendi."));
+        }).WithName("CompanyBlockUser");
+
+        group.MapPost("/users/{userId:guid}/unblock", async (
+            Guid userId, ICurrentUser user, ISender sender, CancellationToken ct) =>
+        {
+            var updated = await sender.Send(new UnblockCompanyUserCommand(user.UserId, userId), ct);
+            return Results.Ok(ApiResponse<CompanyUserDto>.Ok(updated, "Kullanıcının engeli kaldırıldı."));
+        }).WithName("CompanyUnblockUser");
+
+        // ---- Güvenlik: engellenen IP adresleri ----
+
+        group.MapGet("/blocked-ips", async (
+            ICurrentUser user, TenantResolver resolver, ISender sender, CancellationToken ct) =>
+        {
+            if (await ResolveOwnCompanyAsync(user, resolver, ct) is null)
+                return CompanyNotFound();
+
+            var entries = await sender.Send(new GetBlockedIpAddressesQuery(), ct);
+            return Results.Ok(ApiResponse<List<BlockedIpAddressDto>>.Ok(entries));
+        }).WithName("CompanyBlockedIps");
+
+        group.MapPost("/blocked-ips", async (
+            [FromBody] BlockIpAddressRequest request, ICurrentUser user, TenantResolver resolver,
+            ISender sender, CancellationToken ct) =>
+        {
+            if (await ResolveOwnCompanyAsync(user, resolver, ct) is null)
+                return CompanyNotFound();
+
+            var entry = await sender.Send(new BlockIpAddressCommand(request.IpAddress, request.Reason), ct);
+            return Results.Ok(ApiResponse<BlockedIpAddressDto>.Ok(entry, "IP adresi engellendi."));
+        }).WithName("CompanyBlockIp");
+
+        group.MapDelete("/blocked-ips/{ipAddress}", async (
+            string ipAddress, ICurrentUser user, TenantResolver resolver, ISender sender, CancellationToken ct) =>
+        {
+            if (await ResolveOwnCompanyAsync(user, resolver, ct) is null)
+                return CompanyNotFound();
+
+            await sender.Send(new UnblockIpAddressCommand(ipAddress), ct);
+            return Results.Ok(ApiResponse<object?>.Ok(null, "IP adresinin engeli kaldırıldı."));
+        }).WithName("CompanyUnblockIp");
 
         return app;
     }

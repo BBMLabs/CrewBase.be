@@ -117,11 +117,30 @@ namespace RowingClub.Scheduling.Infrastructure.Persistence.Migrations
                         .HasMaxLength(500)
                         .HasColumnType("character varying(500)");
 
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(8)
+                        .HasColumnType("character varying(8)");
+
                     b.Property<DateTimeOffset>("CreatedAtUtc")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<string>("Description")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
                     b.Property<bool>("IsActive")
                         .HasColumnType("boolean");
+
+                    b.Property<string>("ManagerEmail")
+                        .HasColumnType("text");
+
+                    b.Property<string>("ManagerName")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<string>("ManagerPhone")
+                        .HasColumnType("text");
 
                     b.Property<string>("Name")
                         .IsRequired()
@@ -132,7 +151,14 @@ namespace RowingClub.Scheduling.Infrastructure.Persistence.Migrations
                         .HasMaxLength(50)
                         .HasColumnType("character varying(50)");
 
+                    b.Property<string>("TaxNumber")
+                        .HasMaxLength(11)
+                        .HasColumnType("character varying(11)");
+
                     b.HasKey("Id");
+
+                    b.HasIndex("Code")
+                        .IsUnique();
 
                     b.ToTable("branches", (string)null);
                 });
@@ -366,6 +392,9 @@ namespace RowingClub.Scheduling.Infrastructure.Persistence.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
+                    b.Property<Guid?>("BranchId")
+                        .HasColumnType("uuid");
+
                     b.Property<DateTimeOffset>("CreatedAtUtc")
                         .HasColumnType("timestamp with time zone");
 
@@ -385,6 +414,9 @@ namespace RowingClub.Scheduling.Infrastructure.Persistence.Migrations
                     b.Property<string>("FullName")
                         .IsRequired()
                         .HasColumnType("text");
+
+                    b.Property<bool>("IsBlocked")
+                        .HasColumnType("boolean");
 
                     b.Property<int>("Level")
                         .HasColumnType("integer");
@@ -411,6 +443,8 @@ namespace RowingClub.Scheduling.Infrastructure.Persistence.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("BranchId");
+
                     b.HasIndex("EmailIndex")
                         .IsUnique()
                         .HasFilter("\"EmailIndex\" IS NOT NULL");
@@ -423,6 +457,36 @@ namespace RowingClub.Scheduling.Infrastructure.Persistence.Migrations
                         .IsUnique();
 
                     b.ToTable("customers", (string)null);
+                });
+
+            modelBuilder.Entity("RowingClub.Scheduling.Domain.Customers.MemberPasswordSetupToken", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("CustomerId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("ExpiresAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("TokenHash")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<DateTimeOffset?>("UsedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CustomerId");
+
+                    b.HasIndex("TokenHash")
+                        .IsUnique();
+
+                    b.ToTable("member_password_setup_tokens", (string)null);
                 });
 
             modelBuilder.Entity("RowingClub.Scheduling.Domain.Customers.VerificationCode", b =>
@@ -491,6 +555,78 @@ namespace RowingClub.Scheduling.Infrastructure.Persistence.Migrations
                     b.HasIndex("BranchId");
 
                     b.ToTable("instructors", (string)null);
+                });
+
+            modelBuilder.Entity("RowingClub.Scheduling.Domain.Logs.ActivityLog", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Action")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<string>("ActorEmail")
+                        .IsRequired()
+                        .HasMaxLength(254)
+                        .HasColumnType("character varying(254)");
+
+                    b.Property<string>("ActorRole")
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)");
+
+                    b.Property<Guid>("ActorUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("AtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("IpAddress")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("UserAgent")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AtUtc");
+
+                    b.HasIndex("IpAddress");
+
+                    b.ToTable("activity_logs", (string)null);
+                });
+
+            modelBuilder.Entity("RowingClub.Scheduling.Domain.Logs.BlockedIpAddress", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("BlockedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("BlockedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("IpAddress")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("Reason")
+                        .HasMaxLength(300)
+                        .HasColumnType("character varying(300)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("IpAddress")
+                        .IsUnique();
+
+                    b.ToTable("blocked_ip_addresses", (string)null);
                 });
 
             modelBuilder.Entity("RowingClub.Scheduling.Domain.Logs.MemberLog", b =>
@@ -655,9 +791,6 @@ namespace RowingClub.Scheduling.Infrastructure.Persistence.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
-                    b.Property<TimeOnly>("ClosingTime")
-                        .HasColumnType("time without time zone");
-
                     b.Property<int>("DefaultReminderMinutes")
                         .HasColumnType("integer");
 
@@ -667,16 +800,19 @@ namespace RowingClub.Scheduling.Infrastructure.Persistence.Migrations
                     b.Property<int>("MinNoticeHours")
                         .HasColumnType("integer");
 
-                    b.Property<int>("OpenDaysMask")
-                        .HasColumnType("integer");
+                    b.Property<bool>("NotifyOnCancellation")
+                        .HasColumnType("boolean");
 
-                    b.Property<TimeOnly>("OpeningTime")
-                        .HasColumnType("time without time zone");
+                    b.Property<bool>("NotifyOnNewAppointment")
+                        .HasColumnType("boolean");
 
                     b.Property<string>("ReminderOptionsMinutes")
                         .IsRequired()
                         .HasMaxLength(200)
                         .HasColumnType("character varying(200)");
+
+                    b.Property<bool>("SendCustomerReminders")
+                        .HasColumnType("boolean");
 
                     b.Property<int>("SlotMinutes")
                         .HasColumnType("integer");
@@ -689,6 +825,35 @@ namespace RowingClub.Scheduling.Infrastructure.Persistence.Migrations
                     b.HasKey("Id");
 
                     b.ToTable("company_settings", (string)null);
+                });
+
+            modelBuilder.Entity("RowingClub.Scheduling.Domain.Settings.DaySchedule", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<TimeOnly>("ClosingTime")
+                        .HasColumnType("time without time zone");
+
+                    b.Property<Guid>("CompanySettingsId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Day")
+                        .HasColumnType("integer");
+
+                    b.Property<bool>("IsOpen")
+                        .HasColumnType("boolean");
+
+                    b.Property<TimeOnly>("OpeningTime")
+                        .HasColumnType("time without time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CompanySettingsId", "Day")
+                        .IsUnique();
+
+                    b.ToTable("company_day_schedules", (string)null);
                 });
 
             modelBuilder.Entity("RowingClub.Scheduling.Domain.Social.DirectMessage", b =>
@@ -882,6 +1047,14 @@ namespace RowingClub.Scheduling.Infrastructure.Persistence.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("RowingClub.Scheduling.Domain.Customers.Customer", b =>
+                {
+                    b.HasOne("RowingClub.Scheduling.Domain.Branches.Branch", null)
+                        .WithMany()
+                        .HasForeignKey("BranchId")
+                        .OnDelete(DeleteBehavior.SetNull);
+                });
+
             modelBuilder.Entity("RowingClub.Scheduling.Domain.Customers.VerificationCode", b =>
                 {
                     b.HasOne("RowingClub.Scheduling.Domain.Customers.Customer", null)
@@ -940,6 +1113,15 @@ namespace RowingClub.Scheduling.Infrastructure.Persistence.Migrations
                     b.Navigation("Instructor");
                 });
 
+            modelBuilder.Entity("RowingClub.Scheduling.Domain.Settings.DaySchedule", b =>
+                {
+                    b.HasOne("RowingClub.Scheduling.Domain.Settings.CompanySettings", null)
+                        .WithMany("DaySchedules")
+                        .HasForeignKey("CompanySettingsId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("RowingClub.Scheduling.Domain.Social.DirectMessage", b =>
                 {
                     b.HasOne("RowingClub.Scheduling.Domain.Customers.Customer", null)
@@ -973,6 +1155,11 @@ namespace RowingClub.Scheduling.Infrastructure.Persistence.Migrations
             modelBuilder.Entity("RowingClub.Scheduling.Domain.Sessions.TrainingSession", b =>
                 {
                     b.Navigation("Appointments");
+                });
+
+            modelBuilder.Entity("RowingClub.Scheduling.Domain.Settings.CompanySettings", b =>
+                {
+                    b.Navigation("DaySchedules");
                 });
 #pragma warning restore 612, 618
         }

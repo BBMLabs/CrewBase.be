@@ -19,7 +19,9 @@ public sealed class TenantResolver(ISender sender, ITenantDatabase tenantDatabas
     {
         var company = await sender.Send(new GetCompanySiteQuery(subdomain, null), cancellationToken);
         if (company is not null)
-            tenantDatabase.Set(company.CompanyId, company.DatabaseName, company.Subdomain);
+            tenantDatabase.Set(
+                company.CompanyId, company.DatabaseName, company.Subdomain, company.Plan,
+                company.MaxBranches, company.MaxMembers, company.MaxBoats);
 
         return company;
     }
@@ -29,7 +31,9 @@ public sealed class TenantResolver(ISender sender, ITenantDatabase tenantDatabas
     {
         var company = await sender.Send(new GetCompanySiteQuery(null, companyId), cancellationToken);
         if (company is not null)
-            tenantDatabase.Set(company.CompanyId, company.DatabaseName, company.Subdomain);
+            tenantDatabase.Set(
+                company.CompanyId, company.DatabaseName, company.Subdomain, company.Plan,
+                company.MaxBranches, company.MaxMembers, company.MaxBoats);
 
         return company;
     }

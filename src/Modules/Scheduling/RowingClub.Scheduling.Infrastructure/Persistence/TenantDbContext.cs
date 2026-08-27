@@ -37,6 +37,8 @@ public sealed class TenantDbContext(
 
     public DbSet<Customer> Customers => Set<Customer>();
 
+    public DbSet<MemberPasswordSetupToken> MemberPasswordSetupTokens => Set<MemberPasswordSetupToken>();
+
     public DbSet<Appointment> Appointments => Set<Appointment>();
 
     public DbSet<TrainingSession> TrainingSessions => Set<TrainingSession>();
@@ -54,6 +56,10 @@ public sealed class TenantDbContext(
     public DbSet<CustomerPackage> CustomerPackages => Set<CustomerPackage>();
 
     public DbSet<MemberLog> MemberLogs => Set<MemberLog>();
+
+    public DbSet<ActivityLog> ActivityLogs => Set<ActivityLog>();
+
+    public DbSet<BlockedIpAddress> BlockedIpAddresses => Set<BlockedIpAddress>();
 
     public DbSet<ClosedDate> ClosedDates => Set<ClosedDate>();
 
@@ -113,6 +119,20 @@ public sealed class TenantDbContext(
             // Üye kodu paylaşılmak İÇİN üretilir (gizli veri değildir); benzersizliği DB garantiler.
             builder.Property(c => c.MemberCode).HasMaxLength(12);
             builder.HasIndex(c => c.MemberCode).IsUnique().HasFilter("\"MemberCode\" IS NOT NULL");
+
+            builder.HasOne<Branch>()
+                .WithMany()
+                .HasForeignKey(c => c.BranchId)
+                .OnDelete(DeleteBehavior.SetNull);
+        });
+
+        modelBuilder.Entity<MemberPasswordSetupToken>(builder =>
+        {
+            builder.ToTable("member_password_setup_tokens");
+            builder.HasKey(t => t.Id);
+            builder.Property(t => t.TokenHash).HasMaxLength(128).IsRequired();
+            builder.HasIndex(t => t.TokenHash).IsUnique();
+            builder.HasIndex(t => t.CustomerId);
         });
 
         modelBuilder.Entity<Friendship>(builder =>
@@ -267,6 +287,28 @@ public sealed class TenantDbContext(
                 .OnDelete(DeleteBehavior.Cascade);
         });
 
+        modelBuilder.Entity<ActivityLog>(builder =>
+        {
+            builder.ToTable("activity_logs");
+            builder.HasKey(l => l.Id);
+            builder.Property(l => l.ActorEmail).HasMaxLength(254).IsRequired();
+            builder.Property(l => l.ActorRole).HasMaxLength(30);
+            builder.Property(l => l.Action).HasMaxLength(100).IsRequired();
+            builder.Property(l => l.IpAddress).HasMaxLength(64);
+            builder.Property(l => l.UserAgent).HasMaxLength(500);
+            builder.HasIndex(l => l.AtUtc);
+            builder.HasIndex(l => l.IpAddress);
+        });
+
+        modelBuilder.Entity<BlockedIpAddress>(builder =>
+        {
+            builder.ToTable("blocked_ip_addresses");
+            builder.HasKey(b => b.Id);
+            builder.Property(b => b.IpAddress).HasMaxLength(64).IsRequired();
+            builder.Property(b => b.Reason).HasMaxLength(300);
+            builder.HasIndex(b => b.IpAddress).IsUnique();
+        });
+
         modelBuilder.Entity<ClosedDate>(builder =>
         {
             builder.ToTable("closed_dates");
@@ -279,9 +321,16 @@ public sealed class TenantDbContext(
         {
             builder.ToTable("branches");
             builder.HasKey(b => b.Id);
+            builder.Property(b => b.Code).HasMaxLength(8).IsRequired();
+            builder.HasIndex(b => b.Code).IsUnique();
             builder.Property(b => b.Name).HasMaxLength(200).IsRequired();
             builder.Property(b => b.Address).HasMaxLength(500);
             builder.Property(b => b.Phone).HasMaxLength(50);
+            builder.Property(b => b.ManagerName).HasMaxLength(200);
+            builder.Property(b => b.ManagerPhone).HasConversion(encrypted!);
+            builder.Property(b => b.ManagerEmail).HasConversion(encrypted!);
+            builder.Property(b => b.TaxNumber).HasMaxLength(11);
+            builder.Property(b => b.Description).HasMaxLength(1000);
         });
 
         modelBuilder.Entity<Instructor>(builder =>
@@ -326,6 +375,19 @@ public sealed class TenantDbContext(
             builder.HasKey(s => s.Id);
             builder.Property(s => s.ReminderOptionsMinutes).HasMaxLength(200).IsRequired();
             builder.Property(s => s.TimeZoneId).HasMaxLength(100).IsRequired();
+
+            builder.HasMany(s => s.DaySchedules)
+                .WithOne()
+                .HasForeignKey(d => d.CompanySettingsId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<DaySchedule>(builder =>
+        {
+            builder.ToTable("company_day_schedules");
+            builder.HasKey(d => d.Id);
+            builder.Property(d => d.Day).HasConversion<int>();
+            builder.HasIndex(d => new { d.CompanySettingsId, d.Day }).IsUnique();
         });
 
         modelBuilder.Entity<TrainingSession>(builder =>

@@ -19,8 +19,10 @@ public sealed class GetCompanySiteQueryHandler(ICompanyRepository companyReposit
         if (company is null || company.Status != CompanyStatus.Active)
             return null;
 
+        var limits = company.PlanLimits;
         return new CompanySiteDto(
             company.Id, company.Name, company.Subdomain, company.DatabaseName,
-            company.Phone, company.ContactEmail, company.Address, company.Status.ToString());
+            company.Phone, company.ContactEmail, company.Address, company.TaxNumber, company.Status.ToString(),
+            company.Plan.ToString(), limits.MaxBranches, limits.MaxMembers, limits.MaxBoats);
     }
 }

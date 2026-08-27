@@ -15,5 +15,14 @@ public interface ITenantDatabase
 
     string Subdomain { get; }
 
-    void Set(Guid companyId, string databaseName, string subdomain);
+    /// <summary>Firmanın geçerli abonelik paketi ve üst sınırları — kayıt/oluşturma akışları bunlara karşı denetim yapar.</summary>
+    string Plan { get; }
+
+    int MaxBranches { get; }
+
+    int MaxMembers { get; }
+
+    int MaxBoats { get; }
+
+    void Set(Guid companyId, string databaseName, string subdomain, string plan, int maxBranches, int maxMembers, int maxBoats);
 }

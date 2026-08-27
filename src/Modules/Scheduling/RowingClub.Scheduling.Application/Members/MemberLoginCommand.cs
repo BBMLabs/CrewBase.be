@@ -26,6 +26,8 @@ public sealed class MemberLoginCommandHandler(
         if (customer is null || customer.PasswordHash is null)
             throw invalid;
 
+        customer.EnsureCanAuthenticate();
+
         if (!passwordHasher.Verify(request.Password, customer.PasswordHash))
             throw invalid;
 

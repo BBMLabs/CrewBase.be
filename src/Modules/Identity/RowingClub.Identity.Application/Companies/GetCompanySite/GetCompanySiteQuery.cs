@@ -13,4 +13,9 @@ public sealed record CompanySiteDto(
     string? Phone,
     string? ContactEmail,
     string? Address,
-    string Status);
+    string? TaxNumber,
+    string Status,
+    string Plan,
+    int MaxBranches,
+    int MaxMembers,
+    int MaxBoats);

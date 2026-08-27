@@ -98,6 +98,15 @@ namespace RowingClub.BuildingBlocks.Infrastructure.Postgres.Migrations
                     b.Property<DateTimeOffset>("CreatedAtUtc")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<int?>("CustomMaxBoats")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("CustomMaxBranches")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("CustomMaxMembers")
+                        .HasColumnType("integer");
+
                     b.Property<string>("DatabaseName")
                         .IsRequired()
                         .HasMaxLength(63)
@@ -121,6 +130,11 @@ namespace RowingClub.BuildingBlocks.Infrastructure.Postgres.Migrations
                     b.Property<string>("Phone")
                         .HasMaxLength(20)
                         .HasColumnType("character varying(20)");
+
+                    b.Property<string>("Plan")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
 
                     b.Property<string>("Status")
                         .IsRequired()

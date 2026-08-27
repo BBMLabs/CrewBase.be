@@ -1,15 +1,11 @@
 using FluentAssertions;
-using Microsoft.Extensions.Configuration;
 using NSubstitute;
 using RowingClub.BuildingBlocks.Application.Abstractions;
 using RowingClub.BuildingBlocks.Domain;
 using RowingClub.BuildingBlocks.Security.Passwords;
 using RowingClub.BuildingBlocks.Security.Tokens;
-using RowingClub.Identity.Application.Audit;
 using RowingClub.Identity.Application.Companies.RegisterCompany;
-using RowingClub.Identity.Application.Email;
 using RowingClub.Identity.Domain.Companies;
-using RowingClub.Identity.Domain.Tokens;
 using RowingClub.Identity.Domain.Users;
 using RowingClub.Identity.Domain.ValueObjects;
 
@@ -22,23 +18,16 @@ public sealed class RegisterCompanyCommandHandlerTests
     private readonly ICredentialRepository _credentialRepository = Substitute.For<ICredentialRepository>();
     private readonly IPasswordHasher _passwordHasher = Substitute.For<IPasswordHasher>();
     private readonly ITenantDatabaseProvisioner _provisioner = Substitute.For<ITenantDatabaseProvisioner>();
-    private readonly IEmailSender _emailSender = Substitute.For<IEmailSender>();
-    private readonly IAuditLogger _auditLogger = Substitute.For<IAuditLogger>();
     private readonly IOpaqueTokenGenerator _tokenGenerator = Substitute.For<IOpaqueTokenGenerator>();
-    private readonly IRefreshTokenHasher _tokenHasher = Substitute.For<IRefreshTokenHasher>();
-    private readonly IPasswordResetTokenRepository _passwordResetTokenRepository = Substitute.For<IPasswordResetTokenRepository>();
-    private readonly IConfiguration _configuration = Substitute.For<IConfiguration>();
 
     private RegisterCompanyCommandHandler CreateHandler() =>
         new(_companyRepository, _userRepository, _credentialRepository, _passwordHasher,
-            _provisioner, _emailSender, _auditLogger, _tokenGenerator, _tokenHasher,
-            _passwordResetTokenRepository, _configuration);
+            _provisioner, _tokenGenerator);
 
     public RegisterCompanyCommandHandlerTests()
     {
         _tokenGenerator.Generate().Returns("random-opaque-token");
         _passwordHasher.Hash(Arg.Any<string>()).Returns("hashed-password");
-        _tokenHasher.Hash(Arg.Any<string>()).Returns("hashed-token");
     }
 
     [Fact]
@@ -63,8 +52,8 @@ public sealed class RegisterCompanyCommandHandlerTests
             u!.Email.Value == "admin@example.com" && u.Role == UserRole.CompanyAdmin));
         // Parola kayıtta alınmaz: kullanıcının hiç bilmediği rastgele bir hash ile Credential açılır.
         _credentialRepository.Received(1).Add(Arg.Any<Credential>());
-        // Parolayı belirlemesi için ForgotPassword ile aynı token mekanizması devreye girer.
-        _passwordResetTokenRepository.Received(1).Add(Arg.Any<PasswordResetToken>());
+        // Aktivasyon e-postası burada gönderilmez: e-posta doğrulanana kadar bekler
+        // (bkz. VerifyEmailCommandHandlerTests).
     }
 
     [Fact]

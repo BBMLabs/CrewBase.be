@@ -17,6 +17,9 @@ public sealed class BoatRepository(TenantDbContext context) : IBoatRepository
     public Task<Boat?> GetByIdAsync(Guid id, CancellationToken cancellationToken) =>
         context.Boats.FirstOrDefaultAsync(b => b.Id == id, cancellationToken);
 
+    public Task<int> CountActiveAsync(CancellationToken cancellationToken) =>
+        context.Boats.CountAsync(b => b.IsActive, cancellationToken);
+
     public void Add(Boat boat) => context.Boats.Add(boat);
 }
 
@@ -27,6 +30,15 @@ public sealed class BranchRepository(TenantDbContext context) : IBranchRepositor
 
     public Task<Branch?> GetByIdAsync(Guid id, CancellationToken cancellationToken) =>
         context.Branches.FirstOrDefaultAsync(b => b.Id == id, cancellationToken);
+
+    public Task<Branch?> GetByCodeAsync(string code, CancellationToken cancellationToken) =>
+        context.Branches.FirstOrDefaultAsync(b => b.Code == code, cancellationToken);
+
+    public Task<bool> ExistsByCodeAsync(string code, CancellationToken cancellationToken) =>
+        context.Branches.AnyAsync(b => b.Code == code, cancellationToken);
+
+    public Task<int> CountActiveAsync(CancellationToken cancellationToken) =>
+        context.Branches.CountAsync(b => b.IsActive, cancellationToken);
 
     public void Add(Branch branch) => context.Branches.Add(branch);
 }
@@ -56,7 +68,7 @@ public sealed class LessonPackageRepository(TenantDbContext context) : ILessonPa
 public sealed class SettingsRepository(TenantDbContext context) : ISettingsRepository
 {
     public Task<CompanySettings?> GetAsync(CancellationToken cancellationToken) =>
-        context.Settings.FirstOrDefaultAsync(cancellationToken);
+        context.Settings.Include(s => s.DaySchedules).FirstOrDefaultAsync(cancellationToken);
 
     public void Add(CompanySettings settings) => context.Settings.Add(settings);
 }

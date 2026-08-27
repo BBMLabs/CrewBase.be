@@ -18,6 +18,7 @@ public static class AuthenticationSetup
         services.AddHttpContextAccessor();
         services.AddScoped<ICurrentUser, HttpContextCurrentUser>();
         services.AddScoped<ICurrentTenant, HttpContextCurrentTenant>();
+        services.AddScoped<ICurrentRequestContext, HttpContextCurrentRequestContext>();
 
         var jwtSection = configuration.GetSection(JwtOptions.SectionName);
 

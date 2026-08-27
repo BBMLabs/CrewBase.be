@@ -42,19 +42,31 @@ public sealed class Customer
 
     public DateTimeOffset CreatedAtUtc { get; private set; }
 
+    /// <summary>Üyenin bağlı olduğu şube; null = henüz bir şubeye atanmamış (tek şubeli kulüplerde hep null).</summary>
+    public Guid? BranchId { get; private set; }
+
+    /// <summary>true ise üye paneline giriş yapamaz (firma tarafından engellenmiştir); randevu/telefon kaydı etkilenmez.</summary>
+    public bool IsBlocked { get; private set; }
+
     private Customer()
     {
     }
 
-    public static Customer Create(string fullName, string phone, string? email) => new()
+    public static Customer Create(string fullName, string phone, string? email, Guid? branchId = null) => new()
     {
         Id = Guid.NewGuid(),
         FullName = fullName.Trim(),
         Phone = phone.Trim(),
         Email = string.IsNullOrWhiteSpace(email) ? null : email.Trim().ToLowerInvariant(),
         Level = 0,
+        BranchId = branchId,
         CreatedAtUtc = DateTimeOffset.UtcNow,
     };
+
+    public void SetBranch(Guid? branchId)
+    {
+        BranchId = branchId;
+    }
 
     public bool HasAccount => PasswordHash is not null;
 
@@ -108,5 +120,15 @@ public sealed class Customer
             throw new DomainException("invalid_reminder", "Hatırlatma süresi 0-10080 dakika arasında olmalıdır.");
 
         DefaultReminderMinutes = minutes;
+    }
+
+    public void Block() => IsBlocked = true;
+
+    public void Unblock() => IsBlocked = false;
+
+    public void EnsureCanAuthenticate()
+    {
+        if (IsBlocked)
+            throw new DomainException("member_blocked", "Hesabınız kulübünüz tarafından engellenmiştir.");
     }
 }

@@ -56,7 +56,9 @@ public sealed class ReminderWorker(
             // her firmaya yeni scope açılır.
             await using var scope = scopeFactory.CreateAsyncScope();
             scope.ServiceProvider.GetRequiredService<ITenantDatabase>()
-                .Set(company.CompanyId, company.DatabaseName, company.Subdomain);
+                .Set(
+                    company.CompanyId, company.DatabaseName, company.Subdomain, company.Plan,
+                    company.MaxBranches, company.MaxMembers, company.MaxBoats);
 
             try
             {

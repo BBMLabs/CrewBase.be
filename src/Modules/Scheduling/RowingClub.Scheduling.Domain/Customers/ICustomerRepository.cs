@@ -16,5 +16,7 @@ public interface ICustomerRepository
 
     Task<List<Customer>> GetAllAsync(CancellationToken cancellationToken);
 
+    Task<int> CountAsync(CancellationToken cancellationToken);
+
     void Add(Customer customer);
 }

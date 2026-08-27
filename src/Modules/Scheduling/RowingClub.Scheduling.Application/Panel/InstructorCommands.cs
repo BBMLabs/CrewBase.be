@@ -8,7 +8,8 @@ namespace RowingClub.Scheduling.Application.Panel;
 
 public sealed record InstructorDto(Guid Id, string FullName, string? Phone, string? Email, bool IsActive, Guid? BranchId);
 
-public sealed record GetInstructorsQuery : IRequest<List<InstructorDto>>;
+public sealed record GetInstructorsQuery(string? Search = null, Guid? BranchId = null, bool? IsActive = null)
+    : IRequest<List<InstructorDto>>;
 
 public sealed record CreateInstructorCommand(string FullName, string? Phone, string? Email, Guid? BranchId)
     : ICommand<InstructorDto>;
@@ -23,6 +24,23 @@ public sealed class GetInstructorsQueryHandler(IInstructorRepository repository)
     public async Task<List<InstructorDto>> Handle(GetInstructorsQuery request, CancellationToken cancellationToken)
     {
         var instructors = await repository.GetAllAsync(cancellationToken);
+
+        if (request.BranchId is { } branchId)
+            instructors = instructors.Where(i => i.BranchId == branchId).ToList();
+
+        if (request.IsActive is { } isActive)
+            instructors = instructors.Where(i => i.IsActive == isActive).ToList();
+
+        if (!string.IsNullOrWhiteSpace(request.Search))
+        {
+            var term = request.Search.Trim();
+            instructors = instructors.Where(i =>
+                i.FullName.Contains(term, StringComparison.OrdinalIgnoreCase) ||
+                (i.Phone?.Contains(term, StringComparison.OrdinalIgnoreCase) ?? false) ||
+                (i.Email?.Contains(term, StringComparison.OrdinalIgnoreCase) ?? false))
+                .ToList();
+        }
+
         return instructors
             .OrderBy(i => i.FullName)
             .Select(i => new InstructorDto(i.Id, i.FullName, i.Phone, i.Email, i.IsActive, i.BranchId))

@@ -14,6 +14,8 @@ namespace RowingClub.Api.Endpoints;
 public sealed record MemberRegisterRequest(
     string FullName, string Phone, string Email, string Password, List<string>? AcceptedConsents);
 public sealed record MemberLoginRequest(string Email, string Password);
+public sealed record MemberSetPasswordRequest(string Email, string Token, string NewPassword);
+public sealed record MemberForgotPasswordRequest(string Email);
 public sealed record MemberUpdateRequest(string FullName, string? Email, int? DefaultReminderMinutes);
 public sealed record MemberDeleteRequest(string Password);
 public sealed record MemberBookingRequest(
@@ -77,6 +79,30 @@ public static class MemberEndpoints
             return Results.Ok(ApiResponse<object>.Ok(
                 new { member, accessToken = token, expiresAtUtc = expiresAt }));
         }).WithName("MemberLogin");
+
+        publicGroup.MapPost("/set-password", async (
+            string subdomain, [FromBody] MemberSetPasswordRequest request, TenantResolver resolver,
+            ISender sender, CancellationToken ct) =>
+        {
+            var company = await resolver.ResolveBySubdomainAsync(subdomain, ct);
+            if (company is null)
+                return CompanyNotFound();
+
+            await sender.Send(new SetMemberPasswordCommand(request.Email, request.Token, request.NewPassword), ct);
+            return Results.Ok(ApiResponse<object?>.Ok(null, "Şifreniz oluşturuldu."));
+        }).WithName("MemberSetPassword");
+
+        publicGroup.MapPost("/forgot-password", async (
+            string subdomain, [FromBody] MemberForgotPasswordRequest request, TenantResolver resolver,
+            ISender sender, CancellationToken ct) =>
+        {
+            var company = await resolver.ResolveBySubdomainAsync(subdomain, ct);
+            if (company is null)
+                return CompanyNotFound();
+
+            await sender.Send(new RequestMemberPasswordResetCommand(request.Email, company.Name, company.Subdomain), ct);
+            return Results.Ok(ApiResponse<object?>.Ok(null, "E-posta adresiniz kayıtlıysa bir sıfırlama bağlantısı gönderildi."));
+        }).WithName("MemberForgotPassword");
 
         // ---- Member rolü gerektiren self-servis uçlar ----
         var group = app.MapGroup("/api/v1/member")

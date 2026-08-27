@@ -1,5 +1,6 @@
 using FluentValidation;
 using MediatR;
+using RowingClub.BuildingBlocks.Application.Abstractions;
 using RowingClub.BuildingBlocks.Application.Messaging;
 using RowingClub.BuildingBlocks.Domain;
 using RowingClub.BuildingBlocks.Security.Passwords;
@@ -35,7 +36,8 @@ public sealed class RegisterMemberCommandHandler(
     IConsentRecordRepository consentRepository,
     IMemberLogRepository memberLogRepository,
     IPasswordHasher passwordHasher,
-    ISchedulingUnitOfWork unitOfWork)
+    ISchedulingUnitOfWork unitOfWork,
+    ITenantDatabase tenantDatabase)
     : IRequestHandler<RegisterMemberCommand, MemberDto>
 {
     public async Task<MemberDto> Handle(RegisterMemberCommand request, CancellationToken cancellationToken)
@@ -46,6 +48,10 @@ public sealed class RegisterMemberCommandHandler(
         var customer = await customerRepository.GetByPhoneAsync(request.Phone, cancellationToken);
         if (customer is null)
         {
+            if (await customerRepository.CountAsync(cancellationToken) >= tenantDatabase.MaxMembers)
+                throw new DomainException("member_limit_reached",
+                    $"Üye limitine ulaşıldı. Mevcut paketiniz en fazla {tenantDatabase.MaxMembers} üyeye izin verir; devam etmek için kulübünüz paketini yükseltmelidir.");
+
             customer = Customer.Create(request.FullName, request.Phone, request.Email);
             customerRepository.Add(customer);
         }

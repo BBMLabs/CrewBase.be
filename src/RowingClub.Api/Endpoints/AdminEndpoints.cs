@@ -6,6 +6,7 @@ using RowingClub.Identity.Application.Companies.ApproveCompany;
 using RowingClub.Identity.Application.Companies.GetPendingCompanies;
 using RowingClub.Identity.Application.Companies.ResetCompanyAdminPassword;
 using RowingClub.Identity.Application.Companies.RestoreCompany;
+using RowingClub.Identity.Application.Companies.SetCompanyPlan;
 using RowingClub.Identity.Application.Companies.SoftDeleteCompany;
 using RowingClub.Identity.Application.Companies.SuspendCompany;
 using RowingClub.Identity.Application.Companies.UpdateCompany;
@@ -14,6 +15,7 @@ using RowingClub.Identity.Application.Platform;
 namespace RowingClub.Api.Endpoints;
 
 public sealed record UpdateCompanyRequest(string Name, string? Phone, string? ContactEmail, string? Address, string? TaxNumber);
+public sealed record SetCompanyPlanRequest(string Plan, int? CustomMaxBranches, int? CustomMaxMembers, int? CustomMaxBoats);
 
 public static class AdminEndpoints
 {
@@ -72,6 +74,15 @@ public static class AdminEndpoints
         })
         .WithName("UpdateCompany");
 
+        platformAdminGroup.MapPost("/companies/{companyId:guid}/plan", async (
+            Guid companyId, [FromBody] SetCompanyPlanRequest request, [FromServices] IMediator mediator) =>
+        {
+            await mediator.Send(new SetCompanyPlanCommand(
+                companyId, request.Plan, request.CustomMaxBranches, request.CustomMaxMembers, request.CustomMaxBoats));
+            return Results.Ok(ApiResponse.Ok("Şirket paketi güncellendi."));
+        })
+        .WithName("SetCompanyPlan");
+
         platformAdminGroup.MapPost("/companies/{companyId:guid}/delete", async (
             Guid companyId, [FromServices] IMediator mediator) =>
         {
@@ -95,6 +106,19 @@ public static class AdminEndpoints
             return Results.Ok(ApiResponse.Ok("Parola sıfırlama bağlantısı gönderildi."));
         })
         .WithName("ResetCompanyAdminPassword");
+
+        platformAdminGroup.MapGet("/companies/{companyId:guid}/overview", async (
+            Guid companyId, RowingClub.Api.Tenancy.TenantResolver resolver, IMediator mediator, CancellationToken ct) =>
+        {
+            var company = await resolver.ResolveByCompanyIdAsync(companyId, ct);
+            if (company is null)
+                return Results.NotFound(ApiResponse.Fail("company_not_found", "Firma bulunamadı."));
+
+            var overview = await mediator.Send(
+                new RowingClub.Scheduling.Application.Panel.GetCompanyOverviewQuery(), ct);
+            return Results.Ok(ApiResponse<RowingClub.Scheduling.Application.Panel.CompanyOverviewDto>.Ok(overview));
+        })
+        .WithName("PlatformCompanyOverview");
 
         var companyGroup = app.MapGroup("/api/v1/admin/{companyId:guid}")
             .RequireAuthorization(new AuthorizeAttribute { Policy = "SameCompany" })

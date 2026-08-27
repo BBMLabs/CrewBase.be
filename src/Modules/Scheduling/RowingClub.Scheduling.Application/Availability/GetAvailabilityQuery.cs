@@ -30,7 +30,7 @@ public sealed class GetAvailabilityQueryHandler(
 
         if (await closedDateRepository.IsClosedAsync(request.Date, cancellationToken))
         {
-            return settings.Slots().Select(s => new SlotDto(s.ToString("HH:mm"), false, 0)).ToList();
+            return settings.Slots(request.Date.DayOfWeek).Select(s => new SlotDto(s.ToString("HH:mm"), false, 0)).ToList();
         }
 
         var level = 0;
@@ -46,7 +46,7 @@ public sealed class GetAvailabilityQueryHandler(
             .ToList();
 
         var slots = new List<SlotDto>();
-        foreach (var slot in settings.Slots())
+        foreach (var slot in settings.Slots(request.Date.DayOfWeek))
         {
             var seatsLeft = SeatsLeftAt(daySessions, boatsOfClass, boatClass, level, slot);
             var bookable = seatsLeft > 0 && IsBookable(settings, request.Date, slot);

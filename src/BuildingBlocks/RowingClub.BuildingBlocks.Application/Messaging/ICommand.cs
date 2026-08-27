@@ -16,3 +16,10 @@ public interface IIdempotentCommand
 {
     string IdempotencyKey { get; }
 }
+
+/// <summary>
+/// Opt-in marker exempting a command from <see cref="RowingClub.BuildingBlocks.Application.Behaviors.BlockedIpCheckBehavior{TRequest,TResponse}"/>.
+/// Only the IP-blocklist management commands themselves implement this, so a company admin can
+/// never lock themselves out by blocking the IP they're currently issuing requests from.
+/// </summary>
+public interface IBypassIpBlockCheck;
