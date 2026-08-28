@@ -25,6 +25,15 @@ public sealed record CreateMemberCommand(
 /// <summary>Var olan bir üyeyi bir şubeye atar/şubesini kaldırır (BranchId null = şubesiz).</summary>
 public sealed record SetCustomerBranchCommand(Guid CustomerId, Guid? BranchId) : ICommand<CustomerDto>;
 
+/// <summary>
+/// Üye kodu özelliğinden ÖNCE oluşturulmuş eski üyelere kod atar (MemberCode null olanlar).
+/// Üyenin kendi kod ekranı zaten "ilk erişimde ata" yapıyor (bkz. GetMyCodeQueryHandler) ama
+/// hiç giriş yapmamış/telefonla kaydedilmiş üyeler o akışa hiç uğramaz - bu yüzden panel üye
+/// listesi her açıldığında bu komut önce çalışır (bkz. CompanyPanelEndpoints "/customers" GET).
+/// İdempotent: zaten kodu olan üyelere dokunmaz, GetCustomersQuery'nin kendisi salt-okunur kalır.
+/// </summary>
+public sealed record BackfillMemberCodesCommand : ICommand<int>;
+
 /// <summary>Üyeye ders paketi tanımlama; bakiye takibi CustomerPackage üzerinden yürür.</summary>
 public sealed record AssignPackageCommand(Guid CustomerId, Guid LessonPackageId)
     : ICommand<CustomerPackageDto>;
@@ -34,7 +43,8 @@ public sealed record GetCustomerPackagesQuery(Guid? CustomerId) : IRequest<List<
 
 public sealed record CustomerPackageBalanceDto(
     Guid Id, Guid CustomerId, string CustomerName, string PackageName,
-    int TotalSessions, int RemainingSessions, int UsedSessions, DateTimeOffset AssignedAtUtc);
+    int TotalSessions, int RemainingSessions, int UsedSessions, DateTimeOffset AssignedAtUtc,
+    DateTimeOffset? ExpiresAtUtc, string Source);
 
 /// <summary>Üye hareket logları (giriş, randevu, paket düşümü...).</summary>
 public sealed record GetMemberLogsQuery(Guid? CustomerId, int Take) : IRequest<List<MemberLogDto>>;
@@ -66,6 +76,10 @@ public sealed class CreateMemberCommandHandler(
         if (request.Level > 0)
             customer.SetLevel(request.Level);
 
+        // Her üye, panelden eklense de kendi kaydını açsa da tekil bir 2-harf+6-rakam kod alır
+        // (bkz. MemberCodeGenerator) - DB'deki benzersiz index son güvence, çakışırsa yeniden üretilir.
+        await MemberCodeAssigner.EnsureCodeAsync(customer, customerRepository, cancellationToken);
+
         string? rawSetupToken = null;
         if (!string.IsNullOrWhiteSpace(request.Email))
         {
@@ -96,7 +110,26 @@ public sealed class CreateMemberCommandHandler(
         }
 
         return new CustomerDto(customer.Id, customer.FullName, customer.Phone, customer.Email,
-            customer.Level, customer.BranchId, customer.IsBlocked, customer.CreatedAtUtc);
+            customer.Level, customer.BranchId, customer.IsBlocked, customer.CreatedAtUtc, customer.MemberCode);
+    }
+}
+
+public sealed class BackfillMemberCodesCommandHandler(
+    ICustomerRepository customerRepository, ISchedulingUnitOfWork unitOfWork)
+    : IRequestHandler<BackfillMemberCodesCommand, int>
+{
+    public async Task<int> Handle(BackfillMemberCodesCommand request, CancellationToken cancellationToken)
+    {
+        var customers = await customerRepository.GetAllAsync(cancellationToken);
+        var missing = customers.Where(c => c.MemberCode is null).ToList();
+        if (missing.Count == 0)
+            return 0;
+
+        foreach (var customer in missing)
+            await MemberCodeAssigner.EnsureCodeAsync(customer, customerRepository, cancellationToken);
+
+        await unitOfWork.SaveChangesAsync(cancellationToken);
+        return missing.Count;
     }
 }
 
@@ -113,7 +146,7 @@ public sealed class SetCustomerBranchCommandHandler(
         await unitOfWork.SaveChangesAsync(cancellationToken);
 
         return new CustomerDto(customer.Id, customer.FullName, customer.Phone, customer.Email,
-            customer.Level, customer.BranchId, customer.IsBlocked, customer.CreatedAtUtc);
+            customer.Level, customer.BranchId, customer.IsBlocked, customer.CreatedAtUtc, customer.MemberCode);
     }
 }
 
@@ -147,7 +180,7 @@ public sealed class SendMemberPasswordResetCommandHandler(
             customer.Email, customer.FullName, request.CompanyName, rawToken, request.Subdomain, cancellationToken);
 
         return new CustomerDto(customer.Id, customer.FullName, customer.Phone, customer.Email,
-            customer.Level, customer.BranchId, customer.IsBlocked, customer.CreatedAtUtc);
+            customer.Level, customer.BranchId, customer.IsBlocked, customer.CreatedAtUtc, customer.MemberCode);
     }
 }
 
@@ -169,7 +202,7 @@ public sealed class BlockMemberCommandHandler(ICustomerRepository customerReposi
         await unitOfWork.SaveChangesAsync(cancellationToken);
 
         return new CustomerDto(customer.Id, customer.FullName, customer.Phone, customer.Email,
-            customer.Level, customer.BranchId, customer.IsBlocked, customer.CreatedAtUtc);
+            customer.Level, customer.BranchId, customer.IsBlocked, customer.CreatedAtUtc, customer.MemberCode);
     }
 }
 
@@ -185,7 +218,7 @@ public sealed class UnblockMemberCommandHandler(ICustomerRepository customerRepo
         await unitOfWork.SaveChangesAsync(cancellationToken);
 
         return new CustomerDto(customer.Id, customer.FullName, customer.Phone, customer.Email,
-            customer.Level, customer.BranchId, customer.IsBlocked, customer.CreatedAtUtc);
+            customer.Level, customer.BranchId, customer.IsBlocked, customer.CreatedAtUtc, customer.MemberCode);
     }
 }
 
@@ -206,15 +239,13 @@ public sealed class AssignPackageCommandHandler(
         if (package is null || !package.IsActive)
             throw new DomainException("invalid_package", "Paket bulunamadı veya aktif değil.");
 
-        var assigned = CustomerPackage.Assign(customer.Id, package);
+        var assigned = CustomerPackage.Assign(customer.Id, package, CustomerPackageSource.Assigned);
         customerPackageRepository.Add(assigned);
         memberLogRepository.Add(MemberLog.Record(
             customer.Id, MemberEvents.PackageAssigned, $"{package.Name} ({package.SessionCount} ders)"));
 
         await unitOfWork.SaveChangesAsync(cancellationToken);
-        return new CustomerPackageDto(
-            assigned.Id, assigned.CustomerId, assigned.PackageName,
-            assigned.TotalSessions, assigned.RemainingSessions, assigned.AssignedAtUtc);
+        return GetMemberPackagesQueryHandler.ToDto(assigned);
     }
 }
 
@@ -237,7 +268,8 @@ public sealed class GetCustomerPackagesQueryHandler(
             .OrderByDescending(p => p.AssignedAtUtc)
             .Select(p => new CustomerPackageBalanceDto(
                 p.Id, p.CustomerId, customers.GetValueOrDefault(p.CustomerId, "-"), p.PackageName,
-                p.TotalSessions, p.RemainingSessions, p.TotalSessions - p.RemainingSessions, p.AssignedAtUtc))
+                p.TotalSessions, p.RemainingSessions, p.TotalSessions - p.RemainingSessions, p.AssignedAtUtc,
+                p.ExpiresAtUtc, p.Source.ToString()))
             .ToList();
     }
 }

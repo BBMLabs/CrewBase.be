@@ -23,8 +23,10 @@ public static class MemberEvents
     public const string AppointmentBooked = "APPOINTMENT_BOOKED";
     public const string AppointmentCancelled = "APPOINTMENT_CANCELLED";
     public const string PackageAssigned = "PACKAGE_ASSIGNED";
+    public const string PackagePurchased = "PACKAGE_PURCHASED";
     public const string PackageDeducted = "PACKAGE_DEDUCTED";
     public const string PackageRefunded = "PACKAGE_REFUNDED";
+    public const string PackageExpired = "PACKAGE_EXPIRED";
     public const string LevelChanged = "LEVEL_CHANGED";
 }
 

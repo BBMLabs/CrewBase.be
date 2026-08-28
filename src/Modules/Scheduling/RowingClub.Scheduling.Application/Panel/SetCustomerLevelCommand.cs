@@ -24,6 +24,6 @@ public sealed class SetCustomerLevelCommandHandler(
 
         return new CustomerDto(
             customer.Id, customer.FullName, customer.Phone, customer.Email, customer.Level,
-            customer.BranchId, customer.IsBlocked, customer.CreatedAtUtc);
+            customer.BranchId, customer.IsBlocked, customer.CreatedAtUtc, customer.MemberCode);
     }
 }

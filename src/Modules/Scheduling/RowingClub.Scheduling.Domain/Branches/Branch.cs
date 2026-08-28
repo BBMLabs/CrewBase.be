@@ -26,6 +26,8 @@ public sealed class Branch
 
     public string? Description { get; private set; }
 
+    public string? LogoPath { get; private set; }
+
     public DateTimeOffset CreatedAtUtc { get; private set; }
 
     private Branch()
@@ -66,4 +68,8 @@ public sealed class Branch
         TaxNumber = string.IsNullOrWhiteSpace(taxNumber) ? null : taxNumber.Trim();
         Description = string.IsNullOrWhiteSpace(description) ? null : description.Trim();
     }
+
+    public void SetLogo(string path) => LogoPath = path;
+
+    public void ClearLogo() => LogoPath = null;
 }

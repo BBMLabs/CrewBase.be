@@ -32,7 +32,7 @@ public static class DependencyInjection
         services.AddIdentityApplication(configuration);
         services.AddIdentityInfrastructure(configuration);
 
-        services.AddSchedulingInfrastructure();
+        services.AddSchedulingInfrastructure(configuration);
 
         // Clubs, Memberships, Packages, Notifications, Reporting: scaffolded only,
         // no Application/Infrastructure registrations yet - see docs/ARCHITECTURE.md.

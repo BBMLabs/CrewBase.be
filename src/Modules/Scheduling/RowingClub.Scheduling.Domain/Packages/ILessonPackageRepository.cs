@@ -7,4 +7,6 @@ public interface ILessonPackageRepository
     Task<LessonPackage?> GetByIdAsync(Guid id, CancellationToken cancellationToken);
 
     void Add(LessonPackage lessonPackage);
+
+    void Remove(LessonPackage lessonPackage);
 }

@@ -17,7 +17,8 @@ public sealed record CompanySettingsDto(
     string TimeZoneId,
     bool NotifyOnNewAppointment,
     bool NotifyOnCancellation,
-    bool SendCustomerReminders);
+    bool SendCustomerReminders,
+    List<int> PackageExpiryReminderDays);
 
 public sealed record GetSettingsQuery : IRequest<CompanySettingsDto>;
 
@@ -32,7 +33,8 @@ public sealed record UpdateSettingsCommand(
     string TimeZoneId,
     bool NotifyOnNewAppointment,
     bool NotifyOnCancellation,
-    bool SendCustomerReminders) : ICommand<CompanySettingsDto>;
+    bool SendCustomerReminders,
+    List<int> PackageExpiryReminderDays) : ICommand<CompanySettingsDto>;
 
 public sealed class GetSettingsQueryHandler(ISettingsRepository settingsRepository)
     : IRequestHandler<GetSettingsQuery, CompanySettingsDto>
@@ -68,6 +70,7 @@ public sealed class UpdateSettingsCommandHandler(
             request.TimeZoneId);
         settings.UpdateNotifications(
             request.NotifyOnNewAppointment, request.NotifyOnCancellation, request.SendCustomerReminders);
+        settings.UpdatePackageExpirySettings(request.PackageExpiryReminderDays);
 
         await unitOfWork.SaveChangesAsync(cancellationToken);
         return SettingsMapper.ToDto(settings);
@@ -96,5 +99,6 @@ internal static class SettingsMapper
         settings.TimeZoneId,
         settings.NotifyOnNewAppointment,
         settings.NotifyOnCancellation,
-        settings.SendCustomerReminders);
+        settings.SendCustomerReminders,
+        settings.PackageExpiryReminderDays().ToList());
 }

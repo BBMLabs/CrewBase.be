@@ -33,6 +33,7 @@ public sealed record PostCreateRequest(
     string Body, string? MediaBase64, string? MediaContentType,
     bool IsEvent, string? EventTitle, string? EventDate);
 public sealed record CommentCreateRequest(string Body);
+public sealed record ConfirmPackagePurchaseRequest(Guid PackageId, string Token);
 
 /// <summary>
 /// Üye tarafı: subdomain üzerinden kayıt/giriş (anonim) ve Member rolüyle korunan self-servis
@@ -185,6 +186,32 @@ public static class MemberEndpoints
             return Results.Ok(ApiResponse<List<CustomerPackageDto>>.Ok(packages));
         })).WithName("MemberPackages");
 
+        group.MapGet("/packages/catalog", Guarded(async (ctx, sender, ct) =>
+        {
+            var catalog = await sender.Send(new GetPurchasablePackagesQuery(), ct);
+            return Results.Ok(ApiResponse<List<PurchasablePackageDto>>.Ok(catalog));
+        })).WithName("MemberPackageCatalog");
+
+        group.MapPost("/packages/{packageId:guid}/purchase", GuardedRoute(async (ctx, packageId, sender, ct) =>
+        {
+            // Ham SPA route'u DEĞİL - iyzico callback'i token'ı form POST ile gönderir, SPA bunu
+            // yakalayamaz; bkz. WebhookEndpoints.MapWebhookEndpoints'teki POST->GET köprüsü. "tenant"
+            // burada taşınır çünkü köprü, hangi firma alt alanına geri yönlendireceğini bilemez.
+            var callbackUrl =
+                $"https://{TenantResolver.BaseDomain}/api/v1/webhooks/iyzico/checkout-callback/package?tenant={ctx.Subdomain}";
+            var result = await sender.Send(
+                new PurchasePackageCommand(ctx.CustomerId, packageId, callbackUrl, ctx.Ip ?? "0.0.0.0"), ct);
+            return Results.Ok(ApiResponse<PurchasePackageResult>.Ok(result));
+        })).WithName("MemberPurchasePackage");
+
+        group.MapPost("/packages/purchase/checkout-result", GuardedBody<ConfirmPackagePurchaseRequest>(
+            async (ctx, request, sender, ct) =>
+        {
+            var package = await sender.Send(
+                new ConfirmPackagePurchaseCommand(ctx.CustomerId, request.PackageId, request.Token), ct);
+            return Results.Ok(ApiResponse<CustomerPackageDto>.Ok(package, "Paketiniz satın alındı."));
+        })).WithName("MemberConfirmPackagePurchase");
+
         // -- beyanlar --
 
         group.MapGet("/consents", Guarded(async (ctx, sender, ct) =>
@@ -332,7 +359,7 @@ public static class MemberEndpoints
 
     // ---- Ortak sarmalayıcılar: tenant çözümü + üye bağlamı ----
 
-    private sealed record MemberContext(Guid CustomerId, string? Ip);
+    private sealed record MemberContext(Guid CustomerId, string? Ip, string Subdomain, string CompanyName);
 
     private static string? ClientIp(HttpContext http)
     {
@@ -351,7 +378,7 @@ public static class MemberEndpoints
 
         return company is null
             ? (null, CompanyNotFound())
-            : (new MemberContext(user.UserId, ClientIp(http)), null);
+            : (new MemberContext(user.UserId, ClientIp(http), company.Subdomain, company.Name), null);
     }
 
     private static Delegate Guarded(Func<MemberContext, ISender, CancellationToken, Task<IResult>> handler) =>

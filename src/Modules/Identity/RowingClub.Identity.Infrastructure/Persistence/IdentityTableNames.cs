@@ -11,4 +11,6 @@ public static class IdentityTableNames
     public const string Companies = "identity_companies";
     public const string RecoveryCodes = "identity_recovery_codes";
     public const string PendingTwoFactorTokens = "identity_pending_two_factor_tokens";
+    public const string CompanySubscriptions = "identity_company_subscriptions";
+    public const string CompanyPayments = "identity_company_payments";
 }

@@ -46,10 +46,11 @@ public sealed class GetPublicOptionsQueryHandler(
         if (activeBoatClasses.Count == 0)
             activeBoatClasses.Add(BoatClass.Single1x);
 
+        var now = DateTimeOffset.UtcNow;
         var packages = (await lessonPackageRepository.GetAllAsync(cancellationToken))
             .Where(p => p.IsActive)
-            .OrderBy(p => p.Price)
-            .Select(p => new PackageOptionDto(p.Id, p.Name, p.Description, p.SessionCount, p.Price))
+            .OrderBy(p => p.GetEffectivePrice(now))
+            .Select(p => new PackageOptionDto(p.Id, p.Name, p.Description, p.SessionCount, p.GetEffectivePrice(now)))
             .ToList();
 
         return new PublicOptionsDto(

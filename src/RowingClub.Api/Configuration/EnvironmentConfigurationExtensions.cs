@@ -54,6 +54,33 @@ public static class EnvironmentConfigurationExtensions
 
             ["Recaptcha:SecretKey"] = Get("RECAPTCHA_SECRET_KEY"),
 
+            ["Iyzico:ApiKey"] = Get("IYZICO_API_KEY"),
+            ["Iyzico:SecretKey"] = Get("IYZICO_SECRET_KEY"),
+            ["Iyzico:MerchantId"] = Get("IYZICO_MERCHANT_ID"),
+            ["Iyzico:BaseUrl"] = Get("IYZICO_BASE_URL") ?? "https://sandbox-api.iyzipay.com",
+            ["Iyzico:WebhookSecret"] = Get("IYZICO_WEBHOOK_SECRET"),
+            ["Iyzico:PlanReferenceCodeTayfa"] = Get("IYZICO_PLAN_TAYFA_REF"),
+            ["Iyzico:PlanReferenceCodeKaptan"] = Get("IYZICO_PLAN_KAPTAN_REF"),
+            ["Iyzico:PlanReferenceCodeAmiral"] = Get("IYZICO_PLAN_AMIRAL_REF"),
+
+            // Üye ders paketi satın alma (Scheduling modülü, klasik CheckoutForm API) - firma
+            // abonelik faturalamasıyla (yukarıdaki Iyzico:*) AYNI mağaza hesabı/env değişkenleri
+            // paylaşılır, bkz. plan mimari karar #3.
+            ["PackagePayment:ApiKey"] = Get("IYZICO_API_KEY"),
+            ["PackagePayment:SecretKey"] = Get("IYZICO_SECRET_KEY"),
+            ["PackagePayment:BaseUrl"] = Get("IYZICO_BASE_URL") ?? "https://sandbox-api.iyzipay.com",
+
+            ["FileStorage:RootPath"] = Get("UPLOADS_ROOT_PATH") ?? "./uploads",
+
+            // Cloudflare R2 (S3 uyumlu) görsel depolama - hepsi boşsa yerel diske düşülür
+            // (bkz. Scheduling.Infrastructure/DependencyInjection.cs). PublicBaseUrl, bucket'a
+            // bağlanmış özel alan adı (ör. https://cdn.faturebase.com) ya da r2.dev test URL'i.
+            ["R2Storage:AccountId"] = Get("R2_ACCOUNT_ID"),
+            ["R2Storage:AccessKeyId"] = Get("R2_ACCESS_KEY_ID"),
+            ["R2Storage:SecretAccessKey"] = Get("R2_SECRET_ACCESS_KEY"),
+            ["R2Storage:BucketName"] = Get("R2_BUCKET_NAME"),
+            ["R2Storage:PublicBaseUrl"] = Get("R2_PUBLIC_BASE_URL"),
+
             ["OTEL_EXPORTER_OTLP_ENDPOINT"] = Get("OTEL_EXPORTER_OTLP_ENDPOINT"),
         };
 

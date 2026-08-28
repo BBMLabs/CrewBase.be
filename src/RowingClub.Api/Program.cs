@@ -1,3 +1,4 @@
+using Microsoft.Extensions.FileProviders;
 using RowingClub.Api.Configuration;
 using RowingClub.Api.Endpoints;
 using RowingClub.Api.HealthChecks;
@@ -30,8 +31,12 @@ builder.Services
 builder.Services.AddScoped<TenantResolver>();
 builder.Services.AddScoped<RowingClub.Scheduling.Application.Reminders.IAppointmentReminderSender,
     EmailAppointmentReminderSender>();
+builder.Services.AddScoped<RowingClub.Scheduling.Application.Reminders.IPackageExpiryReminderSender,
+    EmailPackageExpiryReminderSender>();
 builder.Services.AddScoped<RowingClub.Scheduling.Application.Members.IMemberWelcomeEmailSender,
     EmailMemberWelcomeSender>();
+builder.Services.AddScoped<RowingClub.Scheduling.Application.Members.IMemberBranchTransferEmailSender,
+    EmailMemberBranchTransferSender>();
 builder.Services.AddSingleton<MemberTokenIssuer>();
 builder.Services.AddSignalR();
 builder.Services.AddSingleton<Microsoft.AspNetCore.SignalR.IUserIdProvider, TenantUserIdProvider>();
@@ -40,6 +45,7 @@ builder.Services.AddScoped<RowingClub.Scheduling.Application.Members.IOtpSender,
 builder.Services.AddHostedService<TenantMigrationHostedService>();
 builder.Services.AddHostedService<PlatformAdminSeeder>();
 builder.Services.AddHostedService<ReminderWorker>();
+builder.Services.AddHostedService<SubscriptionSafetyNetWorker>();
 
 // React frontend'i (Vite dev sunucusu) ayrı origin'den çalışır; *.localhost subdomain'leri ve
 // mock domain için CORS açılır. Kimlik Authorization header'ıyla taşındığından cookie yoktur.
@@ -62,6 +68,18 @@ if (app.Environment.IsDevelopment())
 
 app.UseRowingClubObservability();
 app.UseCors("frontend");
+
+// Yüklenen dosyalar (paket görselleri vb.) - kimlik doğrulaması gerektirmez, bir kartın üzerinde
+// gösterilecek herkese açık pazarlama görselidir. UPLOADS_ROOT_PATH env değişkeninden (varsayılan
+// ./uploads) LocalFileStorageService ile aynı klasörü "/uploads" altında sunar.
+var uploadsRootPath = Path.GetFullPath(app.Configuration["FileStorage:RootPath"] ?? "./uploads");
+Directory.CreateDirectory(uploadsRootPath);
+app.UseStaticFiles(new StaticFileOptions
+{
+    FileProvider = new PhysicalFileProvider(uploadsRootPath),
+    RequestPath = "/uploads",
+});
+
 app.UseRateLimiter();
 app.UseAuthentication();
 app.UseAuthorization();
@@ -71,6 +89,7 @@ app.MapAdminEndpoints();
 app.MapPublicSiteEndpoints();
 app.MapCompanyPanelEndpoints();
 app.MapMemberEndpoints();
+app.MapWebhookEndpoints();
 app.MapHub<ChatHub>("/hubs/chat").RequireCors("frontend");
 app.MapRowingClubHealthChecks();
 

@@ -11,7 +11,9 @@ public sealed record CustomerPackageDto(
     string PackageName,
     int TotalSessions,
     int RemainingSessions,
-    DateTimeOffset AssignedAtUtc);
+    DateTimeOffset AssignedAtUtc,
+    DateTimeOffset? ExpiresAtUtc,
+    string Source);
 
 public sealed class GetMemberPackagesQueryHandler(ICustomerPackageRepository repository)
     : IRequestHandler<GetMemberPackagesQuery, List<CustomerPackageDto>>
@@ -22,8 +24,11 @@ public sealed class GetMemberPackagesQueryHandler(ICustomerPackageRepository rep
         var packages = await repository.GetByCustomerAsync(request.CustomerId, cancellationToken);
         return packages
             .OrderByDescending(p => p.AssignedAtUtc)
-            .Select(p => new CustomerPackageDto(
-                p.Id, p.CustomerId, p.PackageName, p.TotalSessions, p.RemainingSessions, p.AssignedAtUtc))
+            .Select(ToDto)
             .ToList();
     }
+
+    internal static CustomerPackageDto ToDto(CustomerPackage p) => new(
+        p.Id, p.CustomerId, p.PackageName, p.TotalSessions, p.RemainingSessions, p.AssignedAtUtc,
+        p.ExpiresAtUtc, p.Source.ToString());
 }

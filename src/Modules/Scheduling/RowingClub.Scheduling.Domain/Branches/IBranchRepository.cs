@@ -13,4 +13,6 @@ public interface IBranchRepository
     Task<int> CountActiveAsync(CancellationToken cancellationToken);
 
     void Add(Branch branch);
+
+    void Remove(Branch branch);
 }

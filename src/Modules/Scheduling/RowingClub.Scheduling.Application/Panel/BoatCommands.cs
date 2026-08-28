@@ -16,6 +16,8 @@ public sealed record CreateBoatCommand(string Name, string BoatClass, Guid? Bran
 public sealed record UpdateBoatCommand(Guid Id, string Name, string BoatClass, bool IsActive, Guid? BranchId)
     : ICommand<BoatDto>;
 
+public sealed record DeleteBoatCommand(Guid Id) : ICommand<Unit>;
+
 public sealed class GetBoatsQueryHandler(IBoatRepository repository)
     : IRequestHandler<GetBoatsQuery, List<BoatDto>>
 {
@@ -76,6 +78,22 @@ public sealed class UpdateBoatCommandHandler(
         await unitOfWork.SaveChangesAsync(cancellationToken);
 
         return BoatMapper.ToDto(boat);
+    }
+}
+
+public sealed class DeleteBoatCommandHandler(
+    IBoatRepository repository, ISchedulingUnitOfWork unitOfWork)
+    : IRequestHandler<DeleteBoatCommand, Unit>
+{
+    public async Task<Unit> Handle(DeleteBoatCommand request, CancellationToken cancellationToken)
+    {
+        var boat = await repository.GetByIdAsync(request.Id, cancellationToken)
+            ?? throw new NotFoundException("Boat", request.Id.ToString());
+
+        repository.Remove(boat);
+        await unitOfWork.SaveChangesAsync(cancellationToken);
+
+        return Unit.Value;
     }
 }
 

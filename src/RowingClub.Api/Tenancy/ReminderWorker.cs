@@ -66,6 +66,14 @@ public sealed class ReminderWorker(
                 var sent = await sender.Send(new SendDueRemindersCommand(company.Name), cancellationToken);
                 if (sent > 0)
                     logger.LogInformation("{Company} için {Count} hatırlatma gönderildi.", company.Name, sent);
+
+                var packageResult = await sender.Send(new ProcessPackageExpiriesCommand(company.Name), cancellationToken);
+                if (packageResult.RemindersSent > 0 || packageResult.PackagesDeleted > 0)
+                {
+                    logger.LogInformation(
+                        "{Company} için {Reminders} paket hatırlatması gönderildi, {Deleted} paket süresi doldu ve silindi.",
+                        company.Name, packageResult.RemindersSent, packageResult.PackagesDeleted);
+                }
             }
             catch (Exception ex)
             {

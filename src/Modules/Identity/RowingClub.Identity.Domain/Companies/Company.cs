@@ -134,21 +134,7 @@ public sealed class Company : AggregateRoot<Guid>
         if (!CompanyPlanLimitsCatalog.IsFixed(newPlan))
             throw new DomainException("plan_not_selfserve", "Bu paket yalnızca satış ekibiyle görüşülerek tanımlanabilir.");
 
-        var targetLimits = CompanyPlanLimitsCatalog.For(newPlan);
-        var exceeded = new List<string>();
-        if (usedBranches > targetLimits.MaxBranches)
-            exceeded.Add($"şube ({usedBranches}/{targetLimits.MaxBranches})");
-        if (usedMembers > targetLimits.MaxMembers)
-            exceeded.Add($"aktif üye ({usedMembers}/{targetLimits.MaxMembers})");
-        if (usedBoats > targetLimits.MaxBoats)
-            exceeded.Add($"tekne ({usedBoats}/{targetLimits.MaxBoats})");
-
-        if (exceeded.Count > 0)
-        {
-            throw new DomainException(
-                "plan_limits_exceeded",
-                $"Bu pakete geçmek için önce şu sayıları azaltmalısınız: {string.Join(", ", exceeded)}.");
-        }
+        CompanyPlanLimitsCatalog.EnsureUsageFits(newPlan, usedBranches, usedMembers, usedBoats);
 
         Plan = newPlan;
         CustomMaxBranches = null;

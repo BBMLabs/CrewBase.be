@@ -3,6 +3,7 @@ using RowingClub.BuildingBlocks.Application.Messaging;
 using RowingClub.BuildingBlocks.Domain;
 using RowingClub.BuildingBlocks.Security.Passwords;
 using RowingClub.Scheduling.Domain;
+using RowingClub.Scheduling.Domain.Branches;
 using RowingClub.Scheduling.Domain.Customers;
 using RowingClub.Scheduling.Domain.Logs;
 
@@ -12,6 +13,7 @@ public sealed record MemberLoginCommand(string Email, string Password) : IComman
 
 public sealed class MemberLoginCommandHandler(
     ICustomerRepository customerRepository,
+    IBranchRepository branchRepository,
     IMemberLogRepository memberLogRepository,
     IPasswordHasher passwordHasher,
     ISchedulingUnitOfWork unitOfWork)
@@ -27,6 +29,13 @@ public sealed class MemberLoginCommandHandler(
             throw invalid;
 
         customer.EnsureCanAuthenticate();
+
+        if (customer.BranchId is { } branchId)
+        {
+            var branch = await branchRepository.GetByIdAsync(branchId, cancellationToken);
+            if (branch is not null && !branch.IsActive)
+                throw new DomainException("branch_inactive", "Şubeniz şu anda hizmet dışıdır. Lütfen kulübünüzle iletişime geçin.");
+        }
 
         if (!passwordHasher.Verify(request.Password, customer.PasswordHash))
             throw invalid;

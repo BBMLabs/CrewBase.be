@@ -132,6 +132,10 @@ namespace RowingClub.Scheduling.Infrastructure.Persistence.Migrations
                     b.Property<bool>("IsActive")
                         .HasColumnType("boolean");
 
+                    b.Property<string>("LogoPath")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
                     b.Property<string>("ManagerEmail")
                         .HasColumnType("text");
 
@@ -668,6 +672,12 @@ namespace RowingClub.Scheduling.Infrastructure.Persistence.Migrations
                     b.Property<Guid>("CustomerId")
                         .HasColumnType("uuid");
 
+                    b.Property<DateTimeOffset?>("ExpiresAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int?>("LastReminderDaysBeforeExpiry")
+                        .HasColumnType("integer");
+
                     b.Property<Guid>("LessonPackageId")
                         .HasColumnType("uuid");
 
@@ -676,8 +686,19 @@ namespace RowingClub.Scheduling.Infrastructure.Persistence.Migrations
                         .HasMaxLength(200)
                         .HasColumnType("character varying(200)");
 
+                    b.Property<string>("PaymentReferenceCode")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
                     b.Property<int>("RemainingSessions")
                         .HasColumnType("integer");
+
+                    b.Property<string>("Source")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasDefaultValue("Assigned");
 
                     b.Property<int>("TotalSessions")
                         .HasColumnType("integer");
@@ -685,6 +706,8 @@ namespace RowingClub.Scheduling.Infrastructure.Persistence.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("CustomerId");
+
+                    b.HasIndex("ExpiresAtUtc");
 
                     b.HasIndex("LessonPackageId");
 
@@ -697,12 +720,26 @@ namespace RowingClub.Scheduling.Infrastructure.Persistence.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
+                    b.Property<DateTimeOffset?>("CampaignEndsAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<decimal?>("CampaignPrice")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)");
+
+                    b.Property<DateTimeOffset?>("CampaignStartsAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<DateTimeOffset>("CreatedAtUtc")
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<string>("Description")
                         .HasMaxLength(1000)
                         .HasColumnType("character varying(1000)");
+
+                    b.Property<string>("ImagePath")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
 
                     b.Property<bool>("IsActive")
                         .HasColumnType("boolean");
@@ -717,6 +754,9 @@ namespace RowingClub.Scheduling.Infrastructure.Persistence.Migrations
                         .HasColumnType("numeric(12,2)");
 
                     b.Property<int>("SessionCount")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("ValidityDays")
                         .HasColumnType("integer");
 
                     b.HasKey("Id");
@@ -805,6 +845,13 @@ namespace RowingClub.Scheduling.Infrastructure.Persistence.Migrations
 
                     b.Property<bool>("NotifyOnNewAppointment")
                         .HasColumnType("boolean");
+
+                    b.Property<string>("PackageExpiryReminderDaysCsv")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasDefaultValue("15,7");
 
                     b.Property<string>("ReminderOptionsMinutes")
                         .IsRequired()

@@ -7,4 +7,6 @@ public interface IInstructorRepository
     Task<Instructor?> GetByIdAsync(Guid id, CancellationToken cancellationToken);
 
     void Add(Instructor instructor);
+
+    void Remove(Instructor instructor);
 }

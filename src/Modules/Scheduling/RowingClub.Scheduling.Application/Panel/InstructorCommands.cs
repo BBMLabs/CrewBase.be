@@ -18,6 +18,8 @@ public sealed record UpdateInstructorCommand(
     Guid Id, string FullName, string? Phone, string? Email, bool IsActive, Guid? BranchId)
     : ICommand<InstructorDto>;
 
+public sealed record DeleteInstructorCommand(Guid Id) : ICommand<Unit>;
+
 public sealed class GetInstructorsQueryHandler(IInstructorRepository repository)
     : IRequestHandler<GetInstructorsQuery, List<InstructorDto>>
 {
@@ -80,5 +82,21 @@ public sealed class UpdateInstructorCommandHandler(
 
         return new InstructorDto(
             instructor.Id, instructor.FullName, instructor.Phone, instructor.Email, instructor.IsActive, instructor.BranchId);
+    }
+}
+
+public sealed class DeleteInstructorCommandHandler(
+    IInstructorRepository repository, ISchedulingUnitOfWork unitOfWork)
+    : IRequestHandler<DeleteInstructorCommand, Unit>
+{
+    public async Task<Unit> Handle(DeleteInstructorCommand request, CancellationToken cancellationToken)
+    {
+        var instructor = await repository.GetByIdAsync(request.Id, cancellationToken)
+            ?? throw new NotFoundException("Instructor", request.Id.ToString());
+
+        repository.Remove(instructor);
+        await unitOfWork.SaveChangesAsync(cancellationToken);
+
+        return Unit.Value;
     }
 }

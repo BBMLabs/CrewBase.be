@@ -9,4 +9,6 @@ public interface IBoatRepository
     Task<int> CountActiveAsync(CancellationToken cancellationToken);
 
     void Add(Boat boat);
+
+    void Remove(Boat boat);
 }

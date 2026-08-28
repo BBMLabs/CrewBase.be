@@ -3,10 +3,18 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using RowingClub.Api.Tenancy;
 using RowingClub.BuildingBlocks.Application.Abstractions;
+using RowingClub.Identity.Application.Companies.Billing.CancelPendingDowngrade;
+using RowingClub.Identity.Application.Companies.Billing.ConfirmSubscriptionCheckout;
+using RowingClub.Identity.Application.Companies.Billing.GetPaymentHistory;
+using RowingClub.Identity.Application.Companies.Billing.GetSubscriptionStatus;
+using RowingClub.Identity.Application.Companies.Billing.RequestPlanDowngrade;
+using RowingClub.Identity.Application.Companies.Billing.SubscribeToPlan;
 using RowingClub.Identity.Application.Companies.GetCompanySite;
 using RowingClub.Identity.Application.Companies.UpgradeCompanyPlan;
 using RowingClub.Identity.Application.CompanyUsers;
+using RowingClub.Identity.Domain.Companies;
 using RowingClub.Scheduling.Application.Community;
+using RowingClub.Scheduling.Application.Files;
 using RowingClub.Scheduling.Application.Panel;
 
 namespace RowingClub.Api.Endpoints;
@@ -20,15 +28,28 @@ public sealed record BranchRequest(
     string? ManagerName, string? ManagerPhone, string? ManagerEmail,
     string? TaxNumber, string? Description);
 public sealed record SetCustomerBranchRequest(Guid? BranchId);
-public sealed record PackageRequest(string Name, string? Description, int SessionCount, decimal Price, bool? IsActive);
+public sealed record DeleteBranchRequest(string MemberAction, Guid? TransferTargetBranchId);
+public sealed record PackageRequest(
+    string Name, string? Description, int SessionCount, decimal Price, bool? IsActive,
+    int? ValidityDays, DateTimeOffset? CampaignStartsAtUtc, DateTimeOffset? CampaignEndsAtUtc,
+    decimal? CampaignPrice);
 public sealed record AssignSessionRequest(Guid? BoatId, Guid? InstructorId);
 public sealed record UpdateSettingsRequest(
     List<DayScheduleDto> WorkingHours, int SlotMinutes,
     int MinNoticeHours, int MaxAdvanceDays, List<int> ReminderOptions,
     int DefaultReminderMinutes, string TimeZoneId,
-    bool NotifyOnNewAppointment, bool NotifyOnCancellation, bool SendCustomerReminders);
+    bool NotifyOnNewAppointment, bool NotifyOnCancellation, bool SendCustomerReminders,
+    List<int> PackageExpiryReminderDays);
 public sealed record CreateCompanyUserRequest(string Email, string Password, string Role);
-public sealed record UpgradePlanRequest(string Plan);
+public sealed record UpgradePlanRequest(string Plan, string IdempotencyKey);
+public sealed record SubscribePlanRequest(string Plan);
+public sealed record ConfirmCheckoutRequest(string Plan, string Token);
+public sealed record DowngradePlanRequest(string Plan);
+public sealed record CompanyPlanResponse(
+    string Plan, decimal MonthlyPrice, Dictionary<string, decimal> PlanCatalog,
+    int MaxBranches, int UsedBranches, int MaxMembers, int UsedMembers, int MaxBoats, int UsedBoats,
+    string SubscriptionStatus, DateTimeOffset? NextPaymentDateUtc,
+    string? PendingPlan, DateTimeOffset? PendingPlanEffectiveAtUtc);
 public sealed record ChangeUserRoleRequest(string Role);
 public sealed record CreateMemberRequest(string FullName, string Phone, string? Email, int Level, Guid? BranchId);
 public sealed record AssignPackageRequest(Guid LessonPackageId);
@@ -74,9 +95,58 @@ public static class CompanyPanelEndpoints
             if (await ResolveOwnCompanyAsync(user, resolver, ct) is null)
                 return CompanyNotFound();
 
-            var plan = await sender.Send(new GetCompanyPlanQuery(), ct);
-            return Results.Ok(ApiResponse<CompanyPlanDto>.Ok(plan));
+            var usage = await sender.Send(new GetCompanyPlanQuery(), ct);
+            var billing = await sender.Send(new GetSubscriptionStatusQuery(user.CompanyId!.Value), ct);
+            var monthlyPrice = Enum.TryParse<CompanyPlan>(usage.Plan, ignoreCase: true, out var planEnum)
+                ? CompanyPlanPricingCatalog.MonthlyPriceFor(planEnum)
+                : 0m;
+            var planCatalog = CompanyPlanLimitsCatalog.UpgradeOrder
+                .ToDictionary(p => p.ToString(), CompanyPlanPricingCatalog.MonthlyPriceFor);
+
+            return Results.Ok(ApiResponse<CompanyPlanResponse>.Ok(new CompanyPlanResponse(
+                usage.Plan, monthlyPrice, planCatalog,
+                usage.MaxBranches, usage.UsedBranches, usage.MaxMembers, usage.UsedMembers, usage.MaxBoats, usage.UsedBoats,
+                billing.Status, billing.NextPaymentDateUtc, billing.PendingPlan, billing.PendingPlanEffectiveAtUtc)));
         }).WithName("CompanyPlan");
+
+        group.MapGet("/plan/payments", async (
+            ICurrentUser user, TenantResolver resolver, ISender sender, CancellationToken ct) =>
+        {
+            if (await ResolveOwnCompanyAsync(user, resolver, ct) is null)
+                return CompanyNotFound();
+
+            var payments = await sender.Send(new GetPaymentHistoryQuery(user.CompanyId!.Value), ct);
+            return Results.Ok(ApiResponse<List<CompanyPaymentDto>>.Ok(payments));
+        }).WithName("CompanyPlanPayments");
+
+        group.MapPost("/plan/subscribe", async (
+            [FromBody] SubscribePlanRequest request, ICurrentUser user, TenantResolver resolver,
+            ISender sender, CancellationToken ct) =>
+        {
+            var company = await ResolveOwnCompanyAsync(user, resolver, ct);
+            if (company is null)
+                return CompanyNotFound();
+
+            // Ham SPA route'u DEĞİL - iyzico callback'i token'ı form POST ile gönderir, SPA bunu
+            // yakalayamaz; bkz. WebhookEndpoints.MapWebhookEndpoints'teki POST->GET köprüsü.
+            var callbackUrl = $"https://{TenantResolver.BaseDomain}/api/v1/webhooks/iyzico/checkout-callback/plan";
+            var result = await sender.Send(
+                new SubscribeToPlanCommand(company.CompanyId, request.Plan, callbackUrl), ct);
+            return Results.Ok(ApiResponse<SubscribeToPlanResult>.Ok(result));
+        }).WithName("CompanySubscribePlan");
+
+        group.MapPost("/plan/checkout-result", async (
+            [FromBody] ConfirmCheckoutRequest request, ICurrentUser user, TenantResolver resolver,
+            ISender sender, CancellationToken ct) =>
+        {
+            var company = await ResolveOwnCompanyAsync(user, resolver, ct);
+            if (company is null)
+                return CompanyNotFound();
+
+            var result = await sender.Send(
+                new ConfirmSubscriptionCheckoutCommand(company.CompanyId, request.Plan, request.Token), ct);
+            return Results.Ok(ApiResponse<ConfirmSubscriptionCheckoutResult>.Ok(result, "Aboneliğiniz başladı."));
+        }).WithName("CompanyConfirmPlanCheckout");
 
         group.MapPost("/plan/upgrade", async (
             [FromBody] UpgradePlanRequest request, ICurrentUser user, TenantResolver resolver,
@@ -89,10 +159,39 @@ public static class CompanyPanelEndpoints
             var usage = await sender.Send(new GetCompanyPlanQuery(), ct);
             var result = await sender.Send(
                 new UpgradeCompanyPlanCommand(
+                    company.CompanyId, request.Plan, usage.UsedBranches, usage.UsedMembers, usage.UsedBoats,
+                    request.IdempotencyKey),
+                ct);
+            return Results.Ok(ApiResponse<UpgradeCompanyPlanResult>.Ok(result, "Paketiniz yükseltildi."));
+        }).WithName("CompanyUpgradePlan");
+
+        group.MapPost("/plan/downgrade", async (
+            [FromBody] DowngradePlanRequest request, ICurrentUser user, TenantResolver resolver,
+            ISender sender, CancellationToken ct) =>
+        {
+            var company = await ResolveOwnCompanyAsync(user, resolver, ct);
+            if (company is null)
+                return CompanyNotFound();
+
+            var usage = await sender.Send(new GetCompanyPlanQuery(), ct);
+            var result = await sender.Send(
+                new RequestPlanDowngradeCommand(
                     company.CompanyId, request.Plan, usage.UsedBranches, usage.UsedMembers, usage.UsedBoats),
                 ct);
-            return Results.Ok(ApiResponse<UpgradeCompanyPlanResult>.Ok(result, "Paketiniz güncellendi."));
-        }).WithName("CompanyUpgradePlan");
+            return Results.Ok(ApiResponse<RequestPlanDowngradeResult>.Ok(
+                result, $"{result.EffectiveAtUtc:dd.MM.yyyy} tarihinde {result.PendingPlan} paketine geçeceksiniz."));
+        }).WithName("CompanyRequestPlanDowngrade");
+
+        group.MapPost("/plan/downgrade/cancel", async (
+            ICurrentUser user, TenantResolver resolver, ISender sender, CancellationToken ct) =>
+        {
+            var company = await ResolveOwnCompanyAsync(user, resolver, ct);
+            if (company is null)
+                return CompanyNotFound();
+
+            await sender.Send(new CancelPendingDowngradeCommand(company.CompanyId), ct);
+            return Results.Ok(ApiResponse<object?>.Ok(null, "Bekleyen paket değişikliği iptal edildi."));
+        }).WithName("CompanyCancelPlanDowngrade");
 
         // ---- Randevular ----
 
@@ -161,6 +260,10 @@ public static class CompanyPanelEndpoints
         {
             if (await ResolveOwnCompanyAsync(user, resolver, ct) is null)
                 return CompanyNotFound();
+
+            // Üye kodu özelliğinden önce oluşturulmuş eski üyelere kod ata (idempotent, tek turda
+            // tüm eksikleri kapatır) - GetCustomersQuery salt-okunur kalır, bkz. BackfillMemberCodesCommand.
+            await sender.Send(new BackfillMemberCodesCommand(), ct);
 
             var customers = await sender.Send(new GetCustomersQuery(search, branchId), ct);
             return Results.Ok(ApiResponse<List<CustomerDto>>.Ok(customers));
@@ -299,6 +402,16 @@ public static class CompanyPanelEndpoints
             return Results.Ok(ApiResponse<CompanyStatsDto>.Ok(stats));
         }).WithName("CompanyStats");
 
+        group.MapGet("/insights", async (
+            ICurrentUser user, TenantResolver resolver, ISender sender, CancellationToken ct) =>
+        {
+            if (await ResolveOwnCompanyAsync(user, resolver, ct) is null)
+                return CompanyNotFound();
+
+            var insights = await sender.Send(new GetCompanyInsightsQuery(), ct);
+            return Results.Ok(ApiResponse<CompanyInsightsDto>.Ok(insights));
+        }).WithName("CompanyInsights");
+
         // ---- Randevu tarih yönetimi: kapalı günler ----
 
         group.MapGet("/closed-dates", async (
@@ -387,6 +500,16 @@ public static class CompanyPanelEndpoints
             return Results.Ok(ApiResponse<InstructorDto>.Ok(instructor));
         }).WithName("CompanyUpdateInstructor");
 
+        group.MapDelete("/instructors/{instructorId:guid}", async (
+            Guid instructorId, ICurrentUser user, TenantResolver resolver, ISender sender, CancellationToken ct) =>
+        {
+            if (await ResolveOwnCompanyAsync(user, resolver, ct) is null)
+                return CompanyNotFound();
+
+            await sender.Send(new DeleteInstructorCommand(instructorId), ct);
+            return Results.Ok(ApiResponse.Ok("Eğitmen silindi."));
+        }).WithName("CompanyDeleteInstructor");
+
         // ---- Şubeler ----
 
         group.MapGet("/branches", async (
@@ -427,6 +550,44 @@ public static class CompanyPanelEndpoints
             return Results.Ok(ApiResponse<BranchDto>.Ok(branch));
         }).WithName("CompanyUpdateBranch");
 
+        group.MapPost("/branches/{branchId:guid}/logo", async (
+            Guid branchId, IFormFile file, ICurrentUser user, TenantResolver resolver,
+            IFileStorageService fileStorage, ISender sender, CancellationToken ct) =>
+        {
+            var site = await ResolveOwnCompanyAsync(user, resolver, ct);
+            if (site is null)
+                return CompanyNotFound();
+
+            const long maxBytes = 2 * 1024 * 1024;
+            var allowedTypes = new[] { "image/jpeg", "image/png", "image/webp" };
+            if (file.Length == 0 || file.Length > maxBytes || !allowedTypes.Contains(file.ContentType))
+            {
+                return Results.BadRequest(ApiResponse.Fail(
+                    "invalid_image", "Görsel jpeg/png/webp olmalı ve 2 MB'ı aşmamalıdır."));
+            }
+
+            var detail = await sender.Send(new GetBranchDetailQuery(branchId), ct);
+
+            await using var stream = file.OpenReadStream();
+            var extension = file.ContentType switch
+            {
+                "image/png" => ".png",
+                "image/webp" => ".webp",
+                _ => ".jpg",
+            };
+            // Bkz. paket görseli uçlarındaki aynı firma-izolasyon gerekçesi (IFileStorageService klasör
+            // kuralı) - klasör adı GUID yerine okunabilir şube koduyla oluşturulur.
+            var path = await fileStorage.SaveAsync(
+                stream, $"{Guid.NewGuid()}{extension}", $"{site.Subdomain}/subeler/{detail.Branch.Code}", ct);
+
+            var branch = await sender.Send(new SetBranchLogoCommand(branchId, path), ct);
+            return Results.Ok(ApiResponse<BranchDto>.Ok(branch, "Logo yüklendi."));
+        })
+        .WithName("CompanySetBranchLogo")
+        // Bkz. CompanySetPackageImage - IFormFile parametresi otomatik antiforgery metadata'sı
+        // ekletir, bu API Bearer JWT ile çalıştığından CSRF yüzeyi yoktur.
+        .DisableAntiforgery();
+
         group.MapGet("/branches/{branchId:guid}/detail", async (
             Guid branchId, ICurrentUser user, TenantResolver resolver, ISender sender, CancellationToken ct) =>
         {
@@ -436,6 +597,31 @@ public static class CompanyPanelEndpoints
             var detail = await sender.Send(new GetBranchDetailQuery(branchId), ct);
             return Results.Ok(ApiResponse<BranchDetailDto>.Ok(detail));
         }).WithName("CompanyBranchDetail");
+
+        group.MapDelete("/branches/{branchId:guid}", async (
+            Guid branchId, [FromBody] DeleteBranchRequest request, ICurrentUser user,
+            TenantResolver resolver, ISender sender, CancellationToken ct) =>
+        {
+            var site = await ResolveOwnCompanyAsync(user, resolver, ct);
+            if (site is null)
+                return CompanyNotFound();
+
+            var result = await sender.Send(new DeleteBranchCommand(
+                branchId, request.MemberAction, request.TransferTargetBranchId, site.Name, site.Subdomain), ct);
+            return Results.Ok(ApiResponse<DeleteBranchResultDto>.Ok(result, "Şube silindi."));
+        }).WithName("CompanyDeleteBranch");
+
+        group.MapGet("/branches/{branchId:guid}/members/export", async (
+            Guid branchId, ICurrentUser user, TenantResolver resolver, ISender sender, CancellationToken ct) =>
+        {
+            if (await ResolveOwnCompanyAsync(user, resolver, ct) is null)
+                return CompanyNotFound();
+
+            var detail = await sender.Send(new GetBranchDetailQuery(branchId), ct);
+            var bytes = BranchMemberExcelBuilder.Build(detail);
+            var fileName = $"sube-uyeleri-{detail.Branch.Code}-{DateOnly.FromDateTime(DateTime.UtcNow):yyyyMMdd}.xlsx";
+            return Results.File(bytes, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", fileName);
+        }).WithName("CompanyExportBranchMembers");
 
         // ---- Tekneler ----
 
@@ -473,6 +659,16 @@ public static class CompanyPanelEndpoints
             return Results.Ok(ApiResponse<BoatDto>.Ok(boat));
         }).WithName("CompanyUpdateBoat");
 
+        group.MapDelete("/boats/{boatId:guid}", async (
+            Guid boatId, ICurrentUser user, TenantResolver resolver, ISender sender, CancellationToken ct) =>
+        {
+            if (await ResolveOwnCompanyAsync(user, resolver, ct) is null)
+                return CompanyNotFound();
+
+            await sender.Send(new DeleteBoatCommand(boatId), ct);
+            return Results.Ok(ApiResponse.Ok("Tekne silindi."));
+        }).WithName("CompanyDeleteBoat");
+
         // ---- Ders paketleri ----
 
         group.MapGet("/packages", async (
@@ -493,7 +689,9 @@ public static class CompanyPanelEndpoints
                 return CompanyNotFound();
 
             var package = await sender.Send(new CreatePackageCommand(
-                request.Name, request.Description, request.SessionCount, request.Price), ct);
+                request.Name, request.Description, request.SessionCount, request.Price,
+                request.ValidityDays, request.CampaignStartsAtUtc, request.CampaignEndsAtUtc,
+                request.CampaignPrice), ct);
             return Results.Created($"/api/v1/company/packages/{package.Id}", ApiResponse<PackageDto>.Ok(package));
         }).WithName("CompanyCreatePackage");
 
@@ -506,9 +704,61 @@ public static class CompanyPanelEndpoints
 
             var package = await sender.Send(new UpdatePackageCommand(
                 packageId, request.Name, request.Description, request.SessionCount,
-                request.Price, request.IsActive ?? true), ct);
+                request.Price, request.IsActive ?? true,
+                request.ValidityDays, request.CampaignStartsAtUtc, request.CampaignEndsAtUtc,
+                request.CampaignPrice), ct);
             return Results.Ok(ApiResponse<PackageDto>.Ok(package));
         }).WithName("CompanyUpdatePackage");
+
+        group.MapDelete("/packages/{packageId:guid}", async (
+            Guid packageId, ICurrentUser user, TenantResolver resolver, ISender sender, CancellationToken ct) =>
+        {
+            if (await ResolveOwnCompanyAsync(user, resolver, ct) is null)
+                return CompanyNotFound();
+
+            await sender.Send(new DeletePackageCommand(packageId), ct);
+            return Results.Ok(ApiResponse.Ok("Paket silindi."));
+        }).WithName("CompanyDeletePackage");
+
+        group.MapPost("/packages/{packageId:guid}/image", async (
+            Guid packageId, IFormFile file, ICurrentUser user, TenantResolver resolver,
+            IFileStorageService fileStorage, ISender sender, CancellationToken ct) =>
+        {
+            var site = await ResolveOwnCompanyAsync(user, resolver, ct);
+            if (site is null)
+                return CompanyNotFound();
+
+            const long maxBytes = 2 * 1024 * 1024;
+            var allowedTypes = new[] { "image/jpeg", "image/png", "image/webp" };
+            if (file.Length == 0 || file.Length > maxBytes || !allowedTypes.Contains(file.ContentType))
+            {
+                return Results.BadRequest(ApiResponse.Fail(
+                    "invalid_image", "Görsel jpeg/png/webp olmalı ve 2 MB'ı aşmamalıdır."));
+            }
+
+            await using var stream = file.OpenReadStream();
+            var extension = file.ContentType switch
+            {
+                "image/png" => ".png",
+                "image/webp" => ".webp",
+                _ => ".jpg",
+            };
+            // Depolama (R2/yerel disk) tüm firmalar için TEK ortak bucket/klasör - katalog/tenant
+            // veritabanı ayrımının aksine dosya depolamada firma izolasyonu yoktur. Bu yüzden her
+            // yol firma alt alan adıyla başlar (bkz. IFileStorageService klasör kuralı).
+            var path = await fileStorage.SaveAsync(
+                stream, $"{Guid.NewGuid()}{extension}", $"{site.Subdomain}/paketler/{packageId}", ct);
+
+            var package = await sender.Send(new SetPackageImageCommand(packageId, path), ct);
+            return Results.Ok(ApiResponse<PackageDto>.Ok(package, "Görsel yüklendi."));
+        })
+        .WithName("CompanySetPackageImage")
+        // ASP.NET Core, IFormFile parametresi olan uçlara otomatik olarak antiforgery metadata'sı
+        // ekler (app.UseAntiforgery() beklenir). Bu API tamamen Bearer JWT ile çalışır - cookie/
+        // credentials:include YOK (bkz. 02-frontend-code.md §3, 03-security-policy.md) - dolayısıyla
+        // CSRF yüzeyi zaten yok ve çerez tabanlı antiforgery burada anlamsız; middleware eklemek
+        // yerine bu uca özgü olarak devre dışı bırakılır.
+        .DisableAntiforgery();
 
         // ---- Firma ayarları (çalışma saatleri, randevu ve hatırlatma kuralları) ----
 
@@ -533,7 +783,8 @@ public static class CompanyPanelEndpoints
                 request.WorkingHours, request.SlotMinutes,
                 request.MinNoticeHours, request.MaxAdvanceDays, request.ReminderOptions,
                 request.DefaultReminderMinutes, request.TimeZoneId,
-                request.NotifyOnNewAppointment, request.NotifyOnCancellation, request.SendCustomerReminders), ct);
+                request.NotifyOnNewAppointment, request.NotifyOnCancellation, request.SendCustomerReminders,
+                request.PackageExpiryReminderDays), ct);
             return Results.Ok(ApiResponse<CompanySettingsDto>.Ok(settings, "Ayarlar güncellendi."));
         }).WithName("CompanyUpdateSettings");
 

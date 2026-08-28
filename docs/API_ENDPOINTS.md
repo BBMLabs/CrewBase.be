@@ -184,6 +184,7 @@ değişkenleri doluysa `PlatformAdminSeeder` bu rolde bir hesabı otomatik oluş
 | GET | `/companies/pending` | Geriye dönük uyumluluk için tutulan uç — firmalar artık otomatik aktif olduğundan pratikte boş liste döner |
 | POST | `/companies/{companyId}/approve` | Firmayı aktifleştirir (askıya alınmışsa da geri açar) |
 | POST | `/companies/{companyId}/suspend` | Firmayı askıya alır — site ve panel erişimi kapanır |
+| GET | `/companies/{companyId}/overview` | Firmanın üye/eğitmen/tekne/şube sayıları + her şubenin `id, code, name, isActive` bilgisi ("Bilgi" menüsü) |
 
 `PlatformCompanyDto`: `id, name, subdomain, status, phone, contactEmail, createdAtUtc`.
 
@@ -209,15 +210,25 @@ doğrular (`SameCompanyAuthorizationHandler`).
 ## 4. Public Site — `/api/v1/public/{subdomain}` (Anonim)
 
 Kaynak: `PublicSiteEndpoints.cs`. Kayıtsız ziyaretçilerin firma sitesinden randevu almasını sağlar.
+Site artık **firma genelinde değil, şube bazında** yayınlanır: her şubenin kendi tekil sitesi
+`{subdomain}.faturebase.com/sube/{code}` adresindedir (frontend `BranchSite.tsx`); firmanın kökü
+(`/`) tek şube varsa doğrudan ona yönlenir, birden fazlaysa `TenantHome.tsx` bir şube seçim listesi
+gösterir. Eski firma-geneli site kaldırılmıştır.
 
 | Metot | Route | Açıklama |
 |---|---|---|
 | GET | `/` (kök) | API karşılama mesajı |
 | GET | `/api/v1/public/{subdomain}/info` | Firma adı/telefon/e-posta/adres/site URL'i |
+| GET | `/api/v1/public/{subdomain}/branches` | Aktif şubelerin kısa listesi (`code, name, address`) — kök sitede şube seçim listesi için |
+| GET | `/api/v1/public/{subdomain}/branches/{code}` | Şubenin kendi sitesi için bilgiler (`code, name, address, phone, description`); şube pasif/yok ise `404 branch_not_found` |
 | GET | `/api/v1/public/{subdomain}/options` | Dinamik randevu kuralları: çalışma saatleri, tekne sınıfları+kapasiteleri, hatırlatma seçenekleri, aktif paketler, derece etiketleri |
 | GET | `/api/v1/public/{subdomain}/consents` | Beyan kataloğu (bkz. §7.4) — üye kimliği olmadan, yalnızca metinler |
 | GET | `/api/v1/public/{subdomain}/availability?date=&boatClass=&phone=` | Belirli gün+sınıf için slot listesi (`time, available, seatsLeft`) |
 | POST | `/api/v1/public/{subdomain}/appointments` | Kayıtsız (misafir) randevu oluşturma |
+
+Şube kodu 6 rakam + 2 harf'tir (`BranchCodeGenerator`, I/O harfleri hariç), şube oluşturulduğu anda
+üretilir ve `Branch.Code` üzerinde tekildir — panelde Şubeler tablosunun "Kod" sütununda ve site
+bağlantısında (`lib/tenant.ts#siteUrlForBranch`) kullanılır.
 
 ### 4.1 Misafir Randevu — `POST /appointments`
 
@@ -276,6 +287,14 @@ kimlik uzayından tamamen ayrıdır.
 |---|---|---|
 | POST | `/register` | Üyelik oluşturur; aynı telefonla misafir kaydı varsa hesap ona iliştirilir |
 | POST | `/login` | E-posta/parola ile giriş |
+| POST | `/set-password` | `{ email, token, newPassword }` — tek kullanımlık bağlantıdaki token ile ilk şifre oluşturma (panelden e-postalı eklenen üye) veya `/forgot-password` sonrası şifre sıfırlama; aynı mekanizma |
+| POST | `/forgot-password` | `{ email }` — üye giriş ekranından şifremi unuttum; e-postanın kayıtlı olup olmadığı sızdırılmaz, her zaman `200 OK` döner |
+
+Firma panelinden e-postalı eklenen bir üyeye **asla panelden üretilmiş bir şifre gösterilmez/
+iletilmez** — üyeye kendi şifresini oluşturması için `/uye/sifre-olustur?token=&email=` bağlantısı
+e-postayla gönderilir (`MemberPasswordSetupToken`, 7 gün geçerli). Firma admini de panelden aynı
+akışı (`POST /api/v1/company/customers/{id}/send-password-reset`, bkz. §6.3) tetikleyebilir — bu
+durumda bağlantı 1 saat geçerlidir.
 
 **Register request:**
 ```json
@@ -331,11 +350,22 @@ Kod 10 dakika geçerlidir, en fazla 5 yanlış deneme hakkı vardır (`otp_expir
 | GET | `/appointments` | Üyenin randevu geçmişi + yaklaşanlar; her kayıtta aynı seanstaki diğer üyeler **maskeli isimle** görünür (`"Veli D."`) |
 | POST | `/appointments` | Üye adına randevu; `usePackage: true` ile paketten düşülebilir |
 | POST | `/appointments/{id}/cancel` | Yalnızca kendi randevusunu iptal edebilir (`403 forbidden` aksi halde); paketten alınmışsa ders otomatik iade edilir |
-| GET | `/packages` | Üyeye tanımlı ders paketleri ve kalan ders sayıları |
+| GET | `/packages` | Üyeye tanımlı/satın aldığı ders paketleri, kalan ders sayıları, `expiresAtUtc`, `source` (`Assigned`/`Purchased`) |
+| GET | `/packages/catalog` | Şu anda satın alınabilir (aktif + kampanya penceresi içinde/sınırsız) paket kataloğu |
+| POST | `/packages/{packageId}/purchase` | Kendi kartıyla paket satın alma başlatır (iyzico checkout formu döner) |
+| POST | `/packages/purchase/checkout-result` | `{ packageId, token }` - checkout dönüşünde ödemeyi doğrular, paketi bakiyeye ekler |
 
 `POST /appointments` request'i misafir formundakiyle aynıdır, `fullName`/`phone`/`email` yerine
 profilden alınır; ek olarak `usePackage: boolean` taşır. `1x`/`2x`/`4x` kısıtı üyeler için
 uygulanmaz (yalnızca hesabı olmayanlar `4x`'e sınırlıdır).
+
+`POST /packages/{packageId}/purchase` iyzico'nun klasik CheckoutForm API'sini kullanır (firma
+abonelik faturalamasındaki Abonelik API'sinden AYRI - bkz. `IIyzicoPaymentClient`). Dönen
+`checkoutFormContent` HAM HTML'dir (frontend `dangerouslySetInnerHTML` ile gömer); iyzico ödeme
+sonrası tarayıcıyı bir form POST ile geri yönlendirdiğinden, callback SPA'ya değil
+`/api/v1/webhooks/iyzico/checkout-callback/package` köprüsüne gider - o da `token`'ı query string
+GET olarak üyenin sonuç sayfasına 302 ile iletir; sayfa oradan `token`'ı alıp bu uçla ödemeyi
+doğrular.
 
 #### Beyanlar (consent)
 
@@ -421,6 +451,42 @@ veriler yalnızca o firmanın **kendi tenant veritabanından** okunur/yazılır.
 |---|---|---|
 | GET | `/site` | Firmanın site adresi ve mock yolu |
 | GET | `/stats` | Panel ana sayfası istatistikleri (bugünkü randevu/seans, üye sayısı, bu ay randevu, önümüzdeki 7 gün, ay içi durum dağılımı, paket bakiyeleri) |
+| GET | `/insights` | Panel ana sayfası grafikleri: `topBoats` (en çok kullanılan 5 tekne), `topMembers` (en çok randevusu olan 5 üye), `busiestWeekdays` (haftanın 7 günü, Pazartesi'den başlayarak randevu sayısı) — iptal edilen randevular hariç |
+
+### 6.1a Abonelik ve Faturalama (iyzico)
+
+Kaynak: `WebhookEndpoints.cs` + `CompanyPanelEndpoints.cs`'teki `/plan/*` uçları. Kart bilgisi hiçbir
+zaman backend'e ulaşmaz - iyzico'nun checkout formunda girilir ve iyzico tarafında tokenize
+edilir. Yükseltmede aradaki fark anında (iyzico proration'ı ile) tahsil edilir; düşürme talebi
+**mevcut faturalama döneminin sonuna ertelenir** (`SubscriptionSafetyNetWorker`, saatlik).
+
+| Metot | Route | Açıklama |
+|---|---|---|
+| GET | `/plan` | `{ plan, monthlyPrice, maxBranches, usedBranches, maxMembers, usedMembers, maxBoats, usedBoats, subscriptionStatus, nextPaymentDateUtc, pendingPlan, pendingPlanEffectiveAtUtc }` |
+| GET | `/plan/payments` | Ödeme/paket geçmişi (en yeni önce): `{ plan, amount, currency, kind, status, occurredAtUtc, failureReason }` listesi |
+| POST | `/plan/subscribe` | `{ plan }` — ilk ücretli abonelik başlatır, iyzico checkout formunu döner (`{ checkoutFormContent, token }`) |
+| POST | `/plan/checkout-result` | `{ plan, token }` — checkout formundan dönüldükten sonra çağrılır, ödeme başarılıysa abonelik/paket aktifleşir |
+| POST | `/plan/upgrade` | `{ plan, idempotencyKey }` — yalnızca ÜST pakete geçiş; aradaki fark anında tahsil edilir. Bekleyen bir düşürme varsa `pending_downgrade_exists` hatası döner |
+| POST | `/plan/downgrade` | `{ plan }` — ALT pakete geçiş talebi; dönem sonuna ertelenir, hemen uygulanmaz |
+| POST | `/plan/downgrade/cancel` | Bekleyen paket düşürme talebini iptal eder |
+| POST | `/api/v1/webhooks/iyzico/subscription` | (Kimlik doğrulamasız, `X-IYZ-SIGNATURE-V3` imzasıyla doğrulanır) iyzico'nun otomatik yenileme bildirimleri - başarılı/başarısız tahsilatları işler |
+| GET/POST | `/api/v1/webhooks/iyzico/checkout-callback/plan` | (Kimlik doğrulamasız) Firma abonelik checkout'undan dönüşte iyzico'nun form POST'la gönderdiği `token`'ı SPA'nın `panel/paketim/odeme-sonuc` route'una query string GET olarak 302 ile iletir |
+| GET/POST | `/api/v1/webhooks/iyzico/checkout-callback/package` | (Kimlik doğrulamasız) Üye paket satın alma checkout'undan dönüşte aynısını `?tenant=` ile taşınan firma alt alanındaki `uye/paketler/odeme-sonuc` route'una iletir |
+
+### 6.1b Şubeler
+
+Her şubenin kendi tekil kodu (`Code`, 6 rakam + 2 harf) ve kendi public sitesi vardır (bkz. §4).
+Üye/tekne/eğitmen `branchId`'ye göre bir şubeye atanabilir (`null` = şubesiz/firma geneli).
+
+| Metot | Route | Açıklama |
+|---|---|---|
+| GET | `/branches?search=&isActive=` | Şube listesi (kod dahil) |
+| POST | `/branches` | `{ name, address?, phone?, isActive?, managerName?, managerPhone?, managerEmail?, taxNumber?, description? }` — oluşturulduğu anda tekil `Code` üretilir ve site aktif olur |
+| PUT | `/branches/{id}` | Şube güncelleme (aynı alanlar) |
+| POST | `/branches/{id}/logo` | `multipart/form-data`, alan adı `file` — şube sitesinde gösterilecek logo |
+| GET | `/branches/{id}/detail` | Şube detayı: bilgiler + atanmış üye/tekne/eğitmen listeleri |
+| GET | `/branches/{id}/members/export` | Şubeye atanmış üyeleri `.xlsx` olarak indirir |
+| DELETE | `/branches/{id}` | `{ memberAction: "transfer"\|"delete", transferTargetBranchId? }` — şube kalıcı silinir (logo dahil); üyeler `transfer` ile hedef şubeye taşınır (`transferTargetBranchId` zorunlu, üyelere e-posta gider) ya da `delete` ile silinir; şubenin tekne/eğitmenleri her durumda kalıcı silinir. Paketler firma geneli olduğundan etkilenmez |
 
 ### 6.2 Randevular ve seanslar
 
@@ -435,12 +501,16 @@ veriler yalnızca o firmanın **kendi tenant veritabanından** okunur/yazılır.
 
 | Metot | Route | Açıklama |
 |---|---|---|
-| GET | `/customers` | Üye listesi |
-| POST | `/customers` | `{ fullName, phone, email?, level }` ile panelden üye ekler |
+| GET | `/customers?search=&branchId=` | Üye listesi; isme göre arama ve şubeye göre filtre |
+| POST | `/customers` | `{ fullName, phone, email?, level, branchId? }` ile panelden üye ekler — e-posta verilirse şifre oluşturma bağlantısı gönderilir (bkz. §5.1) |
 | POST | `/customers/{id}/level` | **Yalnızca firma admini** üye derecesini (0-10) değiştirebilir |
-| POST | `/customers/{id}/packages` | `{ lessonPackageId }` ile üyeye paket tanımlar |
-| GET | `/customers/{id}/packages` | Üyenin paket bakiyeleri |
-| GET | `/package-balances` | Tüm üyelerin paket bakiyeleri (düşüm takibi) |
+| POST | `/customers/{id}/branch` | `{ branchId }` (`null` = şubesiz) ile üyenin şubesini değiştirir |
+| POST | `/customers/{id}/send-password-reset` | Üyenin e-postasına yeni bir şifre oluşturma bağlantısı gönderir (1 saat geçerli); üyenin e-postası yoksa `member_no_email` |
+| POST | `/customers/{id}/block` | Üyeyi üye paneli girişinden men eder; randevu/telefon kaydı etkilenmez |
+| POST | `/customers/{id}/unblock` | Üyenin giriş engelini kaldırır |
+| POST | `/customers/{id}/packages` | `{ lessonPackageId }` ile üyeye paket tanımlar (`source: Assigned`) |
+| GET | `/customers/{id}/packages` | Üyenin paket bakiyeleri (`expiresAtUtc`, `source` dahil) |
+| GET | `/package-balances` | Tüm üyelerin paket bakiyeleri (düşüm takibi, `expiresAtUtc`/`source` dahil) |
 | GET | `/customers/{id}/logs?take=` | Üye hareket geçmişi |
 | GET | `/logs?take=` | Tüm üyelerin son hareketleri |
 
@@ -452,14 +522,15 @@ veriler yalnızca o firmanın **kendi tenant veritabanından** okunur/yazılır.
 | PUT | `/instructors/{id}` | Eğitmen güncelleme (aktif/pasif dahil) |
 | GET/POST | `/boats` | Tekne listesi / oluşturma (`boatClass`: `1x`\|`2x`\|`4x`) |
 | PUT | `/boats/{id}` | Tekne güncelleme |
-| GET/POST | `/packages` | Ders paketi listesi / oluşturma |
-| PUT | `/packages/{id}` | Paket güncelleme (fiyat, ders sayısı, aktif/pasif) |
+| GET/POST | `/packages` | Ders paketi listesi / oluşturma (`validityDays`, `campaignStartsAtUtc`/`campaignEndsAtUtc` opsiyonel) |
+| PUT | `/packages/{id}` | Paket güncelleme (fiyat, ders sayısı, aktif/pasif, geçerlilik süresi, kampanya penceresi) |
+| POST | `/packages/{id}/image` | `multipart/form-data`, alan adı `file` (jpeg/png/webp, en fazla 2 MB) - paket görseli yükler |
 
 ### 6.5 Ayarlar
 
 | Metot | Route | Açıklama |
 |---|---|---|
-| GET | `/settings` | Güne özel çalışma saatleri, slot süresi, min/max rezervasyon penceresi, hatırlatma seçenekleri, saat dilimi, bildirim ayarları |
+| GET | `/settings` | Güne özel çalışma saatleri, slot süresi, min/max rezervasyon penceresi, hatırlatma seçenekleri, saat dilimi, bildirim ayarları, paket süresi hatırlatma günleri |
 | PUT | `/settings` | Aynı alanları günceller — **tamamen firmaya özeldir**, tüm public/member akışları buradan beslenir |
 | GET | `/closed-dates` | Kapalı (bayram/bakım) günler |
 | POST | `/closed-dates` | `{ date, reason? }` ile tekil gün kapatır |
@@ -475,10 +546,13 @@ veriler yalnızca o firmanın **kendi tenant veritabanından** okunur/yazılır.
   "slotMinutes": 60, "minNoticeHours": 1, "maxAdvanceDays": 14,
   "reminderOptions": [30,60,120,1440], "defaultReminderMinutes": 60,
   "timeZoneId": "Europe/Istanbul",
-  "notifyOnNewAppointment": true, "notifyOnCancellation": true, "sendCustomerReminders": true
+  "notifyOnNewAppointment": true, "notifyOnCancellation": true, "sendCustomerReminders": true,
+  "packageExpiryReminderDays": [15, 7]
 }
 ```
 `workingHours`: her gün için ayrı çalışma saati, tam olarak 7 gün girilmeli (`day`: 0=Pazar ... 6=Cumartesi).
+`packageExpiryReminderDays`: üye ders paketi süresi dolmadan kaç gün kala hatırlatma e-postası
+gönderileceği (en az 1 değer, hepsi ≥1); büyükten küçüğe her eşik için en fazla bir kez gönderilir.
 GET aynı şekli döner.
 
 ### 6.6 Kulüp akışı (moderasyon)

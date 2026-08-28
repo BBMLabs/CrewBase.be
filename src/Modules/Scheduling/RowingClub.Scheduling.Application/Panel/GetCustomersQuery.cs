@@ -13,7 +13,8 @@ public sealed record CustomerDto(
     int Level,
     Guid? BranchId,
     bool IsBlocked,
-    DateTimeOffset CreatedAtUtc);
+    DateTimeOffset CreatedAtUtc,
+    string? MemberCode);
 
 public sealed class GetCustomersQueryHandler(ICustomerRepository customerRepository)
     : IRequestHandler<GetCustomersQuery, List<CustomerDto>>
@@ -39,7 +40,7 @@ public sealed class GetCustomersQueryHandler(ICustomerRepository customerReposit
 
         return customers
             .OrderBy(c => c.FullName)
-            .Select(c => new CustomerDto(c.Id, c.FullName, c.Phone, c.Email, c.Level, c.BranchId, c.IsBlocked, c.CreatedAtUtc))
+            .Select(c => new CustomerDto(c.Id, c.FullName, c.Phone, c.Email, c.Level, c.BranchId, c.IsBlocked, c.CreatedAtUtc, c.MemberCode))
             .ToList();
     }
 }

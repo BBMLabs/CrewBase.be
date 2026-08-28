@@ -30,6 +30,9 @@ public sealed class CompanySettings
 
     public int DefaultReminderMinutes { get; private set; }
 
+    /// <summary>Ders paketi süresi dolmadan kaç gün kala hatırlatma gönderilsin, CSV: "15,7". Admin panelden değiştirir.</summary>
+    public string PackageExpiryReminderDaysCsv { get; private set; } = null!;
+
     /// <summary>Çalışma saatleri ve kısıtlar bu saat dilimindeki yerel saate göre yorumlanır.</summary>
     public string TimeZoneId { get; private set; } = null!;
 
@@ -56,6 +59,7 @@ public sealed class CompanySettings
             MaxAdvanceDays = 30,
             ReminderOptionsMinutes = "60,120,1440",
             DefaultReminderMinutes = 120,
+            PackageExpiryReminderDaysCsv = "15,7",
             TimeZoneId = "Europe/Istanbul",
             NotifyOnNewAppointment = true,
             NotifyOnCancellation = true,
@@ -117,6 +121,14 @@ public sealed class CompanySettings
         TimeZoneId = timeZoneId;
     }
 
+    public void UpdatePackageExpirySettings(IReadOnlyCollection<int> reminderDaysBeforeExpiry)
+    {
+        if (reminderDaysBeforeExpiry.Count == 0 || reminderDaysBeforeExpiry.Any(d => d < 1))
+            throw new DomainException("invalid_package_reminder_days", "En az bir geçerli hatırlatma günü tanımlanmalıdır.");
+
+        PackageExpiryReminderDaysCsv = string.Join(',', reminderDaysBeforeExpiry.Distinct().OrderByDescending(d => d));
+    }
+
     public void UpdateNotifications(bool notifyOnNewAppointment, bool notifyOnCancellation, bool sendCustomerReminders)
     {
         NotifyOnNewAppointment = notifyOnNewAppointment;
@@ -142,6 +154,13 @@ public sealed class CompanySettings
     }
 
     public bool IsValidSlot(DateOnly date, TimeOnly time) => Slots(date.DayOfWeek).Contains(time);
+
+    /// <summary>Büyükten küçüğe sıralı (bkz. UpdatePackageExpirySettings) - ProcessPackageExpiriesCommand bu sırada gezer.</summary>
+    public IReadOnlyList<int> PackageExpiryReminderDays() =>
+        PackageExpiryReminderDaysCsv
+            .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Select(int.Parse)
+            .ToList();
 
     public IReadOnlyList<int> ReminderOptions() =>
         ReminderOptionsMinutes

@@ -10,7 +10,7 @@ namespace RowingClub.Scheduling.Application.Panel;
 public sealed record BranchDto(
     Guid Id, string Code, string Name, string? Address, string? Phone, bool IsActive,
     string? ManagerName, string? ManagerPhone, string? ManagerEmail,
-    string? TaxNumber, string? Description);
+    string? TaxNumber, string? Description, string? LogoPath);
 
 public sealed record GetBranchesQuery(string? Search = null, bool? IsActive = null) : IRequest<List<BranchDto>>;
 
@@ -108,10 +108,28 @@ public sealed class UpdateBranchCommandHandler(
     }
 }
 
+public sealed record SetBranchLogoCommand(Guid BranchId, string LogoPath) : ICommand<BranchDto>;
+
+public sealed class SetBranchLogoCommandHandler(
+    IBranchRepository repository, ISchedulingUnitOfWork unitOfWork)
+    : IRequestHandler<SetBranchLogoCommand, BranchDto>
+{
+    public async Task<BranchDto> Handle(SetBranchLogoCommand request, CancellationToken cancellationToken)
+    {
+        var branch = await repository.GetByIdAsync(request.BranchId, cancellationToken)
+            ?? throw new NotFoundException("Branch", request.BranchId.ToString());
+
+        branch.SetLogo(request.LogoPath);
+        await unitOfWork.SaveChangesAsync(cancellationToken);
+
+        return BranchMapper.ToDto(branch);
+    }
+}
+
 internal static class BranchMapper
 {
     public static BranchDto ToDto(Branch branch) =>
         new(branch.Id, branch.Code, branch.Name, branch.Address, branch.Phone, branch.IsActive,
             branch.ManagerName, branch.ManagerPhone, branch.ManagerEmail,
-            branch.TaxNumber, branch.Description);
+            branch.TaxNumber, branch.Description, branch.LogoPath);
 }

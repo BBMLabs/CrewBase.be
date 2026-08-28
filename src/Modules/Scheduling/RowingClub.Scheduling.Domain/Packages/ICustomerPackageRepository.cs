@@ -8,6 +8,8 @@ public interface ICustomerPackageRepository
 
     Task<List<CustomerPackage>> GetAllAsync(CancellationToken cancellationToken);
 
+    Task<bool> ExistsByPaymentReferenceCodeAsync(string paymentReferenceCode, CancellationToken cancellationToken);
+
     void Add(CustomerPackage customerPackage);
 
     void Remove(CustomerPackage customerPackage);

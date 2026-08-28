@@ -21,6 +21,8 @@ public sealed class BoatRepository(TenantDbContext context) : IBoatRepository
         context.Boats.CountAsync(b => b.IsActive, cancellationToken);
 
     public void Add(Boat boat) => context.Boats.Add(boat);
+
+    public void Remove(Boat boat) => context.Boats.Remove(boat);
 }
 
 public sealed class BranchRepository(TenantDbContext context) : IBranchRepository
@@ -41,6 +43,8 @@ public sealed class BranchRepository(TenantDbContext context) : IBranchRepositor
         context.Branches.CountAsync(b => b.IsActive, cancellationToken);
 
     public void Add(Branch branch) => context.Branches.Add(branch);
+
+    public void Remove(Branch branch) => context.Branches.Remove(branch);
 }
 
 public sealed class InstructorRepository(TenantDbContext context) : IInstructorRepository
@@ -52,6 +56,8 @@ public sealed class InstructorRepository(TenantDbContext context) : IInstructorR
         context.Instructors.FirstOrDefaultAsync(i => i.Id == id, cancellationToken);
 
     public void Add(Instructor instructor) => context.Instructors.Add(instructor);
+
+    public void Remove(Instructor instructor) => context.Instructors.Remove(instructor);
 }
 
 public sealed class LessonPackageRepository(TenantDbContext context) : ILessonPackageRepository
@@ -63,6 +69,8 @@ public sealed class LessonPackageRepository(TenantDbContext context) : ILessonPa
         context.LessonPackages.FirstOrDefaultAsync(p => p.Id == id, cancellationToken);
 
     public void Add(LessonPackage lessonPackage) => context.LessonPackages.Add(lessonPackage);
+
+    public void Remove(LessonPackage lessonPackage) => context.LessonPackages.Remove(lessonPackage);
 }
 
 public sealed class SettingsRepository(TenantDbContext context) : ISettingsRepository

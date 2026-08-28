@@ -15,5 +15,12 @@ public interface IAppointmentRepository
     /// <summary>Hatırlatması henüz gönderilmemiş, iptal edilmemiş, bugünden itibaren yaklaşan randevular.</summary>
     Task<List<Appointment>> GetPendingRemindersAsync(DateOnly fromDate, CancellationToken cancellationToken);
 
+    /// <summary>
+    /// Bu paketi kullanan, iptal edilmemiş, henüz gerçekleşmemiş (gelecekteki) bir randevu var mı -
+    /// süresi dolan bir CustomerPackage'ı silmeden önce bu kontrol yapılır (bkz. ProcessPackageExpiriesCommand).
+    /// </summary>
+    Task<bool> HasActiveFutureAppointmentsUsingPackageAsync(
+        Guid customerPackageId, DateOnly today, TimeOnly nowTime, CancellationToken cancellationToken);
+
     void Add(Appointment appointment);
 }

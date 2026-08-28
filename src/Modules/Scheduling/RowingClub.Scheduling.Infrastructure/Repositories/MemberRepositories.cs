@@ -17,6 +17,9 @@ public sealed class CustomerPackageRepository(TenantDbContext context) : ICustom
     public Task<List<CustomerPackage>> GetAllAsync(CancellationToken cancellationToken) =>
         context.CustomerPackages.ToListAsync(cancellationToken);
 
+    public Task<bool> ExistsByPaymentReferenceCodeAsync(string paymentReferenceCode, CancellationToken cancellationToken) =>
+        context.CustomerPackages.AnyAsync(p => p.PaymentReferenceCode == paymentReferenceCode, cancellationToken);
+
     public void Add(CustomerPackage customerPackage) => context.CustomerPackages.Add(customerPackage);
 
     public void Remove(CustomerPackage customerPackage) => context.CustomerPackages.Remove(customerPackage);

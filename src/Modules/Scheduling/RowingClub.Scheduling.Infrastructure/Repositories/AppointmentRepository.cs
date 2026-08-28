@@ -42,5 +42,13 @@ public sealed class AppointmentRepository(TenantDbContext context) : IAppointmen
                         a.Date >= fromDate.AddDays(-1) && a.Date <= fromDate.AddDays(8))
             .ToListAsync(cancellationToken);
 
+    public Task<bool> HasActiveFutureAppointmentsUsingPackageAsync(
+        Guid customerPackageId, DateOnly today, TimeOnly nowTime, CancellationToken cancellationToken) =>
+        context.Appointments.AnyAsync(
+            a => a.CustomerPackageId == customerPackageId &&
+                 a.Status != AppointmentStatus.Cancelled &&
+                 (a.Date > today || (a.Date == today && a.StartTime > nowTime)),
+            cancellationToken);
+
     public void Add(Appointment appointment) => context.Appointments.Add(appointment);
 }

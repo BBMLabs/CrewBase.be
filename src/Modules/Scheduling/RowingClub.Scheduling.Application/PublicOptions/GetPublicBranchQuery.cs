@@ -7,7 +7,7 @@ namespace RowingClub.Scheduling.Application.PublicOptions;
 public sealed record GetPublicBranchQuery(string Code) : IRequest<PublicBranchDto?>;
 
 public sealed record PublicBranchDto(
-    string Code, string Name, string? Address, string? Phone, string? Description);
+    string Code, string Name, string? Address, string? Phone, string? Description, bool IsActive);
 
 public sealed class GetPublicBranchQueryHandler(IBranchRepository branchRepository)
     : IRequestHandler<GetPublicBranchQuery, PublicBranchDto?>
@@ -15,10 +15,13 @@ public sealed class GetPublicBranchQueryHandler(IBranchRepository branchReposito
     public async Task<PublicBranchDto?> Handle(GetPublicBranchQuery request, CancellationToken cancellationToken)
     {
         var branch = await branchRepository.GetByCodeAsync(request.Code, cancellationToken);
-        if (branch is null || !branch.IsActive)
+        if (branch is null)
             return null;
 
-        return new PublicBranchDto(branch.Code, branch.Name, branch.Address, branch.Phone, branch.Description);
+        // Pasif şube "bulunamadı" değildir - genel site bunu görüp rezervasyon yerine
+        // "bakımda" göstermeli (bkz. BranchSite.tsx). Aktif şube listesi (aşağıdaki
+        // GetPublicBranchListQueryHandler) zaten pasif şubeleri filtreliyor.
+        return new PublicBranchDto(branch.Code, branch.Name, branch.Address, branch.Phone, branch.Description, branch.IsActive);
     }
 }
 

@@ -260,7 +260,15 @@ public sealed class TenantDbContext(
             builder.ToTable("customer_packages");
             builder.HasKey(p => p.Id);
             builder.Property(p => p.PackageName).HasMaxLength(200).IsRequired();
+            // HasDefaultValue ZORUNLU: bu olmadan EF migration'ı mevcut satırlar için "" atar,
+            // sonraki okumada Enum.Parse("") patlar (bkz. PackageExpiryReminderDaysCsv'deki aynı ders).
+            // Mevcut (bu migration'dan önceki) tüm satırlar zaten admin tarafından atanmıştı.
+            builder.Property(p => p.Source).HasConversion<string>().HasMaxLength(20)
+                .HasDefaultValue(CustomerPackageSource.Assigned);
+            builder.Property(p => p.PaymentReferenceCode).HasMaxLength(100);
             builder.HasIndex(p => p.CustomerId);
+            // Süresi dolmuş (ExpiresAtUtc geçmiş) paketleri bulan periyodik tarama için.
+            builder.HasIndex(p => p.ExpiresAtUtc);
 
             builder.HasOne<Customer>()
                 .WithMany()
@@ -331,6 +339,7 @@ public sealed class TenantDbContext(
             builder.Property(b => b.ManagerEmail).HasConversion(encrypted!);
             builder.Property(b => b.TaxNumber).HasMaxLength(11);
             builder.Property(b => b.Description).HasMaxLength(1000);
+            builder.Property(b => b.LogoPath).HasMaxLength(500);
         });
 
         modelBuilder.Entity<Instructor>(builder =>
@@ -367,6 +376,8 @@ public sealed class TenantDbContext(
             builder.Property(p => p.Name).HasMaxLength(200).IsRequired();
             builder.Property(p => p.Description).HasMaxLength(1000);
             builder.Property(p => p.Price).HasPrecision(12, 2);
+            builder.Property(p => p.CampaignPrice).HasPrecision(12, 2);
+            builder.Property(p => p.ImagePath).HasMaxLength(500);
         });
 
         modelBuilder.Entity<CompanySettings>(builder =>
@@ -375,6 +386,9 @@ public sealed class TenantDbContext(
             builder.HasKey(s => s.Id);
             builder.Property(s => s.ReminderOptionsMinutes).HasMaxLength(200).IsRequired();
             builder.Property(s => s.TimeZoneId).HasMaxLength(100).IsRequired();
+            // HasDefaultValue ZORUNLU: bu olmadan mevcut (migration'dan önce satırı zaten var olan)
+            // her tenant DB'sinde "ADD COLUMN ... NOT NULL" migration'ı başarısız olur.
+            builder.Property(s => s.PackageExpiryReminderDaysCsv).HasMaxLength(200).IsRequired().HasDefaultValue("15,7");
 
             builder.HasMany(s => s.DaySchedules)
                 .WithOne()

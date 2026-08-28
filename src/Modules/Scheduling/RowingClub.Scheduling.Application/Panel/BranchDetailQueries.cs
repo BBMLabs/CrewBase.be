@@ -31,7 +31,7 @@ public sealed class GetBranchDetailQueryHandler(
         var members = (await customerRepository.GetAllAsync(cancellationToken))
             .Where(c => c.BranchId == branch.Id)
             .OrderBy(c => c.FullName)
-            .Select(c => new CustomerDto(c.Id, c.FullName, c.Phone, c.Email, c.Level, c.BranchId, c.IsBlocked, c.CreatedAtUtc))
+            .Select(c => new CustomerDto(c.Id, c.FullName, c.Phone, c.Email, c.Level, c.BranchId, c.IsBlocked, c.CreatedAtUtc, c.MemberCode))
             .ToList();
 
         var boats = (await boatRepository.GetAllAsync(cancellationToken))
