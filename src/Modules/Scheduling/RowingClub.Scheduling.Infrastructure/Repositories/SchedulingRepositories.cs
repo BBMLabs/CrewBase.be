@@ -17,6 +17,9 @@ public sealed class BoatRepository(TenantDbContext context) : IBoatRepository
     public Task<Boat?> GetByIdAsync(Guid id, CancellationToken cancellationToken) =>
         context.Boats.FirstOrDefaultAsync(b => b.Id == id, cancellationToken);
 
+    public Task<List<Boat>> GetByBranchIdAsync(Guid branchId, CancellationToken cancellationToken) =>
+        context.Boats.Where(b => b.BranchId == branchId).ToListAsync(cancellationToken);
+
     public Task<int> CountActiveAsync(CancellationToken cancellationToken) =>
         context.Boats.CountAsync(b => b.IsActive, cancellationToken);
 
@@ -54,6 +57,9 @@ public sealed class InstructorRepository(TenantDbContext context) : IInstructorR
 
     public Task<Instructor?> GetByIdAsync(Guid id, CancellationToken cancellationToken) =>
         context.Instructors.FirstOrDefaultAsync(i => i.Id == id, cancellationToken);
+
+    public Task<List<Instructor>> GetByBranchIdAsync(Guid branchId, CancellationToken cancellationToken) =>
+        context.Instructors.Where(i => i.BranchId == branchId).ToListAsync(cancellationToken);
 
     public void Add(Instructor instructor) => context.Instructors.Add(instructor);
 

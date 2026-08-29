@@ -18,10 +18,13 @@ public sealed class GetActiveCompanySitesQueryHandler(ICompanyRepository company
             .Select(c =>
             {
                 var limits = c.PlanLimits;
+                var features = c.PlanFeatures;
                 return new CompanySiteDto(
                     c.Id, c.Name, c.Subdomain, c.DatabaseName,
                     c.Phone, c.ContactEmail, c.Address, c.TaxNumber, c.Status.ToString(),
-                    c.Plan.ToString(), limits.MaxBranches, limits.MaxMembers, limits.MaxBoats);
+                    c.Plan.ToString(), limits.MaxBranches, limits.MaxMembers, limits.MaxBoats,
+                    features.MaxCompanyUsers, features.CanExportData, features.CanAssignEmployeeRole,
+                    features.HasAdvancedReports, features.HasAutomaticDuesReminders);
             })
             .ToList();
     }

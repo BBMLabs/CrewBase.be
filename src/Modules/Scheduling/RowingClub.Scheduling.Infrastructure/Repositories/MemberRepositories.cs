@@ -17,6 +17,11 @@ public sealed class CustomerPackageRepository(TenantDbContext context) : ICustom
     public Task<List<CustomerPackage>> GetAllAsync(CancellationToken cancellationToken) =>
         context.CustomerPackages.ToListAsync(cancellationToken);
 
+    public Task<List<CustomerPackage>> GetExpiringWithinAsync(DateTimeOffset maxExpiresAtUtc, CancellationToken cancellationToken) =>
+        context.CustomerPackages
+            .Where(p => p.ExpiresAtUtc != null && p.ExpiresAtUtc <= maxExpiresAtUtc)
+            .ToListAsync(cancellationToken);
+
     public Task<bool> ExistsByPaymentReferenceCodeAsync(string paymentReferenceCode, CancellationToken cancellationToken) =>
         context.CustomerPackages.AnyAsync(p => p.PaymentReferenceCode == paymentReferenceCode, cancellationToken);
 
@@ -45,11 +50,29 @@ public sealed class MemberLogRepository(TenantDbContext context) : IMemberLogRep
 
 public sealed class ActivityLogRepository(TenantDbContext context) : IActivityLogRepository
 {
-    public Task<List<ActivityLog>> GetRecentAsync(int take, CancellationToken cancellationToken) =>
-        context.ActivityLogs
+    public async Task<(List<ActivityLog> Items, int TotalCount)> GetPagedAsync(
+        string? search, int page, int pageSize, CancellationToken cancellationToken)
+    {
+        var query = context.ActivityLogs.AsQueryable();
+
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            var term = search.Trim();
+            query = query.Where(l =>
+                EF.Functions.ILike(l.ActorEmail, $"%{term}%") ||
+                EF.Functions.ILike(l.Action, $"%{term}%") ||
+                (l.IpAddress != null && EF.Functions.ILike(l.IpAddress, $"%{term}%")));
+        }
+
+        var totalCount = await query.CountAsync(cancellationToken);
+        var items = await query
             .OrderByDescending(l => l.AtUtc)
-            .Take(take)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
             .ToListAsync(cancellationToken);
+
+        return (items, totalCount);
+    }
 
     public void Add(ActivityLog log) => context.ActivityLogs.Add(log);
 }

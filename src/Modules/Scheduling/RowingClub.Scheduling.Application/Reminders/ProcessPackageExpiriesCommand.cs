@@ -1,4 +1,5 @@
 using MediatR;
+using RowingClub.BuildingBlocks.Application.Abstractions;
 using RowingClub.BuildingBlocks.Application.Messaging;
 using RowingClub.Scheduling.Application.Members;
 using RowingClub.Scheduling.Domain;
@@ -35,6 +36,7 @@ public sealed class ProcessPackageExpiriesCommandHandler(
     IAppointmentRepository appointmentRepository,
     IMemberLogRepository memberLogRepository,
     IPackageExpiryReminderSender reminderSender,
+    ITenantDatabase tenantDatabase,
     ISchedulingUnitOfWork unitOfWork)
     : IRequestHandler<ProcessPackageExpiriesCommand, ProcessPackageExpiriesResult>
 {
@@ -44,20 +46,25 @@ public sealed class ProcessPackageExpiriesCommandHandler(
         var settings = await settingsRepository.GetAsync(cancellationToken) ?? CompanySettings.Default();
         var thresholds = settings.PackageExpiryReminderDays(); // büyükten küçüğe sıralı
 
-        var packages = (await customerPackageRepository.GetAllAsync(cancellationToken))
-            .Where(p => p.ExpiresAtUtc is not null)
-            .ToList();
+        var nowUtc = DateTimeOffset.UtcNow;
+        var maxThresholdDays = thresholds.Count > 0 ? thresholds.Max() : 0;
+        var packages = await customerPackageRepository.GetExpiringWithinAsync(
+            nowUtc.AddDays(maxThresholdDays), cancellationToken);
 
         if (packages.Count == 0)
             return new ProcessPackageExpiriesResult(0, 0);
 
-        var nowUtc = DateTimeOffset.UtcNow;
         var nowLocal = settings.NowLocal();
         var today = DateOnly.FromDateTime(nowLocal);
         var nowTime = TimeOnly.FromDateTime(nowLocal);
 
-        var customers = (await customerRepository.GetAllAsync(cancellationToken))
+        var customerIds = packages.Select(p => p.CustomerId).Distinct().ToList();
+        var customers = (await customerRepository.GetByIdsAsync(customerIds, cancellationToken))
             .ToDictionary(c => c.Id, c => c);
+
+        var expiredPackageIds = packages.Where(p => p.ExpiresAtUtc!.Value <= nowUtc).Select(p => p.Id).ToList();
+        var blockedPackageIds = await appointmentRepository.GetPackageIdsWithActiveFutureAppointmentsAsync(
+            expiredPackageIds, today, nowTime, cancellationToken);
 
         var remindersSent = 0;
         var packagesDeleted = 0;
@@ -68,8 +75,7 @@ public sealed class ProcessPackageExpiriesCommandHandler(
 
             if (expiresAtUtc <= nowUtc)
             {
-                if (await appointmentRepository.HasActiveFutureAppointmentsUsingPackageAsync(
-                        package.Id, today, nowTime, cancellationToken))
+                if (blockedPackageIds.Contains(package.Id))
                 {
                     continue; // gelecekte bu paketi kullanan bir randevu var - bir sonraki turda tekrar denenir
                 }
@@ -81,6 +87,9 @@ public sealed class ProcessPackageExpiriesCommandHandler(
                 packagesDeleted++;
                 continue;
             }
+
+            if (!tenantDatabase.HasAutomaticDuesReminders)
+                continue;
 
             var daysUntilExpiry = (int)Math.Ceiling((expiresAtUtc - nowUtc).TotalDays);
 

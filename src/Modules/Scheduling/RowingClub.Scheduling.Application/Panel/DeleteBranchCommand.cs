@@ -44,9 +44,7 @@ public sealed class DeleteBranchCommandHandler(
         var branch = await branchRepository.GetByIdAsync(request.BranchId, cancellationToken)
             ?? throw new NotFoundException("Branch", request.BranchId.ToString());
 
-        var members = (await customerRepository.GetAllAsync(cancellationToken))
-            .Where(c => c.BranchId == branch.Id)
-            .ToList();
+        var members = await customerRepository.GetByBranchIdAsync(branch.Id, cancellationToken);
 
         var transferredCount = 0;
         var deletedCount = 0;
@@ -93,13 +91,11 @@ public sealed class DeleteBranchCommandHandler(
                 throw new DomainException("invalid_member_action", "Üye aksiyonu 'transfer' veya 'delete' olmalıdır.");
         }
 
-        var boats = (await boatRepository.GetAllAsync(cancellationToken))
-            .Where(b => b.BranchId == branch.Id).ToList();
+        var boats = await boatRepository.GetByBranchIdAsync(branch.Id, cancellationToken);
         foreach (var boat in boats)
             boatRepository.Remove(boat);
 
-        var instructors = (await instructorRepository.GetAllAsync(cancellationToken))
-            .Where(i => i.BranchId == branch.Id).ToList();
+        var instructors = await instructorRepository.GetByBranchIdAsync(branch.Id, cancellationToken);
         foreach (var instructor in instructors)
             instructorRepository.Remove(instructor);
 
@@ -113,8 +109,10 @@ public sealed class DeleteBranchCommandHandler(
         // geçici olarak erişilemez olsa da aktarım işlemi geri alınmaz (bkz. RequestMemberPasswordResetCommand).
         if (targetBranch is not null)
         {
-            foreach (var member in emailable)
+            using var concurrencyLimiter = new SemaphoreSlim(5);
+            await Task.WhenAll(emailable.Select(async member =>
             {
+                await concurrencyLimiter.WaitAsync(cancellationToken);
                 try
                 {
                     await transferEmailSender.SendAsync(
@@ -125,7 +123,11 @@ public sealed class DeleteBranchCommandHandler(
                 {
                     logger.LogError(ex, "Şube aktarım e-postası gönderilemedi: {CustomerId}", member.Id);
                 }
-            }
+                finally
+                {
+                    concurrencyLimiter.Release();
+                }
+            }));
         }
 
         return new DeleteBranchResultDto(transferredCount, deletedCount, boats.Count, instructors.Count);

@@ -17,8 +17,8 @@ public sealed class EmailMemberWelcomeSender(IEmailSender emailSender) : IMember
             $"https://{subdomain}.{TenantResolver.BaseDomain}/uye/sifre-olustur" +
             $"?token={Uri.EscapeDataString(setupToken)}&email={Uri.EscapeDataString(email)}";
         var bodyHtml = $"""
-            <p>Sayın {fullName},</p>
-            <p><b>{companyName}</b> kulübüne üye olarak eklendiniz. Üye panelinize giriş yapabilmeniz için önce
+            <p>Sayın {EmailTemplate.Encode(fullName)},</p>
+            <p><b>{EmailTemplate.Encode(companyName)}</b> kulübüne üye olarak eklendiniz. Üye panelinize giriş yapabilmeniz için önce
             kendi şifrenizi oluşturmanız gerekiyor. Aşağıdaki bağlantı 7 gün geçerlidir:</p>
             """;
         var htmlBody = EmailTemplate.Render("Üye Panelinize Hoş Geldiniz", bodyHtml, "Şifremi Oluştur", setupUrl);
@@ -35,8 +35,8 @@ public sealed class EmailMemberWelcomeSender(IEmailSender emailSender) : IMember
             $"https://{subdomain}.{TenantResolver.BaseDomain}/uye/sifre-olustur" +
             $"?token={Uri.EscapeDataString(resetToken)}&email={Uri.EscapeDataString(email)}";
         var bodyHtml = $"""
-            <p>Sayın {fullName},</p>
-            <p><b>{companyName}</b> üye paneliniz için bir şifre sıfırlama talebi aldık. Aşağıdaki bağlantı
+            <p>Sayın {EmailTemplate.Encode(fullName)},</p>
+            <p><b>{EmailTemplate.Encode(companyName)}</b> üye paneliniz için bir şifre sıfırlama talebi aldık. Aşağıdaki bağlantı
             ile yeni şifrenizi belirleyebilirsiniz. Bu bağlantı 1 saat geçerlidir. Bu talebi siz yapmadıysanız
             bu e-postayı yok sayabilirsiniz.</p>
             """;

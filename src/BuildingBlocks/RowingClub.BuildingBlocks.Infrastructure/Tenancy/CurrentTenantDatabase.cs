@@ -15,6 +15,11 @@ public sealed class CurrentTenantDatabase : ITenantDatabase
     private int _maxBranches;
     private int _maxMembers;
     private int _maxBoats;
+    private int _maxCompanyUsers;
+    private bool _canExportData;
+    private bool _canAssignEmployeeRole;
+    private bool _hasAdvancedReports;
+    private bool _hasAutomaticDuesReminders;
 
     public bool IsSet => _databaseName is not null;
 
@@ -43,9 +48,31 @@ public sealed class CurrentTenantDatabase : ITenantDatabase
         ? _maxBoats
         : throw new InvalidOperationException("Tenant veritabanı bu istek için çözülmedi.");
 
+    public int MaxCompanyUsers => IsSet
+        ? _maxCompanyUsers
+        : throw new InvalidOperationException("Tenant veritabanı bu istek için çözülmedi.");
+
+    public bool CanExportData => IsSet
+        ? _canExportData
+        : throw new InvalidOperationException("Tenant veritabanı bu istek için çözülmedi.");
+
+    public bool CanAssignEmployeeRole => IsSet
+        ? _canAssignEmployeeRole
+        : throw new InvalidOperationException("Tenant veritabanı bu istek için çözülmedi.");
+
+    public bool HasAdvancedReports => IsSet
+        ? _hasAdvancedReports
+        : throw new InvalidOperationException("Tenant veritabanı bu istek için çözülmedi.");
+
+    public bool HasAutomaticDuesReminders => IsSet
+        ? _hasAutomaticDuesReminders
+        : throw new InvalidOperationException("Tenant veritabanı bu istek için çözülmedi.");
+
     public void Set(
         Guid companyId, string databaseName, string subdomain, string plan,
-        int maxBranches, int maxMembers, int maxBoats)
+        int maxBranches, int maxMembers, int maxBoats,
+        int maxCompanyUsers, bool canExportData, bool canAssignEmployeeRole,
+        bool hasAdvancedReports, bool hasAutomaticDuesReminders)
     {
         _companyId = companyId;
         _databaseName = databaseName;
@@ -54,5 +81,10 @@ public sealed class CurrentTenantDatabase : ITenantDatabase
         _maxBranches = maxBranches;
         _maxMembers = maxMembers;
         _maxBoats = maxBoats;
+        _maxCompanyUsers = maxCompanyUsers;
+        _canExportData = canExportData;
+        _canAssignEmployeeRole = canAssignEmployeeRole;
+        _hasAdvancedReports = hasAdvancedReports;
+        _hasAutomaticDuesReminders = hasAutomaticDuesReminders;
     }
 }

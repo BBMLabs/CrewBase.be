@@ -50,5 +50,18 @@ public sealed class AppointmentRepository(TenantDbContext context) : IAppointmen
                  (a.Date > today || (a.Date == today && a.StartTime > nowTime)),
             cancellationToken);
 
+    public async Task<HashSet<Guid>> GetPackageIdsWithActiveFutureAppointmentsAsync(
+        IReadOnlyCollection<Guid> customerPackageIds, DateOnly today, TimeOnly nowTime, CancellationToken cancellationToken)
+    {
+        var ids = await context.Appointments
+            .Where(a => a.CustomerPackageId != null && customerPackageIds.Contains(a.CustomerPackageId.Value) &&
+                        a.Status != AppointmentStatus.Cancelled &&
+                        (a.Date > today || (a.Date == today && a.StartTime > nowTime)))
+            .Select(a => a.CustomerPackageId!.Value)
+            .Distinct()
+            .ToListAsync(cancellationToken);
+        return ids.ToHashSet();
+    }
+
     public void Add(Appointment appointment) => context.Appointments.Add(appointment);
 }

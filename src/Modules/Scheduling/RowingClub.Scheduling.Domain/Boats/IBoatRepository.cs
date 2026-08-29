@@ -6,6 +6,8 @@ public interface IBoatRepository
 
     Task<Boat?> GetByIdAsync(Guid id, CancellationToken cancellationToken);
 
+    Task<List<Boat>> GetByBranchIdAsync(Guid branchId, CancellationToken cancellationToken);
+
     Task<int> CountActiveAsync(CancellationToken cancellationToken);
 
     void Add(Boat boat);

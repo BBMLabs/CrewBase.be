@@ -16,6 +16,10 @@ public interface ICustomerRepository
 
     Task<List<Customer>> GetAllAsync(CancellationToken cancellationToken);
 
+    Task<List<Customer>> GetByIdsAsync(IReadOnlyCollection<Guid> ids, CancellationToken cancellationToken);
+
+    Task<List<Customer>> GetByBranchIdAsync(Guid branchId, CancellationToken cancellationToken);
+
     Task<int> CountAsync(CancellationToken cancellationToken);
 
     void Add(Customer customer);

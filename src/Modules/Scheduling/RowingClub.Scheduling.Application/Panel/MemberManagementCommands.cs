@@ -261,7 +261,8 @@ public sealed class GetCustomerPackagesQueryHandler(
             ? await customerPackageRepository.GetByCustomerAsync(customerId, cancellationToken)
             : await customerPackageRepository.GetAllAsync(cancellationToken);
 
-        var customers = (await customerRepository.GetAllAsync(cancellationToken))
+        var customerIds = packages.Select(p => p.CustomerId).Distinct().ToList();
+        var customers = (await customerRepository.GetByIdsAsync(customerIds, cancellationToken))
             .ToDictionary(c => c.Id, c => c.FullName);
 
         return packages
@@ -286,7 +287,8 @@ public sealed class GetMemberLogsQueryHandler(
             ? await memberLogRepository.GetByCustomerAsync(customerId, take, cancellationToken)
             : await memberLogRepository.GetRecentAsync(take, cancellationToken);
 
-        var customers = (await customerRepository.GetAllAsync(cancellationToken))
+        var customerIds = logs.Select(l => l.CustomerId).Distinct().ToList();
+        var customers = (await customerRepository.GetByIdsAsync(customerIds, cancellationToken))
             .ToDictionary(c => c.Id, c => c.FullName);
 
         return logs

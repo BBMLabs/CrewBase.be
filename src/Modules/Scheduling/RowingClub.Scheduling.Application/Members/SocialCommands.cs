@@ -1,3 +1,4 @@
+using FluentValidation;
 using MediatR;
 using RowingClub.BuildingBlocks.Application.Messaging;
 using RowingClub.BuildingBlocks.Domain;
@@ -22,6 +23,14 @@ public sealed record FriendDto(
 public sealed record GetMyCodeQuery(Guid CustomerId) : ICommand<string>;
 
 public sealed record SendFriendRequestCommand(Guid CustomerId, string MemberCode) : ICommand<FriendDto>;
+
+public sealed class SendFriendRequestCommandValidator : AbstractValidator<SendFriendRequestCommand>
+{
+    public SendFriendRequestCommandValidator()
+    {
+        RuleFor(c => c.MemberCode).NotEmpty().MaximumLength(20);
+    }
+}
 
 public sealed record RespondFriendRequestCommand(Guid CustomerId, Guid FriendshipId, bool Accept) : ICommand<Unit>;
 

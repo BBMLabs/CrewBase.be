@@ -58,7 +58,9 @@ public sealed class ReminderWorker(
             scope.ServiceProvider.GetRequiredService<ITenantDatabase>()
                 .Set(
                     company.CompanyId, company.DatabaseName, company.Subdomain, company.Plan,
-                    company.MaxBranches, company.MaxMembers, company.MaxBoats);
+                    company.MaxBranches, company.MaxMembers, company.MaxBoats,
+                    company.MaxCompanyUsers, company.CanExportData, company.CanAssignEmployeeRole,
+                    company.HasAdvancedReports, company.HasAutomaticDuesReminders);
 
             try
             {

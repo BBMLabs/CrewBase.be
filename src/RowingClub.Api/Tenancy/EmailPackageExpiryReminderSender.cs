@@ -14,8 +14,8 @@ public sealed class EmailPackageExpiryReminderSender(IEmailSender emailSender) :
         DateTimeOffset expiresAtUtc, int daysRemaining, CancellationToken cancellationToken)
     {
         var bodyHtml = $"""
-            <p>Sayın {customerName},</p>
-            <p><b>{companyName}</b> firmasındaki <b>{packageName}</b> paketinizin süresi yaklaşıyor:</p>
+            <p>Sayın {EmailTemplate.Encode(customerName)},</p>
+            <p><b>{EmailTemplate.Encode(companyName)}</b> firmasındaki <b>{EmailTemplate.Encode(packageName)}</b> paketinizin süresi yaklaşıyor:</p>
             <p style="margin:16px 0;padding:14px 16px;background:#f4f6f8;border-radius:8px;font-size:17px;">
               Son kullanım tarihi <b>{expiresAtUtc:dd.MM.yyyy}</b> ({daysRemaining} gün kaldı)
             </p>

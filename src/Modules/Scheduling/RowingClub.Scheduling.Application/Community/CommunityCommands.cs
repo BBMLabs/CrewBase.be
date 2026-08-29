@@ -84,7 +84,8 @@ public sealed class GetFeedQueryHandler(
             following = await repository.GetFollowedIdsAsync(viewer, cancellationToken);
         }
 
-        var authors = (await customerRepository.GetAllAsync(cancellationToken))
+        var authorIds = posts.Where(p => p.AuthorCustomerId is not null).Select(p => p.AuthorCustomerId!.Value).Distinct().ToList();
+        var authors = (await customerRepository.GetByIdsAsync(authorIds, cancellationToken))
             .ToDictionary(c => c.Id, c => c.FullName);
 
         return posts.Select(p => new PostDto(
@@ -198,7 +199,8 @@ public sealed class GetCommentsQueryHandler(
     public async Task<List<CommentDto>> Handle(GetCommentsQuery request, CancellationToken cancellationToken)
     {
         var comments = await repository.GetCommentsAsync(request.PostId, cancellationToken);
-        var names = (await customerRepository.GetAllAsync(cancellationToken))
+        var commenterIds = comments.Select(c => c.CustomerId).Distinct().ToList();
+        var names = (await customerRepository.GetByIdsAsync(commenterIds, cancellationToken))
             .ToDictionary(c => c.Id, c => c.FullName);
 
         return comments
@@ -260,7 +262,8 @@ public sealed class GetParticipantsQueryHandler(
     public async Task<List<ParticipantDto>> Handle(GetParticipantsQuery request, CancellationToken cancellationToken)
     {
         var participants = await repository.GetParticipantsAsync(request.PostId, cancellationToken);
-        var customers = (await customerRepository.GetAllAsync(cancellationToken))
+        var participantIds = participants.Select(p => p.CustomerId).Distinct().ToList();
+        var customers = (await customerRepository.GetByIdsAsync(participantIds, cancellationToken))
             .ToDictionary(c => c.Id);
 
         return participants

@@ -14,8 +14,8 @@ public sealed class EmailAppointmentReminderSender(IEmailSender emailSender) : I
         DateOnly date, TimeOnly startTime, CancellationToken cancellationToken)
     {
         var bodyHtml = $"""
-            <p>Sayın {customerName},</p>
-            <p><b>{companyName}</b> firmasındaki randevunuz yaklaşıyor:</p>
+            <p>Sayın {EmailTemplate.Encode(customerName)},</p>
+            <p><b>{EmailTemplate.Encode(companyName)}</b> firmasındaki randevunuz yaklaşıyor:</p>
             <p style="margin:16px 0;padding:14px 16px;background:#f4f6f8;border-radius:8px;font-size:17px;">
               <b>{date:dd.MM.yyyy}</b> günü saat <b>{startTime:HH\:mm}</b>
             </p>

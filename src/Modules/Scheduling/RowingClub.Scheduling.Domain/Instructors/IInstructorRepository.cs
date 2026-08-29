@@ -6,6 +6,8 @@ public interface IInstructorRepository
 
     Task<Instructor?> GetByIdAsync(Guid id, CancellationToken cancellationToken);
 
+    Task<List<Instructor>> GetByBranchIdAsync(Guid branchId, CancellationToken cancellationToken);
+
     void Add(Instructor instructor);
 
     void Remove(Instructor instructor);

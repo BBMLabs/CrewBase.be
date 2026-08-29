@@ -24,5 +24,19 @@ public interface ITenantDatabase
 
     int MaxBoats { get; }
 
-    void Set(Guid companyId, string databaseName, string subdomain, string plan, int maxBranches, int maxMembers, int maxBoats);
+    int MaxCompanyUsers { get; }
+
+    bool CanExportData { get; }
+
+    bool CanAssignEmployeeRole { get; }
+
+    bool HasAdvancedReports { get; }
+
+    bool HasAutomaticDuesReminders { get; }
+
+    void Set(
+        Guid companyId, string databaseName, string subdomain, string plan,
+        int maxBranches, int maxMembers, int maxBoats,
+        int maxCompanyUsers, bool canExportData, bool canAssignEmployeeRole,
+        bool hasAdvancedReports, bool hasAutomaticDuesReminders);
 }

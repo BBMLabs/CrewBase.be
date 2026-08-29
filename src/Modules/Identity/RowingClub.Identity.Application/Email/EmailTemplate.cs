@@ -1,9 +1,14 @@
+using System.Net;
+
 namespace RowingClub.Identity.Application.Email;
 
 public static class EmailTemplate
 {
+    public static string Encode(string value) => WebUtility.HtmlEncode(value);
+
     public static string Render(string heading, string bodyHtml, string? ctaText = null, string? ctaUrl = null)
     {
+        heading = WebUtility.HtmlEncode(heading);
         var ctaHtml = ctaText is not null && ctaUrl is not null
             ? $"""
               <div style="margin-top:28px;">

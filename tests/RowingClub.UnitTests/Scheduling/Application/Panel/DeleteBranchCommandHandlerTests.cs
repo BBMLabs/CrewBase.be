@@ -37,9 +37,9 @@ public sealed class DeleteBranchCommandHandlerTests
     private void SetUpBranch(Branch branch, List<Customer> members, List<Boat> boats, List<Instructor> instructors)
     {
         _branchRepository.GetByIdAsync(branch.Id, Arg.Any<CancellationToken>()).Returns(branch);
-        _customerRepository.GetAllAsync(Arg.Any<CancellationToken>()).Returns(members);
-        _boatRepository.GetAllAsync(Arg.Any<CancellationToken>()).Returns(boats);
-        _instructorRepository.GetAllAsync(Arg.Any<CancellationToken>()).Returns(instructors);
+        _customerRepository.GetByBranchIdAsync(branch.Id, Arg.Any<CancellationToken>()).Returns(members);
+        _boatRepository.GetByBranchIdAsync(branch.Id, Arg.Any<CancellationToken>()).Returns(boats);
+        _instructorRepository.GetByBranchIdAsync(branch.Id, Arg.Any<CancellationToken>()).Returns(instructors);
     }
 
     [Fact]

@@ -38,12 +38,14 @@ public static class DependencyInjection
             .Bind(configuration.GetSection(SmtpOptions.SectionName))
             .ValidateOnStart();
 
-        services.AddHttpClient<IRecaptchaVerifier, GoogleRecaptchaVerifier>();
+        services.AddHttpClient<IRecaptchaVerifier, GoogleRecaptchaVerifier>(
+            c => c.Timeout = TimeSpan.FromSeconds(10));
         services.AddOptions<RecaptchaOptions>()
             .Bind(configuration.GetSection(RecaptchaOptions.SectionName))
             .ValidateOnStart();
 
-        services.AddHttpClient<IIyzicoSubscriptionClient, IyzicoSubscriptionClient>();
+        services.AddHttpClient<IIyzicoSubscriptionClient, IyzicoSubscriptionClient>(
+            c => c.Timeout = TimeSpan.FromSeconds(15));
         services.AddOptions<IyzicoOptions>()
             .Bind(configuration.GetSection(IyzicoOptions.SectionName));
 

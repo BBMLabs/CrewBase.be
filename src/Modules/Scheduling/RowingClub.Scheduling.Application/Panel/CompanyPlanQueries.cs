@@ -13,7 +13,10 @@ public sealed record CompanyPlanDto(
     string Plan,
     int MaxBranches, int UsedBranches,
     int MaxMembers, int UsedMembers,
-    int MaxBoats, int UsedBoats);
+    int MaxBoats, int UsedBoats,
+    int MaxCompanyUsers,
+    bool CanExportData, bool CanAssignEmployeeRole,
+    bool HasAdvancedReports, bool HasAutomaticDuesReminders);
 
 public sealed class GetCompanyPlanQueryHandler(
     ITenantDatabase tenantDatabase,
@@ -32,6 +35,9 @@ public sealed class GetCompanyPlanQueryHandler(
             tenantDatabase.Plan,
             tenantDatabase.MaxBranches, usedBranches,
             tenantDatabase.MaxMembers, usedMembers,
-            tenantDatabase.MaxBoats, usedBoats);
+            tenantDatabase.MaxBoats, usedBoats,
+            tenantDatabase.MaxCompanyUsers,
+            tenantDatabase.CanExportData, tenantDatabase.CanAssignEmployeeRole,
+            tenantDatabase.HasAdvancedReports, tenantDatabase.HasAutomaticDuesReminders);
     }
 }

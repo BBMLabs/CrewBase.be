@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using RowingClub.Api.Tenancy;
 using RowingClub.BuildingBlocks.Application.Abstractions;
+using RowingClub.BuildingBlocks.Application.Messaging;
 using RowingClub.Identity.Application.Companies.Billing.CancelPendingDowngrade;
 using RowingClub.Identity.Application.Companies.Billing.ConfirmSubscriptionCheckout;
 using RowingClub.Identity.Application.Companies.Billing.GetPaymentHistory;
@@ -65,6 +66,9 @@ public sealed record BlockIpAddressRequest(string IpAddress, string? Reason);
 /// </summary>
 public static class CompanyPanelEndpoints
 {
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<Guid, bool> MemberCodeBackfilledCompanies = new();
+
+
     public static IEndpointRouteBuilder MapCompanyPanelEndpoints(this IEndpointRouteBuilder app)
     {
         var group = app.MapGroup("/api/v1/company")
@@ -110,13 +114,14 @@ public static class CompanyPanelEndpoints
         }).WithName("CompanyPlan");
 
         group.MapGet("/plan/payments", async (
-            ICurrentUser user, TenantResolver resolver, ISender sender, CancellationToken ct) =>
+            int? page, int? pageSize, ICurrentUser user, TenantResolver resolver, ISender sender, CancellationToken ct) =>
         {
             if (await ResolveOwnCompanyAsync(user, resolver, ct) is null)
                 return CompanyNotFound();
 
-            var payments = await sender.Send(new GetPaymentHistoryQuery(user.CompanyId!.Value), ct);
-            return Results.Ok(ApiResponse<List<CompanyPaymentDto>>.Ok(payments));
+            var payments = await sender.Send(
+                new GetPaymentHistoryQuery(user.CompanyId!.Value, page ?? 1, pageSize ?? 25), ct);
+            return Results.Ok(ApiResponse<PagedResult<CompanyPaymentDto>>.Ok(payments));
         }).WithName("CompanyPlanPayments");
 
         group.MapPost("/plan/subscribe", async (
@@ -256,17 +261,18 @@ public static class CompanyPanelEndpoints
         // ---- Üyeler ve dereceleri ----
 
         group.MapGet("/customers", async (
-            string? search, Guid? branchId, ICurrentUser user, TenantResolver resolver, ISender sender, CancellationToken ct) =>
+            string? search, Guid? branchId, int? page, int? pageSize,
+            ICurrentUser user, TenantResolver resolver, ISender sender, CancellationToken ct) =>
         {
             if (await ResolveOwnCompanyAsync(user, resolver, ct) is null)
                 return CompanyNotFound();
 
-            // Üye kodu özelliğinden önce oluşturulmuş eski üyelere kod ata (idempotent, tek turda
-            // tüm eksikleri kapatır) - GetCustomersQuery salt-okunur kalır, bkz. BackfillMemberCodesCommand.
-            await sender.Send(new BackfillMemberCodesCommand(), ct);
+            if (MemberCodeBackfilledCompanies.TryAdd(user.CompanyId!.Value, true))
+                await sender.Send(new BackfillMemberCodesCommand(), ct);
 
-            var customers = await sender.Send(new GetCustomersQuery(search, branchId), ct);
-            return Results.Ok(ApiResponse<List<CustomerDto>>.Ok(customers));
+            var customers = await sender.Send(
+                new GetCustomersQuery(search, branchId, page ?? 1, pageSize ?? 25), ct);
+            return Results.Ok(ApiResponse<PagedResult<CustomerDto>>.Ok(customers));
         }).WithName("CompanyCustomers");
 
         group.MapPost("/customers", async (
@@ -382,14 +388,14 @@ public static class CompanyPanelEndpoints
         }).WithName("CompanyLogs");
 
         group.MapGet("/activity-logs", async (
-            [FromQuery] int? take, string? search, ICurrentUser user, TenantResolver resolver,
+            string? search, int? page, int? pageSize, ICurrentUser user, TenantResolver resolver,
             ISender sender, CancellationToken ct) =>
         {
             if (await ResolveOwnCompanyAsync(user, resolver, ct) is null)
                 return CompanyNotFound();
 
-            var logs = await sender.Send(new GetActivityLogsQuery(take ?? 100, search), ct);
-            return Results.Ok(ApiResponse<List<ActivityLogDto>>.Ok(logs));
+            var logs = await sender.Send(new GetActivityLogsQuery(search, page ?? 1, pageSize ?? 25), ct);
+            return Results.Ok(ApiResponse<PagedResult<ActivityLogDto>>.Ok(logs));
         }).WithName("CompanyActivityLogs");
 
         group.MapGet("/stats", async (
@@ -465,14 +471,15 @@ public static class CompanyPanelEndpoints
         // ---- Eğitmenler ----
 
         group.MapGet("/instructors", async (
-            string? search, Guid? branchId, bool? isActive, ICurrentUser user, TenantResolver resolver,
-            ISender sender, CancellationToken ct) =>
+            string? search, Guid? branchId, bool? isActive, int? page, int? pageSize,
+            ICurrentUser user, TenantResolver resolver, ISender sender, CancellationToken ct) =>
         {
             if (await ResolveOwnCompanyAsync(user, resolver, ct) is null)
                 return CompanyNotFound();
 
-            var instructors = await sender.Send(new GetInstructorsQuery(search, branchId, isActive), ct);
-            return Results.Ok(ApiResponse<List<InstructorDto>>.Ok(instructors));
+            var instructors = await sender.Send(
+                new GetInstructorsQuery(search, branchId, isActive, page ?? 1, pageSize ?? 25), ct);
+            return Results.Ok(ApiResponse<PagedResult<InstructorDto>>.Ok(instructors));
         }).WithName("CompanyInstructors");
 
         group.MapPost("/instructors", async (
@@ -513,13 +520,15 @@ public static class CompanyPanelEndpoints
         // ---- Şubeler ----
 
         group.MapGet("/branches", async (
-            string? search, bool? isActive, ICurrentUser user, TenantResolver resolver, ISender sender, CancellationToken ct) =>
+            string? search, bool? isActive, int? page, int? pageSize,
+            ICurrentUser user, TenantResolver resolver, ISender sender, CancellationToken ct) =>
         {
             if (await ResolveOwnCompanyAsync(user, resolver, ct) is null)
                 return CompanyNotFound();
 
-            var branches = await sender.Send(new GetBranchesQuery(search, isActive), ct);
-            return Results.Ok(ApiResponse<List<BranchDto>>.Ok(branches));
+            var branches = await sender.Send(
+                new GetBranchesQuery(search, isActive, page ?? 1, pageSize ?? 25), ct);
+            return Results.Ok(ApiResponse<PagedResult<BranchDto>>.Ok(branches));
         }).WithName("CompanyBranches");
 
         group.MapPost("/branches", async (
@@ -614,8 +623,16 @@ public static class CompanyPanelEndpoints
         group.MapGet("/branches/{branchId:guid}/members/export", async (
             Guid branchId, ICurrentUser user, TenantResolver resolver, ISender sender, CancellationToken ct) =>
         {
-            if (await ResolveOwnCompanyAsync(user, resolver, ct) is null)
+            var site = await ResolveOwnCompanyAsync(user, resolver, ct);
+            if (site is null)
                 return CompanyNotFound();
+
+            if (!site.CanExportData)
+            {
+                return Results.Json(
+                    ApiResponse.Fail("plan_feature_not_available", "Veri dışa aktarma özelliği mevcut paketinizde yer almıyor."),
+                    statusCode: StatusCodes.Status403Forbidden);
+            }
 
             var detail = await sender.Send(new GetBranchDetailQuery(branchId), ct);
             var bytes = BranchMemberExcelBuilder.Build(detail);
@@ -626,14 +643,15 @@ public static class CompanyPanelEndpoints
         // ---- Tekneler ----
 
         group.MapGet("/boats", async (
-            string? search, Guid? branchId, bool? isActive, ICurrentUser user, TenantResolver resolver,
-            ISender sender, CancellationToken ct) =>
+            string? search, Guid? branchId, bool? isActive, int? page, int? pageSize,
+            ICurrentUser user, TenantResolver resolver, ISender sender, CancellationToken ct) =>
         {
             if (await ResolveOwnCompanyAsync(user, resolver, ct) is null)
                 return CompanyNotFound();
 
-            var boats = await sender.Send(new GetBoatsQuery(search, branchId, isActive), ct);
-            return Results.Ok(ApiResponse<List<BoatDto>>.Ok(boats));
+            var boats = await sender.Send(
+                new GetBoatsQuery(search, branchId, isActive, page ?? 1, pageSize ?? 25), ct);
+            return Results.Ok(ApiResponse<PagedResult<BoatDto>>.Ok(boats));
         }).WithName("CompanyBoats");
 
         group.MapPost("/boats", async (
@@ -672,13 +690,14 @@ public static class CompanyPanelEndpoints
         // ---- Ders paketleri ----
 
         group.MapGet("/packages", async (
+            string? search, int? page, int? pageSize,
             ICurrentUser user, TenantResolver resolver, ISender sender, CancellationToken ct) =>
         {
             if (await ResolveOwnCompanyAsync(user, resolver, ct) is null)
                 return CompanyNotFound();
 
-            var packages = await sender.Send(new GetPackagesQuery(), ct);
-            return Results.Ok(ApiResponse<List<PackageDto>>.Ok(packages));
+            var packages = await sender.Send(new GetPackagesQuery(search, page ?? 1, pageSize ?? 25), ct);
+            return Results.Ok(ApiResponse<PagedResult<PackageDto>>.Ok(packages));
         }).WithName("CompanyPackages");
 
         group.MapPost("/packages", async (

@@ -35,6 +35,12 @@ public sealed class CustomerRepository(TenantDbContext context) : ICustomerRepos
     public Task<List<Customer>> GetAllAsync(CancellationToken cancellationToken) =>
         context.Customers.ToListAsync(cancellationToken);
 
+    public Task<List<Customer>> GetByIdsAsync(IReadOnlyCollection<Guid> ids, CancellationToken cancellationToken) =>
+        context.Customers.Where(c => ids.Contains(c.Id)).ToListAsync(cancellationToken);
+
+    public Task<List<Customer>> GetByBranchIdAsync(Guid branchId, CancellationToken cancellationToken) =>
+        context.Customers.Where(c => c.BranchId == branchId).ToListAsync(cancellationToken);
+
     public Task<int> CountAsync(CancellationToken cancellationToken) =>
         context.Customers.CountAsync(cancellationToken);
 

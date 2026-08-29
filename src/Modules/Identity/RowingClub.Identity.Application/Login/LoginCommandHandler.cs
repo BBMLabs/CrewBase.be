@@ -52,7 +52,7 @@ public sealed class LoginCommandHandler(
         if (!passwordHasher.Verify(request.Password, credential.PasswordHash))
         {
             user.RegisterFailedLogin(_options.MaxFailedLoginAttempts, _options.LockoutDuration);
-            auditLogger.Log("LOGIN_FAILED", user.Id.ToString(), $"Başarısız giriş denemesi. İp: {request.DeviceInfo}");
+            auditLogger.Log("LOGIN_FAILED", user.Id.ToString(), $"Başarısız giriş denemesi. UA: {request.DeviceInfo}");
             throw InvalidCredentials;
         }
 

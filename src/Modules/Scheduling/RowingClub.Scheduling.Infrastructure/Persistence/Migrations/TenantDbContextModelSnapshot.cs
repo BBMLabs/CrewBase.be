@@ -711,6 +711,9 @@ namespace RowingClub.Scheduling.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("LessonPackageId");
 
+                    b.HasIndex("PaymentReferenceCode")
+                        .IsUnique();
+
                     b.ToTable("customer_packages", (string)null);
                 });
 

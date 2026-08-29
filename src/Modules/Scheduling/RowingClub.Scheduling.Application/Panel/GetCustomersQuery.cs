@@ -1,9 +1,12 @@
 using MediatR;
+using RowingClub.BuildingBlocks.Application.Messaging;
 using RowingClub.Scheduling.Domain.Customers;
 
 namespace RowingClub.Scheduling.Application.Panel;
 
-public sealed record GetCustomersQuery(string? Search = null, Guid? BranchId = null) : IRequest<List<CustomerDto>>;
+public sealed record GetCustomersQuery(
+    string? Search = null, Guid? BranchId = null, int Page = 1, int PageSize = 25)
+    : IRequest<PagedResult<CustomerDto>>;
 
 public sealed record CustomerDto(
     Guid Id,
@@ -17,14 +20,12 @@ public sealed record CustomerDto(
     string? MemberCode);
 
 public sealed class GetCustomersQueryHandler(ICustomerRepository customerRepository)
-    : IRequestHandler<GetCustomersQuery, List<CustomerDto>>
+    : IRequestHandler<GetCustomersQuery, PagedResult<CustomerDto>>
 {
-    public async Task<List<CustomerDto>> Handle(GetCustomersQuery request, CancellationToken cancellationToken)
+    public async Task<PagedResult<CustomerDto>> Handle(GetCustomersQuery request, CancellationToken cancellationToken)
     {
         var customers = await customerRepository.GetAllAsync(cancellationToken);
 
-        // Ad/telefon/e-posta veritabanında şifreli saklanır; kısmi arama yalnızca uygulama
-        // belleğinde (zaten çözülmüş listede) yapılabilir - LIKE sorgusu şifreli kolonda çalışmaz.
         if (request.BranchId is { } branchId)
             customers = customers.Where(c => c.BranchId == branchId).ToList();
 
@@ -38,9 +39,11 @@ public sealed class GetCustomersQueryHandler(ICustomerRepository customerReposit
                 .ToList();
         }
 
-        return customers
+        var dtos = customers
             .OrderBy(c => c.FullName)
             .Select(c => new CustomerDto(c.Id, c.FullName, c.Phone, c.Email, c.Level, c.BranchId, c.IsBlocked, c.CreatedAtUtc, c.MemberCode))
             .ToList();
+
+        return PagedResult<CustomerDto>.Create(dtos, request.Page, request.PageSize);
     }
 }

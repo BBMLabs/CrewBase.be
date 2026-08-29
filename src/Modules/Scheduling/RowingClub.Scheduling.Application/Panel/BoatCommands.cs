@@ -9,7 +9,9 @@ namespace RowingClub.Scheduling.Application.Panel;
 
 public sealed record BoatDto(Guid Id, string Name, string Class, int Capacity, bool IsActive, Guid? BranchId);
 
-public sealed record GetBoatsQuery(string? Search = null, Guid? BranchId = null, bool? IsActive = null) : IRequest<List<BoatDto>>;
+public sealed record GetBoatsQuery(
+    string? Search = null, Guid? BranchId = null, bool? IsActive = null, int Page = 1, int PageSize = 25)
+    : IRequest<PagedResult<BoatDto>>;
 
 public sealed record CreateBoatCommand(string Name, string BoatClass, Guid? BranchId) : ICommand<BoatDto>;
 
@@ -19,9 +21,9 @@ public sealed record UpdateBoatCommand(Guid Id, string Name, string BoatClass, b
 public sealed record DeleteBoatCommand(Guid Id) : ICommand<Unit>;
 
 public sealed class GetBoatsQueryHandler(IBoatRepository repository)
-    : IRequestHandler<GetBoatsQuery, List<BoatDto>>
+    : IRequestHandler<GetBoatsQuery, PagedResult<BoatDto>>
 {
-    public async Task<List<BoatDto>> Handle(GetBoatsQuery request, CancellationToken cancellationToken)
+    public async Task<PagedResult<BoatDto>> Handle(GetBoatsQuery request, CancellationToken cancellationToken)
     {
         var boats = await repository.GetAllAsync(cancellationToken);
 
@@ -37,10 +39,12 @@ public sealed class GetBoatsQueryHandler(IBoatRepository repository)
             boats = boats.Where(b => b.Name.Contains(term, StringComparison.OrdinalIgnoreCase)).ToList();
         }
 
-        return boats
+        var dtos = boats
             .OrderBy(b => (int)b.Class).ThenBy(b => b.Name)
             .Select(BoatMapper.ToDto)
             .ToList();
+
+        return PagedResult<BoatDto>.Create(dtos, request.Page, request.PageSize);
     }
 }
 

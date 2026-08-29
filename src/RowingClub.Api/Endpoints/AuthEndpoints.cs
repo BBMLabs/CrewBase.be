@@ -98,7 +98,8 @@ public static class AuthEndpoints
     }
 
     private static async Task<IResult> RegisterCompanyAsync(
-        [FromBody] RegisterCompanyRequest request, ISender sender, TenantResolver resolver, CancellationToken cancellationToken)
+        [FromBody] RegisterCompanyRequest request, ISender sender, TenantResolver resolver,
+        ILogger<Program> logger, CancellationToken cancellationToken)
     {
         var response = await sender.Send(new RegisterCompanyCommand(
             request.CompanyName, request.AdminEmail, request.TaxNumber,
@@ -111,8 +112,9 @@ public static class AuthEndpoints
                 await sender.Send(new CreateBranchCommand(
                     $"{response.CompanyName} Şube 1", null, null, null, null, null, null, null), cancellationToken);
             }
-            catch
+            catch (Exception ex)
             {
+                logger.LogError(ex, "Firma kaydında ilk şube otomatik oluşturulamadı: {CompanyId}", response.CompanyId);
             }
         }
 

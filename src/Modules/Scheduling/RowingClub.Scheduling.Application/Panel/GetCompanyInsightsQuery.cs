@@ -1,4 +1,6 @@
 using MediatR;
+using RowingClub.BuildingBlocks.Application.Abstractions;
+using RowingClub.BuildingBlocks.Domain;
 using RowingClub.Scheduling.Domain.Appointments;
 using RowingClub.Scheduling.Domain.Boats;
 
@@ -21,7 +23,8 @@ public sealed record CompanyInsightsDto(
 
 public sealed class GetCompanyInsightsQueryHandler(
     IAppointmentRepository appointmentRepository,
-    IBoatRepository boatRepository)
+    IBoatRepository boatRepository,
+    ITenantDatabase tenantDatabase)
     : IRequestHandler<GetCompanyInsightsQuery, CompanyInsightsDto>
 {
     private static readonly string[] WeekdayNamesTr =
@@ -32,6 +35,9 @@ public sealed class GetCompanyInsightsQueryHandler(
 
     public async Task<CompanyInsightsDto> Handle(GetCompanyInsightsQuery request, CancellationToken cancellationToken)
     {
+        if (!tenantDatabase.HasAdvancedReports)
+            throw new DomainException("plan_feature_not_available", "Gelişmiş raporlar özelliği mevcut paketinizde yer almıyor.");
+
         var appointments = await appointmentRepository.GetAllAsync(cancellationToken);
         var boats = await boatRepository.GetAllAsync(cancellationToken);
         var boatNames = boats.ToDictionary(b => b.Id, b => b.Name);

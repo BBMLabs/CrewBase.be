@@ -84,7 +84,7 @@ public sealed class VerifyEmailCommandHandler(
             <p>Firmanız başarıyla oluşturuldu ve hemen kullanıma hazır.</p>
             <p style="margin:16px 0;padding:14px 16px;background:#f4f6f8;border-radius:8px;">
               <b>Randevu siteniz:</b> <a href="{siteUrl}" style="color:#155e75;">{siteUrl}</a><br/>
-              <b>Yönetici kullanıcı adınız:</b> {adminEmail}
+              <b>Yönetici kullanıcı adınız:</b> {EmailTemplate.Encode(adminEmail)}
             </p>
             <p>Giriş yapabilmek için önce parolanızı belirlemeniz gerekiyor. Aşağıdaki bağlantı 48 saat geçerlidir.</p>
             <p>Yönetim panelinizden çalışma saatlerinizi, eğitmenlerinizi, teknelerinizi, ders

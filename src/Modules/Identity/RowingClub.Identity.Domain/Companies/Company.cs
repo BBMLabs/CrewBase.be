@@ -123,6 +123,9 @@ public sealed class Company : AggregateRoot<Guid>
         ? new CompanyPlanLimits(CustomMaxBranches ?? 0, CustomMaxMembers ?? 0, CustomMaxBoats ?? 0)
         : CompanyPlanLimitsCatalog.For(Plan);
 
+    /// <summary>Şu an geçerli nitel özellikler (dışa aktarma, gelişmiş raporlar, rol/yetkilendirme...).</summary>
+    public CompanyPlanFeatures PlanFeatures => CompanyPlanFeaturesCatalog.For(Plan);
+
     /// <summary>
     /// Firma yetkilisinin panelden kendi yaptığı paket değişikliği: yalnızca sabit paketler
     /// arasında, hem yükseltme hem düşürme yönünde. Düşürmede hedef paketin limitleri mevcut

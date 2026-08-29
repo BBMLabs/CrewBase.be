@@ -22,5 +22,9 @@ public interface IAppointmentRepository
     Task<bool> HasActiveFutureAppointmentsUsingPackageAsync(
         Guid customerPackageId, DateOnly today, TimeOnly nowTime, CancellationToken cancellationToken);
 
+    /// <summary>Verilenler arasından, iptal edilmemiş gelecekteki bir randevuda kullanılan paket kimlikleri.</summary>
+    Task<HashSet<Guid>> GetPackageIdsWithActiveFutureAppointmentsAsync(
+        IReadOnlyCollection<Guid> customerPackageIds, DateOnly today, TimeOnly nowTime, CancellationToken cancellationToken);
+
     void Add(Appointment appointment);
 }

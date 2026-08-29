@@ -16,8 +16,8 @@ public sealed class EmailMemberBranchTransferSender(IEmailSender emailSender) : 
     {
         var siteUrl = $"https://{subdomain}.{TenantResolver.BaseDomain}/sube/{Uri.EscapeDataString(newBranchCode)}";
         var bodyHtml = $"""
-            <p>Sayın {fullName},</p>
-            <p><b>{oldBranchName}</b> şubesi kapatıldığı için üyeliğiniz <b>{newBranchName}</b> şubesine
+            <p>Sayın {EmailTemplate.Encode(fullName)},</p>
+            <p><b>{EmailTemplate.Encode(oldBranchName)}</b> şubesi kapatıldığı için üyeliğiniz <b>{EmailTemplate.Encode(newBranchName)}</b> şubesine
             aktarıldı. Yeni şubenizin web sitesine aşağıdaki bağlantıdan ulaşabilirsiniz:</p>
             """;
         var htmlBody = EmailTemplate.Render("Şubeniz Değişti", bodyHtml, "Yeni Şube Sitem", siteUrl);

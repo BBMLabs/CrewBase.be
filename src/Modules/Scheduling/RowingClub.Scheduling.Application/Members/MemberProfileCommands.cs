@@ -1,3 +1,4 @@
+using FluentValidation;
 using MediatR;
 using RowingClub.BuildingBlocks.Application.Messaging;
 using RowingClub.BuildingBlocks.Domain;
@@ -13,6 +14,15 @@ public sealed record GetMemberProfileQuery(Guid CustomerId) : IRequest<MemberDto
 /// <summary>Profil + bildirim tercihi güncelleme (DefaultReminderMinutes: null=firma varsayılanı, 0=istemez).</summary>
 public sealed record UpdateMemberProfileCommand(
     Guid CustomerId, string FullName, string? Email, int? DefaultReminderMinutes) : ICommand<MemberDto>;
+
+public sealed class UpdateMemberProfileCommandValidator : AbstractValidator<UpdateMemberProfileCommand>
+{
+    public UpdateMemberProfileCommandValidator()
+    {
+        RuleFor(c => c.FullName).NotEmpty().MaximumLength(200);
+        RuleFor(c => c.Email).EmailAddress().MaximumLength(254).When(c => !string.IsNullOrWhiteSpace(c.Email));
+    }
+}
 
 /// <summary>
 /// Üye hesabını KALICI siler (hard delete): üye kaydı, randevuları, paket bakiyeleri ve logları

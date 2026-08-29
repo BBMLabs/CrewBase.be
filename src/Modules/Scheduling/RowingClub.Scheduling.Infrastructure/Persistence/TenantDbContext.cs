@@ -266,6 +266,7 @@ public sealed class TenantDbContext(
             builder.Property(p => p.Source).HasConversion<string>().HasMaxLength(20)
                 .HasDefaultValue(CustomerPackageSource.Assigned);
             builder.Property(p => p.PaymentReferenceCode).HasMaxLength(100);
+            builder.HasIndex(p => p.PaymentReferenceCode).IsUnique();
             builder.HasIndex(p => p.CustomerId);
             // Süresi dolmuş (ExpiresAtUtc geçmiş) paketleri bulan periyodik tarama için.
             builder.HasIndex(p => p.ExpiresAtUtc);

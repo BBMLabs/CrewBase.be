@@ -12,7 +12,8 @@ public sealed record PackageDto(
     string? ImagePath, int? ValidityDays, DateTimeOffset? CampaignStartsAtUtc, DateTimeOffset? CampaignEndsAtUtc,
     decimal? CampaignPrice, bool IsCurrentlyPurchasable);
 
-public sealed record GetPackagesQuery : IRequest<List<PackageDto>>;
+public sealed record GetPackagesQuery(string? Search = null, int Page = 1, int PageSize = 25)
+    : IRequest<PagedResult<PackageDto>>;
 
 public sealed record CreatePackageCommand(
     string Name, string? Description, int SessionCount, decimal Price,
@@ -39,16 +40,25 @@ public sealed record SetPackageImageCommand(Guid PackageId, string ImagePath) : 
 public sealed record DeletePackageCommand(Guid Id) : ICommand<Unit>;
 
 public sealed class GetPackagesQueryHandler(ILessonPackageRepository repository)
-    : IRequestHandler<GetPackagesQuery, List<PackageDto>>
+    : IRequestHandler<GetPackagesQuery, PagedResult<PackageDto>>
 {
-    public async Task<List<PackageDto>> Handle(GetPackagesQuery request, CancellationToken cancellationToken)
+    public async Task<PagedResult<PackageDto>> Handle(GetPackagesQuery request, CancellationToken cancellationToken)
     {
         var packages = await repository.GetAllAsync(cancellationToken);
+
+        if (!string.IsNullOrWhiteSpace(request.Search))
+        {
+            var term = request.Search.Trim();
+            packages = packages.Where(p => p.Name.Contains(term, StringComparison.OrdinalIgnoreCase)).ToList();
+        }
+
         var now = DateTimeOffset.UtcNow;
-        return packages
+        var dtos = packages
             .OrderBy(p => p.Price)
             .Select(ToDto(now))
             .ToList();
+
+        return PagedResult<PackageDto>.Create(dtos, request.Page, request.PageSize);
     }
 
     internal static Func<LessonPackage, PackageDto> ToDto(DateTimeOffset now) => p => new PackageDto(

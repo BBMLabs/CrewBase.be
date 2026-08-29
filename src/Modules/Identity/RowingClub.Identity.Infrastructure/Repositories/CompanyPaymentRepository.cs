@@ -9,12 +9,20 @@ public sealed class CompanyPaymentRepository(RowingClubDbContext context) : ICom
     public Task<bool> ExistsByIyzicoPaymentReferenceCodeAsync(string referenceCode, CancellationToken cancellationToken) =>
         context.Set<CompanyPayment>().AnyAsync(p => p.IyzicoPaymentReferenceCode == referenceCode, cancellationToken);
 
-    public Task<List<CompanyPayment>> GetByCompanyIdAsync(Guid companyId, int take, CancellationToken cancellationToken) =>
-        context.Set<CompanyPayment>()
-            .Where(p => p.CompanyId == companyId)
+    public async Task<(List<CompanyPayment> Items, int TotalCount)> GetPagedByCompanyIdAsync(
+        Guid companyId, int page, int pageSize, CancellationToken cancellationToken)
+    {
+        var query = context.Set<CompanyPayment>().Where(p => p.CompanyId == companyId);
+
+        var totalCount = await query.CountAsync(cancellationToken);
+        var items = await query
             .OrderByDescending(p => p.OccurredAtUtc)
-            .Take(take)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
             .ToListAsync(cancellationToken);
+
+        return (items, totalCount);
+    }
 
     public void Add(CompanyPayment payment) => context.Set<CompanyPayment>().Add(payment);
 }

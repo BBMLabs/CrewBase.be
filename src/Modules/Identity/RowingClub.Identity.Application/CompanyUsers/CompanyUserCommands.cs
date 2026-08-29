@@ -3,6 +3,7 @@ using RowingClub.BuildingBlocks.Application.Messaging;
 using RowingClub.BuildingBlocks.Domain;
 using RowingClub.BuildingBlocks.Security.Passwords;
 using RowingClub.Identity.Application.Audit;
+using RowingClub.Identity.Domain.Companies;
 using RowingClub.Identity.Domain.Users;
 using RowingClub.Identity.Domain.ValueObjects;
 
@@ -79,7 +80,8 @@ public sealed class CreateCompanyUserCommandHandler(
     IUserRepository userRepository,
     ICredentialRepository credentialRepository,
     IPasswordHasher passwordHasher,
-    IAuditLogger auditLogger)
+    IAuditLogger auditLogger,
+    ICompanyRepository companyRepository)
     : IRequestHandler<CreateCompanyUserCommand, CompanyUserDto>
 {
     public async Task<CompanyUserDto> Handle(
@@ -88,7 +90,18 @@ public sealed class CreateCompanyUserCommandHandler(
         var (caller, companyId) = await CompanyUserGuards.EnsureCallerIsCompanyAdminAsync(
             userRepository, request.CallerUserId, cancellationToken);
 
+        var company = await companyRepository.GetByIdAsync(companyId, cancellationToken)
+            ?? throw new DomainException("company_not_found", "Firma bulunamadı.");
+        var features = company.PlanFeatures;
+
         var role = CompanyUserGuards.ParseCompanyRole(request.Role);
+        if (role == UserRole.Employee && !features.CanAssignEmployeeRole)
+            throw new DomainException("plan_feature_not_available", "Rol ve yetkilendirme özelliği mevcut paketinizde yer almıyor.");
+
+        var existingUsers = await userRepository.GetByCompanyIdAsync(companyId, cancellationToken);
+        if (existingUsers.Count >= features.MaxCompanyUsers)
+            throw new DomainException("plan_limit_exceeded", "Firma kullanıcı sayısı paket limitine ulaştı.");
+
         var email = EmailAddress.Create(request.Email);
 
         if (await userRepository.ExistsByEmailAsync(email, cancellationToken))
@@ -111,7 +124,8 @@ public sealed class CreateCompanyUserCommandHandler(
 
 public sealed class ChangeCompanyUserRoleCommandHandler(
     IUserRepository userRepository,
-    IAuditLogger auditLogger)
+    IAuditLogger auditLogger,
+    ICompanyRepository companyRepository)
     : IRequestHandler<ChangeCompanyUserRoleCommand, CompanyUserDto>
 {
     public async Task<CompanyUserDto> Handle(
@@ -121,6 +135,13 @@ public sealed class ChangeCompanyUserRoleCommandHandler(
             userRepository, request.CallerUserId, cancellationToken);
 
         var role = CompanyUserGuards.ParseCompanyRole(request.Role);
+        if (role == UserRole.Employee)
+        {
+            var company = await companyRepository.GetByIdAsync(companyId, cancellationToken)
+                ?? throw new DomainException("company_not_found", "Firma bulunamadı.");
+            if (!company.PlanFeatures.CanAssignEmployeeRole)
+                throw new DomainException("plan_feature_not_available", "Rol ve yetkilendirme özelliği mevcut paketinizde yer almıyor.");
+        }
 
         var target = await userRepository.GetByIdAsync(request.TargetUserId, cancellationToken)
             ?? throw new DomainException("user_not_found", "Kullanıcı bulunamadı.");

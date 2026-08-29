@@ -115,7 +115,7 @@ public sealed class IyzicoPaymentClient(
         return new IyzicoPaymentResult(true, response.PaymentId, response.PaidPrice, null);
     }
 
-    private static string DecodeCheckoutFormContent(string? base64)
+    private string DecodeCheckoutFormContent(string? base64)
     {
         if (string.IsNullOrWhiteSpace(base64))
         {
@@ -126,10 +126,9 @@ public sealed class IyzicoPaymentClient(
         {
             return Encoding.UTF8.GetString(Convert.FromBase64String(base64));
         }
-        catch (FormatException)
+        catch (FormatException ex)
         {
-            // Savunmacı geri dönüş: beklenmedik şekilde ham HTML gelirse Base64 çözmeye
-            // çalışmak yerine olduğu gibi kullanılır - sessiz veri kaybı yerine.
+            logger.LogWarning(ex, "iyzico checkoutFormContent Base64 olarak çözülemedi, ham içerik kullanılıyor.");
             return base64;
         }
     }

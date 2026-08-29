@@ -113,12 +113,12 @@ public sealed class ConfirmPackagePurchaseCommandHandler(
         if (!result.Success || result.PaymentReferenceCode is null)
             throw new DomainException("checkout_failed", result.ErrorMessage ?? "Ödeme tamamlanamadı.");
 
-        // Aynı ödeme referansı için ikinci bir paket oluşturulmasın (ör. üye sonuç sayfasını
-        // yeniler/geri döner) - firma abonelik akışındaki dedupeKey kontrolüyle aynı gerekçe.
-        var existing = (await customerPackageRepository.GetByCustomerAsync(request.CustomerId, cancellationToken))
-            .FirstOrDefault(p => p.PaymentReferenceCode == result.PaymentReferenceCode);
-        if (existing is not null)
+        if (await customerPackageRepository.ExistsByPaymentReferenceCodeAsync(result.PaymentReferenceCode, cancellationToken))
+        {
+            var existing = (await customerPackageRepository.GetByCustomerAsync(request.CustomerId, cancellationToken))
+                .First(p => p.PaymentReferenceCode == result.PaymentReferenceCode);
             return GetMemberPackagesQueryHandler.ToDto(existing);
+        }
 
         // iyzico dönüşü gecikmiş olabilir; ödeme başarılı olsa bile bu arada kampanya kapanmış ya
         // da paket pasife alınmışsa yeni bir geçerli paket oluşturulmaz (bkz. plan Aşama 5).

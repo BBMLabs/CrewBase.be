@@ -12,7 +12,8 @@ public sealed record BranchDto(
     string? ManagerName, string? ManagerPhone, string? ManagerEmail,
     string? TaxNumber, string? Description, string? LogoPath);
 
-public sealed record GetBranchesQuery(string? Search = null, bool? IsActive = null) : IRequest<List<BranchDto>>;
+public sealed record GetBranchesQuery(string? Search = null, bool? IsActive = null, int Page = 1, int PageSize = 25)
+    : IRequest<PagedResult<BranchDto>>;
 
 public sealed record CreateBranchCommand(
     string Name, string? Address, string? Phone,
@@ -25,9 +26,9 @@ public sealed record UpdateBranchCommand(
     string? TaxNumber, string? Description) : ICommand<BranchDto>;
 
 public sealed class GetBranchesQueryHandler(IBranchRepository repository)
-    : IRequestHandler<GetBranchesQuery, List<BranchDto>>
+    : IRequestHandler<GetBranchesQuery, PagedResult<BranchDto>>
 {
-    public async Task<List<BranchDto>> Handle(GetBranchesQuery request, CancellationToken cancellationToken)
+    public async Task<PagedResult<BranchDto>> Handle(GetBranchesQuery request, CancellationToken cancellationToken)
     {
         var branches = await repository.GetAllAsync(cancellationToken);
 
@@ -45,10 +46,12 @@ public sealed class GetBranchesQueryHandler(IBranchRepository repository)
                 .ToList();
         }
 
-        return branches
+        var dtos = branches
             .OrderBy(b => b.Name)
             .Select(BranchMapper.ToDto)
             .ToList();
+
+        return PagedResult<BranchDto>.Create(dtos, request.Page, request.PageSize);
     }
 }
 

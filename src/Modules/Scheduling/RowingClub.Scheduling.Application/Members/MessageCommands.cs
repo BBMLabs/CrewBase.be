@@ -1,3 +1,4 @@
+using FluentValidation;
 using MediatR;
 using RowingClub.BuildingBlocks.Application.Messaging;
 using RowingClub.BuildingBlocks.Domain;
@@ -17,6 +18,14 @@ public interface IChatNotifier
 
 public sealed record SendDirectMessageCommand(Guid SenderId, Guid RecipientId, string Body)
     : ICommand<MessageDto>;
+
+public sealed class SendDirectMessageCommandValidator : AbstractValidator<SendDirectMessageCommand>
+{
+    public SendDirectMessageCommandValidator()
+    {
+        RuleFor(c => c.Body).NotEmpty().MaximumLength(DirectMessage.MaxLength);
+    }
+}
 
 public sealed record GetConversationQuery(Guid CustomerId, Guid FriendCustomerId, int Take)
     : ICommand<List<MessageDto>>;

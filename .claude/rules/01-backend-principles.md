@@ -93,3 +93,12 @@ Configuration MUST be environment driven where appropriate. All settings come fr
 
 Secrets MUST never use insecure source-controlled defaults. A missing critical secret (JWT keys,
 field encryption keys) SHOULD fail clearly at startup, not silently degrade.
+
+---
+
+## Comments
+
+Code comments (`//`, `/* */`, `///` XML doc comments) MUST NOT be added anywhere in this repo —
+this is an explicit, non-negotiable project rule, not a style preference. Names, types, and
+extraction into a well-named method/class are the only allowed way to explain intent. This applies
+to every module and every layer (Domain/Application/Infrastructure/Api), including new files.

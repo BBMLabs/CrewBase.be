@@ -70,3 +70,31 @@ public static class CompanyPlanLimitsCatalog
         }
     }
 }
+
+/// <summary>Bir paketin fiyatlandırma sayfasında vaat ettiği nitel özellikler (sayısal limitler hariç).</summary>
+public sealed record CompanyPlanFeatures(
+    int MaxCompanyUsers, bool CanExportData, bool CanAssignEmployeeRole,
+    bool HasAdvancedReports, bool HasAutomaticDuesReminders);
+
+public static class CompanyPlanFeaturesCatalog
+{
+    private static readonly Dictionary<CompanyPlan, CompanyPlanFeatures> Fixed = new()
+    {
+        [CompanyPlan.Mico] = new CompanyPlanFeatures(
+            MaxCompanyUsers: 1, CanExportData: false, CanAssignEmployeeRole: false,
+            HasAdvancedReports: false, HasAutomaticDuesReminders: false),
+        [CompanyPlan.Tayfa] = new CompanyPlanFeatures(
+            MaxCompanyUsers: 3, CanExportData: true, CanAssignEmployeeRole: false,
+            HasAdvancedReports: false, HasAutomaticDuesReminders: false),
+        [CompanyPlan.Kaptan] = new CompanyPlanFeatures(
+            MaxCompanyUsers: 5, CanExportData: true, CanAssignEmployeeRole: true,
+            HasAdvancedReports: true, HasAutomaticDuesReminders: true),
+        [CompanyPlan.Amiral] = new CompanyPlanFeatures(
+            MaxCompanyUsers: int.MaxValue, CanExportData: true, CanAssignEmployeeRole: true,
+            HasAdvancedReports: true, HasAutomaticDuesReminders: true),
+    };
+
+    /// <summary>Custom (satış ekibiyle görüşülmüş) paketler için nitel özellik alanı yok; en üst sabit paketle aynı kabul edilir.</summary>
+    public static CompanyPlanFeatures For(CompanyPlan plan) =>
+        Fixed.TryGetValue(plan, out var features) ? features : Fixed[CompanyPlan.Amiral];
+}

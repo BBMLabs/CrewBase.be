@@ -20,9 +20,12 @@ public sealed class GetCompanySiteQueryHandler(ICompanyRepository companyReposit
             return null;
 
         var limits = company.PlanLimits;
+        var features = company.PlanFeatures;
         return new CompanySiteDto(
             company.Id, company.Name, company.Subdomain, company.DatabaseName,
             company.Phone, company.ContactEmail, company.Address, company.TaxNumber, company.Status.ToString(),
-            company.Plan.ToString(), limits.MaxBranches, limits.MaxMembers, limits.MaxBoats);
+            company.Plan.ToString(), limits.MaxBranches, limits.MaxMembers, limits.MaxBoats,
+            features.MaxCompanyUsers, features.CanExportData, features.CanAssignEmployeeRole,
+            features.HasAdvancedReports, features.HasAutomaticDuesReminders);
     }
 }

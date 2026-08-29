@@ -120,7 +120,8 @@ public static class DependencyInjection
         services.AddOptions<FileStorageOptions>()
             .Bind(configuration.GetSection(FileStorageOptions.SectionName));
 
-        services.AddHttpClient<IIyzicoPaymentClient, IyzicoPaymentClient>();
+        services.AddHttpClient<IIyzicoPaymentClient, IyzicoPaymentClient>(
+            c => c.Timeout = TimeSpan.FromSeconds(15));
         services.AddOptions<PackagePaymentOptions>()
             .Bind(configuration.GetSection(PackagePaymentOptions.SectionName));
 
