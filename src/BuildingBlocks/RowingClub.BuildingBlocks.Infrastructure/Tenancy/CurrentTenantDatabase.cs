@@ -15,9 +15,10 @@ public sealed class CurrentTenantDatabase : ITenantDatabase
     private int _maxBranches;
     private int _maxMembers;
     private int _maxBoats;
-    private int _maxCompanyUsers;
+    private int _maxInstructors;
+    private int _maxManagers;
+    private int _maxEmployees;
     private bool _canExportData;
-    private bool _canAssignEmployeeRole;
     private bool _hasAdvancedReports;
     private bool _hasAutomaticDuesReminders;
 
@@ -48,16 +49,20 @@ public sealed class CurrentTenantDatabase : ITenantDatabase
         ? _maxBoats
         : throw new InvalidOperationException("Tenant veritabanı bu istek için çözülmedi.");
 
-    public int MaxCompanyUsers => IsSet
-        ? _maxCompanyUsers
+    public int MaxInstructors => IsSet
+        ? _maxInstructors
+        : throw new InvalidOperationException("Tenant veritabanı bu istek için çözülmedi.");
+
+    public int MaxManagers => IsSet
+        ? _maxManagers
+        : throw new InvalidOperationException("Tenant veritabanı bu istek için çözülmedi.");
+
+    public int MaxEmployees => IsSet
+        ? _maxEmployees
         : throw new InvalidOperationException("Tenant veritabanı bu istek için çözülmedi.");
 
     public bool CanExportData => IsSet
         ? _canExportData
-        : throw new InvalidOperationException("Tenant veritabanı bu istek için çözülmedi.");
-
-    public bool CanAssignEmployeeRole => IsSet
-        ? _canAssignEmployeeRole
         : throw new InvalidOperationException("Tenant veritabanı bu istek için çözülmedi.");
 
     public bool HasAdvancedReports => IsSet
@@ -70,8 +75,8 @@ public sealed class CurrentTenantDatabase : ITenantDatabase
 
     public void Set(
         Guid companyId, string databaseName, string subdomain, string plan,
-        int maxBranches, int maxMembers, int maxBoats,
-        int maxCompanyUsers, bool canExportData, bool canAssignEmployeeRole,
+        int maxBranches, int maxMembers, int maxBoats, int maxInstructors,
+        int maxManagers, int maxEmployees, bool canExportData,
         bool hasAdvancedReports, bool hasAutomaticDuesReminders)
     {
         _companyId = companyId;
@@ -81,9 +86,10 @@ public sealed class CurrentTenantDatabase : ITenantDatabase
         _maxBranches = maxBranches;
         _maxMembers = maxMembers;
         _maxBoats = maxBoats;
-        _maxCompanyUsers = maxCompanyUsers;
+        _maxInstructors = maxInstructors;
+        _maxManagers = maxManagers;
+        _maxEmployees = maxEmployees;
         _canExportData = canExportData;
-        _canAssignEmployeeRole = canAssignEmployeeRole;
         _hasAdvancedReports = hasAdvancedReports;
         _hasAutomaticDuesReminders = hasAutomaticDuesReminders;
     }

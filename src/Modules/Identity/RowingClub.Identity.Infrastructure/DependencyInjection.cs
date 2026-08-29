@@ -1,11 +1,13 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using RowingClub.BuildingBlocks.Application.Abstractions;
 using RowingClub.BuildingBlocks.Infrastructure.Postgres;
 using RowingClub.Identity.Application.Billing;
 using RowingClub.Identity.Application.Email;
 using RowingClub.Identity.Application.Recaptcha;
 using RowingClub.Identity.Domain.Companies;
 using RowingClub.Identity.Domain.Companies.Billing;
+using RowingClub.Identity.Domain.Platform;
 using RowingClub.Identity.Domain.Tokens;
 using RowingClub.Identity.Domain.Users;
 using RowingClub.Identity.Infrastructure.Billing.Iyzico;
@@ -32,6 +34,8 @@ public static class DependencyInjection
         services.AddScoped<ICompanyPaymentRepository, CompanyPaymentRepository>();
         services.AddScoped<IRecoveryCodeRepository, RecoveryCodeRepository>();
         services.AddScoped<IPendingTwoFactorTokenRepository, PendingTwoFactorTokenRepository>();
+        services.AddScoped<IPlatformActivityLogRepository, PlatformActivityLogRepository>();
+        services.AddScoped<IPlatformActivityLogWriter, PlatformActivityLogWriter>();
 
         services.AddSingleton<IEmailSender, SmtpEmailSender>();
         services.AddOptions<SmtpOptions>()

@@ -41,6 +41,8 @@ public sealed class Company : AggregateRoot<Guid>
 
     public int? CustomMaxBoats { get; private set; }
 
+    public int? CustomMaxInstructors { get; private set; }
+
     public DateTimeOffset CreatedAtUtc { get; private set; }
 
     public DateTimeOffset? ApprovedAtUtc { get; private set; }
@@ -120,43 +122,47 @@ public sealed class Company : AggregateRoot<Guid>
 
     /// <summary>Şu an geçerli üst sınırlar (sabit paketler için katalogdan, Custom için firmaya özel alanlardan).</summary>
     public CompanyPlanLimits PlanLimits => Plan == CompanyPlan.Custom
-        ? new CompanyPlanLimits(CustomMaxBranches ?? 0, CustomMaxMembers ?? 0, CustomMaxBoats ?? 0)
+        ? new CompanyPlanLimits(CustomMaxBranches ?? 0, CustomMaxMembers ?? 0, CustomMaxBoats ?? 0, CustomMaxInstructors ?? 0)
         : CompanyPlanLimitsCatalog.For(Plan);
 
-    /// <summary>Şu an geçerli nitel özellikler (dışa aktarma, gelişmiş raporlar, rol/yetkilendirme...).</summary>
+    /// <summary>Şu an geçerli nitel özellikler (dışa aktarma, gelişmiş raporlar, yönetici/çalışan kotaları...).</summary>
     public CompanyPlanFeatures PlanFeatures => CompanyPlanFeaturesCatalog.For(Plan);
 
     /// <summary>
     /// Firma yetkilisinin panelden kendi yaptığı paket değişikliği: yalnızca sabit paketler
     /// arasında, hem yükseltme hem düşürme yönünde. Düşürmede hedef paketin limitleri mevcut
-    /// kullanımı (şube/aktif üye/tekne sayısı - tenant veritabanından çağıran tarafından
+    /// kullanımı (şube/aktif üye/tekne/eğitmen sayısı - tenant veritabanından çağıran tarafından
     /// çözülür) karşılamıyorsa reddedilir; önce fazlalığın silinmesi gerekir.
     /// </summary>
-    public void ChangePlan(CompanyPlan newPlan, int usedBranches, int usedMembers, int usedBoats)
+    public void ChangePlan(CompanyPlan newPlan, int usedBranches, int usedMembers, int usedBoats, int usedInstructors)
     {
         if (!CompanyPlanLimitsCatalog.IsFixed(newPlan))
             throw new DomainException("plan_not_selfserve", "Bu paket yalnızca satış ekibiyle görüşülerek tanımlanabilir.");
 
-        CompanyPlanLimitsCatalog.EnsureUsageFits(newPlan, usedBranches, usedMembers, usedBoats);
+        CompanyPlanLimitsCatalog.EnsureUsageFits(newPlan, usedBranches, usedMembers, usedBoats, usedInstructors);
 
         Plan = newPlan;
         CustomMaxBranches = null;
         CustomMaxMembers = null;
         CustomMaxBoats = null;
+        CustomMaxInstructors = null;
     }
 
     /// <summary>Master panelden serbest paket ataması; Custom seçildiğinde özel limitler zorunludur.</summary>
-    public void SetPlan(CompanyPlan plan, int? customMaxBranches, int? customMaxMembers, int? customMaxBoats)
+    public void SetPlan(
+        CompanyPlan plan, int? customMaxBranches, int? customMaxMembers, int? customMaxBoats, int? customMaxInstructors)
     {
         if (plan == CompanyPlan.Custom)
         {
-            if (customMaxBranches is null or <= 0 || customMaxMembers is null or <= 0 || customMaxBoats is null or <= 0)
-                throw new DomainException("custom_limits_required", "Custom paket için şube/üye/tekne limitlerinin hepsi girilmelidir.");
+            if (customMaxBranches is null or <= 0 || customMaxMembers is null or <= 0 ||
+                customMaxBoats is null or <= 0 || customMaxInstructors is null or <= 0)
+                throw new DomainException("custom_limits_required", "Custom paket için şube/üye/tekne/eğitmen limitlerinin hepsi girilmelidir.");
 
             Plan = CompanyPlan.Custom;
             CustomMaxBranches = customMaxBranches;
             CustomMaxMembers = customMaxMembers;
             CustomMaxBoats = customMaxBoats;
+            CustomMaxInstructors = customMaxInstructors;
             return;
         }
 
@@ -164,6 +170,7 @@ public sealed class Company : AggregateRoot<Guid>
         CustomMaxBranches = null;
         CustomMaxMembers = null;
         CustomMaxBoats = null;
+        CustomMaxInstructors = null;
     }
 
     public void Delete()

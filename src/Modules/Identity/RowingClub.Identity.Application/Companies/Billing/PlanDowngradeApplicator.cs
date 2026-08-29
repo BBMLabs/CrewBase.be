@@ -46,7 +46,9 @@ public sealed class PlanDowngradeApplicator(IIyzicoSubscriptionClient iyzicoClie
         if (pendingPlan == CompanyPlan.Mico)
             subscription.MarkCancelled();
 
-        company.SetPlan(pendingPlan, customMaxBranches: null, customMaxMembers: null, customMaxBoats: null);
+        company.SetPlan(
+            pendingPlan, customMaxBranches: null, customMaxMembers: null, customMaxBoats: null,
+            customMaxInstructors: null);
         return pendingPlan;
     }
 }

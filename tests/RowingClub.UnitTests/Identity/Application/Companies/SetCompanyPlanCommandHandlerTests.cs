@@ -23,7 +23,7 @@ public sealed class SetCompanyPlanCommandHandlerTests
 
         var handler = CreateHandler();
         var act = () => handler.Handle(
-            new SetCompanyPlanCommand(companyId, "Tayfa", null, null, null), CancellationToken.None);
+            new SetCompanyPlanCommand(companyId, "Tayfa", null, null, null, null), CancellationToken.None);
 
         var ex = await act.Should().ThrowAsync<DomainException>();
         ex.Which.ErrorCode.Should().Be("company_not_found");
@@ -37,7 +37,7 @@ public sealed class SetCompanyPlanCommandHandlerTests
 
         var handler = CreateHandler();
         var act = () => handler.Handle(
-            new SetCompanyPlanCommand(company.Id, "NotAPlan", null, null, null), CancellationToken.None);
+            new SetCompanyPlanCommand(company.Id, "NotAPlan", null, null, null, null), CancellationToken.None);
 
         var ex = await act.Should().ThrowAsync<DomainException>();
         ex.Which.ErrorCode.Should().Be("invalid_plan");
@@ -51,7 +51,7 @@ public sealed class SetCompanyPlanCommandHandlerTests
 
         var handler = CreateHandler();
         var act = () => handler.Handle(
-            new SetCompanyPlanCommand(company.Id, "Custom", null, null, null), CancellationToken.None);
+            new SetCompanyPlanCommand(company.Id, "Custom", null, null, null, null), CancellationToken.None);
 
         var ex = await act.Should().ThrowAsync<DomainException>();
         ex.Which.ErrorCode.Should().Be("custom_limits_required");
@@ -64,7 +64,7 @@ public sealed class SetCompanyPlanCommandHandlerTests
         _companyRepository.GetByIdAsync(company.Id, Arg.Any<CancellationToken>()).Returns(company);
 
         var handler = CreateHandler();
-        await handler.Handle(new SetCompanyPlanCommand(company.Id, "Amiral", null, null, null), CancellationToken.None);
+        await handler.Handle(new SetCompanyPlanCommand(company.Id, "Amiral", null, null, null, null), CancellationToken.None);
 
         company.Plan.Should().Be(CompanyPlan.Amiral);
         _companyRepository.Received(1).Update(company);
@@ -79,13 +79,16 @@ public sealed class SetCompanyPlanCommandHandlerTests
 
         var handler = CreateHandler();
         await handler.Handle(
-            new SetCompanyPlanCommand(company.Id, "Custom", CustomMaxBranches: 10, CustomMaxMembers: 500, CustomMaxBoats: 40),
+            new SetCompanyPlanCommand(
+                company.Id, "Custom", CustomMaxBranches: 10, CustomMaxMembers: 500, CustomMaxBoats: 40,
+                CustomMaxInstructors: 20),
             CancellationToken.None);
 
         company.Plan.Should().Be(CompanyPlan.Custom);
         company.CustomMaxBranches.Should().Be(10);
         company.CustomMaxMembers.Should().Be(500);
         company.CustomMaxBoats.Should().Be(40);
+        company.CustomMaxInstructors.Should().Be(20);
         _companyRepository.Received(1).Update(company);
     }
 }

@@ -22,8 +22,8 @@ public sealed class GetActiveCompanySitesQueryHandler(ICompanyRepository company
                 return new CompanySiteDto(
                     c.Id, c.Name, c.Subdomain, c.DatabaseName,
                     c.Phone, c.ContactEmail, c.Address, c.TaxNumber, c.Status.ToString(),
-                    c.Plan.ToString(), limits.MaxBranches, limits.MaxMembers, limits.MaxBoats,
-                    features.MaxCompanyUsers, features.CanExportData, features.CanAssignEmployeeRole,
+                    c.Plan.ToString(), limits.MaxBranches, limits.MaxMembers, limits.MaxBoats, limits.MaxInstructors,
+                    features.MaxManagers, features.MaxEmployees, features.CanExportData,
                     features.HasAdvancedReports, features.HasAutomaticDuesReminders);
             })
             .ToList();

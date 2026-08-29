@@ -53,6 +53,7 @@ public static class EnvironmentConfigurationExtensions
             ["Smtp:FromName"] = Get("SMTP_FROM_NAME"),
 
             ["Recaptcha:SecretKey"] = Get("RECAPTCHA_SECRET_KEY"),
+            ["Recaptcha:MinimumScore"] = Get("RECAPTCHA_MINIMUM_SCORE"),
 
             ["Iyzico:ApiKey"] = Get("IYZICO_API_KEY"),
             ["Iyzico:SecretKey"] = Get("IYZICO_SECRET_KEY"),

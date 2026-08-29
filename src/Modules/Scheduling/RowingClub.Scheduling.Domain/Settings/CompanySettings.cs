@@ -85,9 +85,14 @@ public sealed class CompanySettings
         if (slotMinutes is < 15 or > 240)
             throw new DomainException("invalid_slot_length", "Slot süresi 15-240 dakika arasında olmalıdır.");
 
-        _daySchedules.Clear();
         foreach (var d in days)
-            _daySchedules.Add(DaySchedule.Create(Id, d.Day, d.IsOpen, d.OpeningTime, d.ClosingTime));
+        {
+            var existing = _daySchedules.FirstOrDefault(x => x.Day == d.Day);
+            if (existing is not null)
+                existing.Update(d.IsOpen, d.OpeningTime, d.ClosingTime);
+            else
+                _daySchedules.Add(DaySchedule.Create(Id, d.Day, d.IsOpen, d.OpeningTime, d.ClosingTime));
+        }
 
         SlotMinutes = slotMinutes;
     }

@@ -21,6 +21,11 @@ public sealed class CompanyRepository(RowingClubDbContext context) : ICompanyRep
     public Task<List<Company>> GetByStatusAsync(CompanyStatus status, CancellationToken cancellationToken) =>
         context.Set<Company>().Where(c => c.Status == status).ToListAsync(cancellationToken);
 
+    public Task<List<Company>> GetByIdsAsync(IReadOnlyCollection<Guid> ids, CancellationToken cancellationToken) =>
+        ids.Count == 0
+            ? Task.FromResult(new List<Company>())
+            : context.Set<Company>().Where(c => ids.Contains(c.Id)).ToListAsync(cancellationToken);
+
     public void Add(Company company) => context.Set<Company>().Add(company);
 
     public void Update(Company company) => context.Set<Company>().Update(company);

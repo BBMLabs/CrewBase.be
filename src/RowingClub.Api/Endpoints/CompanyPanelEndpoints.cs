@@ -49,6 +49,8 @@ public sealed record DowngradePlanRequest(string Plan);
 public sealed record CompanyPlanResponse(
     string Plan, decimal MonthlyPrice, Dictionary<string, decimal> PlanCatalog,
     int MaxBranches, int UsedBranches, int MaxMembers, int UsedMembers, int MaxBoats, int UsedBoats,
+    int MaxInstructors, int UsedInstructors, int MaxManagers, int MaxEmployees,
+    bool CanExportData, bool HasAdvancedReports, bool HasAutomaticDuesReminders,
     string SubscriptionStatus, DateTimeOffset? NextPaymentDateUtc,
     string? PendingPlan, DateTimeOffset? PendingPlanEffectiveAtUtc);
 public sealed record ChangeUserRoleRequest(string Role);
@@ -110,6 +112,8 @@ public static class CompanyPanelEndpoints
             return Results.Ok(ApiResponse<CompanyPlanResponse>.Ok(new CompanyPlanResponse(
                 usage.Plan, monthlyPrice, planCatalog,
                 usage.MaxBranches, usage.UsedBranches, usage.MaxMembers, usage.UsedMembers, usage.MaxBoats, usage.UsedBoats,
+                usage.MaxInstructors, usage.UsedInstructors, usage.MaxManagers, usage.MaxEmployees,
+                usage.CanExportData, usage.HasAdvancedReports, usage.HasAutomaticDuesReminders,
                 billing.Status, billing.NextPaymentDateUtc, billing.PendingPlan, billing.PendingPlanEffectiveAtUtc)));
         }).WithName("CompanyPlan");
 
@@ -165,7 +169,7 @@ public static class CompanyPanelEndpoints
             var result = await sender.Send(
                 new UpgradeCompanyPlanCommand(
                     company.CompanyId, request.Plan, usage.UsedBranches, usage.UsedMembers, usage.UsedBoats,
-                    request.IdempotencyKey),
+                    usage.UsedInstructors, request.IdempotencyKey),
                 ct);
             return Results.Ok(ApiResponse<UpgradeCompanyPlanResult>.Ok(result, "Paketiniz yükseltildi."));
         }).WithName("CompanyUpgradePlan");
@@ -181,7 +185,8 @@ public static class CompanyPanelEndpoints
             var usage = await sender.Send(new GetCompanyPlanQuery(), ct);
             var result = await sender.Send(
                 new RequestPlanDowngradeCommand(
-                    company.CompanyId, request.Plan, usage.UsedBranches, usage.UsedMembers, usage.UsedBoats),
+                    company.CompanyId, request.Plan, usage.UsedBranches, usage.UsedMembers, usage.UsedBoats,
+                    usage.UsedInstructors),
                 ct);
             return Results.Ok(ApiResponse<RequestPlanDowngradeResult>.Ok(
                 result, $"{result.EffectiveAtUtc:dd.MM.yyyy} tarihinde {result.PendingPlan} paketine geçeceksiniz."));

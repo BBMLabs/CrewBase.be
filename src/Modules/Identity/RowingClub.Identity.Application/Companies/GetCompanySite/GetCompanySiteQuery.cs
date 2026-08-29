@@ -19,8 +19,9 @@ public sealed record CompanySiteDto(
     int MaxBranches,
     int MaxMembers,
     int MaxBoats,
-    int MaxCompanyUsers,
+    int MaxInstructors,
+    int MaxManagers,
+    int MaxEmployees,
     bool CanExportData,
-    bool CanAssignEmployeeRole,
     bool HasAdvancedReports,
     bool HasAutomaticDuesReminders);

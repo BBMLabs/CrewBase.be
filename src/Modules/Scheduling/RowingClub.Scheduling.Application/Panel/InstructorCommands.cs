@@ -1,4 +1,5 @@
 using MediatR;
+using RowingClub.BuildingBlocks.Application.Abstractions;
 using RowingClub.BuildingBlocks.Application.Messaging;
 using RowingClub.BuildingBlocks.Domain;
 using RowingClub.Scheduling.Domain;
@@ -54,13 +55,17 @@ public sealed class GetInstructorsQueryHandler(IInstructorRepository repository)
 }
 
 public sealed class CreateInstructorCommandHandler(
-    IInstructorRepository repository, ISchedulingUnitOfWork unitOfWork)
+    IInstructorRepository repository, ISchedulingUnitOfWork unitOfWork, ITenantDatabase tenantDatabase)
     : IRequestHandler<CreateInstructorCommand, InstructorDto>
 {
     public async Task<InstructorDto> Handle(CreateInstructorCommand request, CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(request.FullName))
             throw new DomainException("invalid_name", "Eğitmen adı boş olamaz.");
+
+        if (await repository.CountActiveAsync(cancellationToken) >= tenantDatabase.MaxInstructors)
+            throw new DomainException("instructor_limit_reached",
+                $"Eğitmen limitine ulaşıldı. Mevcut paketiniz en fazla {tenantDatabase.MaxInstructors} eğitmene izin verir; devam etmek için paketinizi yükseltin.");
 
         var instructor = Instructor.Create(request.FullName, request.Phone, request.Email, request.BranchId);
         repository.Add(instructor);

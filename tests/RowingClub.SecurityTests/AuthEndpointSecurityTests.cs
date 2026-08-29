@@ -120,6 +120,7 @@ public sealed class AuthEndpointSecurityTests(RowingClubWebApplicationFactory fa
         { "/api/v1/platform/companies/e9a7e1b1-0000-0000-0000-000000000001/restore", HttpMethod.Post },
         { "/api/v1/platform/companies/e9a7e1b1-0000-0000-0000-000000000001/reset-password", HttpMethod.Post },
         { "/api/v1/platform/companies/e9a7e1b1-0000-0000-0000-000000000001/overview", HttpMethod.Get },
+        { "/api/v1/platform/activity-logs", HttpMethod.Get },
         { "/api/v1/admin/e9a7e1b1-0000-0000-0000-000000000001/dashboard", HttpMethod.Get },
         { "/api/v1/admin/e9a7e1b1-0000-0000-0000-000000000001/users", HttpMethod.Get },
         { "/api/v1/admin/profile", HttpMethod.Get },

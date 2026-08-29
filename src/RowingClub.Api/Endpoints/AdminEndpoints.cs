@@ -2,6 +2,7 @@ using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using RowingClub.BuildingBlocks.Application.Abstractions;
+using RowingClub.BuildingBlocks.Application.Messaging;
 using RowingClub.Identity.Application.Companies.ApproveCompany;
 using RowingClub.Identity.Application.Companies.GetPendingCompanies;
 using RowingClub.Identity.Application.Companies.ResetCompanyAdminPassword;
@@ -15,7 +16,8 @@ using RowingClub.Identity.Application.Platform;
 namespace RowingClub.Api.Endpoints;
 
 public sealed record UpdateCompanyRequest(string Name, string? Phone, string? ContactEmail, string? Address, string? TaxNumber);
-public sealed record SetCompanyPlanRequest(string Plan, int? CustomMaxBranches, int? CustomMaxMembers, int? CustomMaxBoats);
+public sealed record SetCompanyPlanRequest(
+    string Plan, int? CustomMaxBranches, int? CustomMaxMembers, int? CustomMaxBoats, int? CustomMaxInstructors);
 
 public static class AdminEndpoints
 {
@@ -78,7 +80,8 @@ public static class AdminEndpoints
             Guid companyId, [FromBody] SetCompanyPlanRequest request, [FromServices] IMediator mediator) =>
         {
             await mediator.Send(new SetCompanyPlanCommand(
-                companyId, request.Plan, request.CustomMaxBranches, request.CustomMaxMembers, request.CustomMaxBoats));
+                companyId, request.Plan, request.CustomMaxBranches, request.CustomMaxMembers, request.CustomMaxBoats,
+                request.CustomMaxInstructors));
             return Results.Ok(ApiResponse.Ok("Şirket paketi güncellendi."));
         })
         .WithName("SetCompanyPlan");
@@ -106,6 +109,14 @@ public static class AdminEndpoints
             return Results.Ok(ApiResponse.Ok("Parola sıfırlama bağlantısı gönderildi."));
         })
         .WithName("ResetCompanyAdminPassword");
+
+        platformAdminGroup.MapGet("/activity-logs", async (
+            string? search, int? page, int? pageSize, IMediator mediator) =>
+        {
+            var logs = await mediator.Send(new GetPlatformActivityLogsQuery(search, page ?? 1, pageSize ?? 25));
+            return Results.Ok(ApiResponse<PagedResult<PlatformActivityLogDto>>.Ok(logs));
+        })
+        .WithName("GetPlatformActivityLogs");
 
         platformAdminGroup.MapGet("/companies/{companyId:guid}/overview", async (
             Guid companyId, RowingClub.Api.Tenancy.TenantResolver resolver, IMediator mediator, CancellationToken ct) =>

@@ -29,7 +29,8 @@ public sealed class UpgradeCompanyPlanCommandHandlerTests
     }
 
     private static UpgradeCompanyPlanCommand CommandFor(Guid companyId, string plan) =>
-        new(companyId, plan, UsedBranches: 1, UsedMembers: 10, UsedBoats: 2, IdempotencyKey: "idempotency-key-1");
+        new(companyId, plan, UsedBranches: 1, UsedMembers: 10, UsedBoats: 2, UsedInstructors: 2,
+            IdempotencyKey: "idempotency-key-1");
 
     [Fact]
     public async Task Throws_company_not_found_when_company_does_not_exist()
@@ -61,7 +62,7 @@ public sealed class UpgradeCompanyPlanCommandHandlerTests
     public async Task Throws_not_an_upgrade_when_target_plan_is_not_higher_than_current()
     {
         var company = CompanyTestFactory.Create();
-        company.SetPlan(CompanyPlan.Kaptan, null, null, null);
+        company.SetPlan(CompanyPlan.Kaptan, null, null, null, null);
         _companyRepository.GetByIdAsync(company.Id, Arg.Any<CancellationToken>()).Returns(company);
 
         var handler = CreateHandler();
@@ -132,7 +133,8 @@ public sealed class UpgradeCompanyPlanCommandHandlerTests
         _subscriptionRepository.GetByCompanyIdAsync(company.Id, Arg.Any<CancellationToken>()).Returns(subscription);
 
         var command = new UpgradeCompanyPlanCommand(
-            company.Id, "Tayfa", UsedBranches: 99, UsedMembers: 10, UsedBoats: 2, IdempotencyKey: "idempotency-key-1");
+            company.Id, "Tayfa", UsedBranches: 99, UsedMembers: 10, UsedBoats: 2, UsedInstructors: 2,
+            IdempotencyKey: "idempotency-key-1");
 
         var handler = CreateHandler();
         var act = () => handler.Handle(command, CancellationToken.None);

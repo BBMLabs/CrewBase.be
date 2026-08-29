@@ -61,6 +61,9 @@ public sealed class InstructorRepository(TenantDbContext context) : IInstructorR
     public Task<List<Instructor>> GetByBranchIdAsync(Guid branchId, CancellationToken cancellationToken) =>
         context.Instructors.Where(i => i.BranchId == branchId).ToListAsync(cancellationToken);
 
+    public Task<int> CountActiveAsync(CancellationToken cancellationToken) =>
+        context.Instructors.CountAsync(i => i.IsActive, cancellationToken);
+
     public void Add(Instructor instructor) => context.Instructors.Add(instructor);
 
     public void Remove(Instructor instructor) => context.Instructors.Remove(instructor);

@@ -24,8 +24,8 @@ public sealed class GetCompanySiteQueryHandler(ICompanyRepository companyReposit
         return new CompanySiteDto(
             company.Id, company.Name, company.Subdomain, company.DatabaseName,
             company.Phone, company.ContactEmail, company.Address, company.TaxNumber, company.Status.ToString(),
-            company.Plan.ToString(), limits.MaxBranches, limits.MaxMembers, limits.MaxBoats,
-            features.MaxCompanyUsers, features.CanExportData, features.CanAssignEmployeeRole,
+            company.Plan.ToString(), limits.MaxBranches, limits.MaxMembers, limits.MaxBoats, limits.MaxInstructors,
+            features.MaxManagers, features.MaxEmployees, features.CanExportData,
             features.HasAdvancedReports, features.HasAutomaticDuesReminders);
     }
 }

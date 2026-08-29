@@ -21,8 +21,8 @@ public sealed class TenantResolver(ISender sender, ITenantDatabase tenantDatabas
         if (company is not null)
             tenantDatabase.Set(
                 company.CompanyId, company.DatabaseName, company.Subdomain, company.Plan,
-                company.MaxBranches, company.MaxMembers, company.MaxBoats,
-                company.MaxCompanyUsers, company.CanExportData, company.CanAssignEmployeeRole,
+                company.MaxBranches, company.MaxMembers, company.MaxBoats, company.MaxInstructors,
+                company.MaxManagers, company.MaxEmployees, company.CanExportData,
                 company.HasAdvancedReports, company.HasAutomaticDuesReminders);
 
         return company;
@@ -35,8 +35,8 @@ public sealed class TenantResolver(ISender sender, ITenantDatabase tenantDatabas
         if (company is not null)
             tenantDatabase.Set(
                 company.CompanyId, company.DatabaseName, company.Subdomain, company.Plan,
-                company.MaxBranches, company.MaxMembers, company.MaxBoats,
-                company.MaxCompanyUsers, company.CanExportData, company.CanAssignEmployeeRole,
+                company.MaxBranches, company.MaxMembers, company.MaxBoats, company.MaxInstructors,
+                company.MaxManagers, company.MaxEmployees, company.CanExportData,
                 company.HasAdvancedReports, company.HasAutomaticDuesReminders);
 
         return company;

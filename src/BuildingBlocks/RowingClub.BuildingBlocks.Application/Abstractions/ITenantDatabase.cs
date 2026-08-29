@@ -24,11 +24,13 @@ public interface ITenantDatabase
 
     int MaxBoats { get; }
 
-    int MaxCompanyUsers { get; }
+    int MaxInstructors { get; }
+
+    int MaxManagers { get; }
+
+    int MaxEmployees { get; }
 
     bool CanExportData { get; }
-
-    bool CanAssignEmployeeRole { get; }
 
     bool HasAdvancedReports { get; }
 
@@ -36,7 +38,7 @@ public interface ITenantDatabase
 
     void Set(
         Guid companyId, string databaseName, string subdomain, string plan,
-        int maxBranches, int maxMembers, int maxBoats,
-        int maxCompanyUsers, bool canExportData, bool canAssignEmployeeRole,
+        int maxBranches, int maxMembers, int maxBoats, int maxInstructors,
+        int maxManagers, int maxEmployees, bool canExportData,
         bool hasAdvancedReports, bool hasAutomaticDuesReminders);
 }
