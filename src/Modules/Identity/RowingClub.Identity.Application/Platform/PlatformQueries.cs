@@ -20,7 +20,9 @@ public sealed record PlatformCompanyDto(
     Guid Id, string Name, string Subdomain, string Status,
     string? Phone, string? ContactEmail, string? Address, string? TaxNumber,
     DateTimeOffset CreatedAtUtc, DateTimeOffset? LastLoginAtUtc, bool IsDeleted, DateTimeOffset? DeletedAtUtc,
-    string Plan, int PlanMaxBranches, int PlanMaxMembers, int PlanMaxBoats, int PlanMaxInstructors);
+    string Plan, int PlanMaxBranches, int PlanMaxMembers, int PlanMaxBoats, int PlanMaxInstructors,
+    int PlanMaxManagers, int PlanMaxEmployees, bool PlanCanExportData, bool PlanHasAdvancedReports,
+    bool PlanHasAutomaticDuesReminders);
 
 /// <summary>Master admin: platform geneli sayılar.</summary>
 public sealed record GetPlatformStatsQuery : IRequest<PlatformStatsDto>;
@@ -71,10 +73,13 @@ public sealed class GetAllCompaniesQueryHandler(ICompanyRepository companyReposi
             var admin = companyUsers.FirstOrDefault(u => u.Role == UserRole.CompanyAdmin);
 
             var limits = c.PlanLimits;
+            var features = c.PlanFeatures;
             dtos.Add(new PlatformCompanyDto(
                 c.Id, c.Name, c.Subdomain, c.Status.ToString(), c.Phone, c.ContactEmail, c.Address, c.TaxNumber,
                 c.CreatedAtUtc, admin?.LastLoginAtUtc, c.IsDeleted, c.DeletedAtUtc,
-                c.Plan.ToString(), limits.MaxBranches, limits.MaxMembers, limits.MaxBoats, limits.MaxInstructors));
+                c.Plan.ToString(), limits.MaxBranches, limits.MaxMembers, limits.MaxBoats, limits.MaxInstructors,
+                features.MaxManagers, features.MaxEmployees, features.CanExportData, features.HasAdvancedReports,
+                features.HasAutomaticDuesReminders));
         }
 
         IOrderedEnumerable<PlatformCompanyDto> sorted = request.SortBy?.ToLowerInvariant() switch

@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using RowingClub.BuildingBlocks.Infrastructure.Postgres;
@@ -11,9 +12,11 @@ using RowingClub.BuildingBlocks.Infrastructure.Postgres;
 namespace RowingClub.BuildingBlocks.Infrastructure.Postgres.Migrations
 {
     [DbContext(typeof(RowingClubDbContext))]
-    partial class RowingClubDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260829165814_AddCompanyCustomFeatureOverrides")]
+    partial class AddCompanyCustomFeatureOverrides
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder

@@ -188,7 +188,7 @@ public static class MemberEndpoints
 
         group.MapGet("/packages/catalog", Guarded(async (ctx, sender, ct) =>
         {
-            var catalog = await sender.Send(new GetPurchasablePackagesQuery(), ct);
+            var catalog = await sender.Send(new GetPurchasablePackagesQuery(ctx.CustomerId), ct);
             return Results.Ok(ApiResponse<List<PurchasablePackageDto>>.Ok(catalog));
         })).WithName("MemberPackageCatalog");
 

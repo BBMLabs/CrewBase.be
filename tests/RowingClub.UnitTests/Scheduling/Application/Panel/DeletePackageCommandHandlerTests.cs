@@ -20,7 +20,7 @@ public sealed class DeletePackageCommandHandlerTests
         new(_packageRepository, _customerPackageRepository, _fileStorage, _unitOfWork);
 
     private static LessonPackage CreatePackage() =>
-        LessonPackage.Create("Test Paket", null, 8, 100m, null, null, null);
+        LessonPackage.Create("Test Paket", null, 8, 100m, null);
 
     [Fact]
     public async Task Blocks_deletion_when_package_has_been_purchased_or_assigned()

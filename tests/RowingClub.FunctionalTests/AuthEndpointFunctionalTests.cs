@@ -52,6 +52,8 @@ public sealed class AuthEndpointFunctionalTests(RowingClubWebApplicationFactory 
                      "/api/v1/platform/companies/{companyId}/approve",
                      "/api/v1/platform/companies/{companyId}/suspend",
                      "/api/v1/platform/activity-logs",
+                     "/api/v1/platform/revenue",
+                     "/api/v1/platform/companies/{companyId}/subscription",
                      "/api/v1/admin/{companyId}/dashboard",
                      "/api/v1/admin/{companyId}/users",
                      "/api/v1/admin/profile",

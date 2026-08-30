@@ -1,6 +1,7 @@
 using MediatR;
 using RowingClub.Scheduling.Application.Panel;
 using RowingClub.Scheduling.Domain.Boats;
+using RowingClub.Scheduling.Domain.Campaigns;
 using RowingClub.Scheduling.Domain.Customers;
 using RowingClub.Scheduling.Domain.Packages;
 using RowingClub.Scheduling.Domain.Settings;
@@ -28,7 +29,8 @@ public sealed record PublicOptionsDto(
 public sealed class GetPublicOptionsQueryHandler(
     ISettingsRepository settingsRepository,
     IBoatRepository boatRepository,
-    ILessonPackageRepository lessonPackageRepository)
+    ILessonPackageRepository lessonPackageRepository,
+    ICampaignRepository campaignRepository)
     : IRequestHandler<GetPublicOptionsQuery, PublicOptionsDto>
 {
     public async Task<PublicOptionsDto> Handle(GetPublicOptionsQuery request, CancellationToken cancellationToken)
@@ -47,10 +49,18 @@ public sealed class GetPublicOptionsQueryHandler(
             activeBoatClasses.Add(BoatClass.Single1x);
 
         var now = DateTimeOffset.UtcNow;
+        var campaigns = await campaignRepository.GetAllAsync(cancellationToken);
+        // Ziyaretçi henüz üye değil (seviyesi yok) - yalnızca TÜM üyelere açık (seviye kısıtı
+        // olmayan) kampanyalar herkese güvenle gösterilebilir.
+        var publicCampaigns = campaigns.Where(c => c.MinLevel is null && c.MaxLevel is null).ToList();
+
+        decimal EffectivePrice(LessonPackage p) =>
+            publicCampaigns.FirstOrDefault(c => c.LessonPackageId == p.Id && c.IsActiveAt(now))?.Price ?? p.Price;
+
         var packages = (await lessonPackageRepository.GetAllAsync(cancellationToken))
             .Where(p => p.IsActive)
-            .OrderBy(p => p.GetEffectivePrice(now))
-            .Select(p => new PackageOptionDto(p.Id, p.Name, p.Description, p.SessionCount, p.GetEffectivePrice(now)))
+            .OrderBy(EffectivePrice)
+            .Select(p => new PackageOptionDto(p.Id, p.Name, p.Description, p.SessionCount, EffectivePrice(p)))
             .ToList();
 
         return new PublicOptionsDto(

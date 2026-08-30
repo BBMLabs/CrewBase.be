@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using RowingClub.Scheduling.Domain.Boats;
 using RowingClub.Scheduling.Domain.Branches;
+using RowingClub.Scheduling.Domain.Campaigns;
 using RowingClub.Scheduling.Domain.Instructors;
 using RowingClub.Scheduling.Domain.Packages;
 using RowingClub.Scheduling.Domain.Sessions;
@@ -80,6 +81,19 @@ public sealed class LessonPackageRepository(TenantDbContext context) : ILessonPa
     public void Add(LessonPackage lessonPackage) => context.LessonPackages.Add(lessonPackage);
 
     public void Remove(LessonPackage lessonPackage) => context.LessonPackages.Remove(lessonPackage);
+}
+
+public sealed class CampaignRepository(TenantDbContext context) : ICampaignRepository
+{
+    public Task<List<Campaign>> GetAllAsync(CancellationToken cancellationToken) =>
+        context.Campaigns.ToListAsync(cancellationToken);
+
+    public Task<Campaign?> GetByIdAsync(Guid id, CancellationToken cancellationToken) =>
+        context.Campaigns.FirstOrDefaultAsync(c => c.Id == id, cancellationToken);
+
+    public void Add(Campaign campaign) => context.Campaigns.Add(campaign);
+
+    public void Remove(Campaign campaign) => context.Campaigns.Remove(campaign);
 }
 
 public sealed class SettingsRepository(TenantDbContext context) : ISettingsRepository

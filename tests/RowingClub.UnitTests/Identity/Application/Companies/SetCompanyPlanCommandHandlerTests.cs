@@ -81,7 +81,8 @@ public sealed class SetCompanyPlanCommandHandlerTests
         await handler.Handle(
             new SetCompanyPlanCommand(
                 company.Id, "Custom", CustomMaxBranches: 10, CustomMaxMembers: 500, CustomMaxBoats: 40,
-                CustomMaxInstructors: 20),
+                CustomMaxInstructors: 20, CustomMaxManagers: 5, CustomMaxEmployees: 8, CustomCanExportData: true,
+                CustomHasAdvancedReports: true, CustomHasAutomaticDuesReminders: false),
             CancellationToken.None);
 
         company.Plan.Should().Be(CompanyPlan.Custom);
@@ -89,6 +90,11 @@ public sealed class SetCompanyPlanCommandHandlerTests
         company.CustomMaxMembers.Should().Be(500);
         company.CustomMaxBoats.Should().Be(40);
         company.CustomMaxInstructors.Should().Be(20);
+        company.PlanFeatures.MaxManagers.Should().Be(5);
+        company.PlanFeatures.MaxEmployees.Should().Be(8);
+        company.PlanFeatures.CanExportData.Should().BeTrue();
+        company.PlanFeatures.HasAdvancedReports.Should().BeTrue();
+        company.PlanFeatures.HasAutomaticDuesReminders.Should().BeFalse();
         _companyRepository.Received(1).Update(company);
     }
 }

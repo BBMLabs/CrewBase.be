@@ -4,6 +4,7 @@ using RowingClub.BuildingBlocks.Security.Encryption;
 using RowingClub.Scheduling.Domain.Appointments;
 using RowingClub.Scheduling.Domain.Boats;
 using RowingClub.Scheduling.Domain.Branches;
+using RowingClub.Scheduling.Domain.Campaigns;
 using RowingClub.Scheduling.Domain.Cards;
 using RowingClub.Scheduling.Domain.Community;
 using RowingClub.Scheduling.Domain.Consents;
@@ -54,6 +55,8 @@ public sealed class TenantDbContext(
     public DbSet<CompanySettings> Settings => Set<CompanySettings>();
 
     public DbSet<CustomerPackage> CustomerPackages => Set<CustomerPackage>();
+
+    public DbSet<Campaign> Campaigns => Set<Campaign>();
 
     public DbSet<MemberLog> MemberLogs => Set<MemberLog>();
 
@@ -266,6 +269,7 @@ public sealed class TenantDbContext(
             builder.Property(p => p.Source).HasConversion<string>().HasMaxLength(20)
                 .HasDefaultValue(CustomerPackageSource.Assigned);
             builder.Property(p => p.PaymentReferenceCode).HasMaxLength(100);
+            builder.Property(p => p.PricePaid).HasPrecision(12, 2);
             builder.HasIndex(p => p.PaymentReferenceCode).IsUnique();
             builder.HasIndex(p => p.CustomerId);
             // Süresi dolmuş (ExpiresAtUtc geçmiş) paketleri bulan periyodik tarama için.
@@ -280,6 +284,11 @@ public sealed class TenantDbContext(
                 .WithMany()
                 .HasForeignKey(p => p.LessonPackageId)
                 .OnDelete(DeleteBehavior.Restrict);
+
+            builder.HasOne<Campaign>()
+                .WithMany()
+                .HasForeignKey(p => p.CampaignId)
+                .OnDelete(DeleteBehavior.SetNull);
         });
 
         modelBuilder.Entity<MemberLog>(builder =>
@@ -377,8 +386,20 @@ public sealed class TenantDbContext(
             builder.Property(p => p.Name).HasMaxLength(200).IsRequired();
             builder.Property(p => p.Description).HasMaxLength(1000);
             builder.Property(p => p.Price).HasPrecision(12, 2);
-            builder.Property(p => p.CampaignPrice).HasPrecision(12, 2);
             builder.Property(p => p.ImagePath).HasMaxLength(500);
+        });
+
+        modelBuilder.Entity<Campaign>(builder =>
+        {
+            builder.ToTable("campaigns");
+            builder.HasKey(c => c.Id);
+            builder.Property(c => c.Price).HasPrecision(12, 2);
+            builder.HasIndex(c => c.LessonPackageId);
+
+            builder.HasOne<LessonPackage>()
+                .WithMany()
+                .HasForeignKey(c => c.LessonPackageId)
+                .OnDelete(DeleteBehavior.Cascade);
         });
 
         modelBuilder.Entity<CompanySettings>(builder =>

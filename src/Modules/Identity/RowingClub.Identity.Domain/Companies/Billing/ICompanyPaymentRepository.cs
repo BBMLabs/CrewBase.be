@@ -8,5 +8,8 @@ public interface ICompanyPaymentRepository
     Task<(List<CompanyPayment> Items, int TotalCount)> GetPagedByCompanyIdAsync(
         Guid companyId, int page, int pageSize, CancellationToken cancellationToken);
 
+    /// <summary>Master panelin ciro/kazanç analizleri için; tüm firmalardaki başarılı tahsilatlar.</summary>
+    Task<List<CompanyPayment>> GetAllSucceededAsync(CancellationToken cancellationToken);
+
     void Add(CompanyPayment payment);
 }

@@ -19,7 +19,8 @@ public sealed class SetCompanyPlanCommandHandler(
 
         company.SetPlan(
             plan, request.CustomMaxBranches, request.CustomMaxMembers, request.CustomMaxBoats,
-            request.CustomMaxInstructors);
+            request.CustomMaxInstructors, request.CustomMaxManagers, request.CustomMaxEmployees,
+            request.CustomCanExportData, request.CustomHasAdvancedReports, request.CustomHasAutomaticDuesReminders);
         companyRepository.Update(company);
 
         auditLogger.Log("COMPANY_PLAN_SET", company.Id.ToString(), $"Master admin paketi ayarladı: {plan}");

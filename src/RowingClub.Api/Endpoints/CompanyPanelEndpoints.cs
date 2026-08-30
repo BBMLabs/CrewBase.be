@@ -31,15 +31,19 @@ public sealed record BranchRequest(
 public sealed record SetCustomerBranchRequest(Guid? BranchId);
 public sealed record DeleteBranchRequest(string MemberAction, Guid? TransferTargetBranchId);
 public sealed record PackageRequest(
-    string Name, string? Description, int SessionCount, decimal Price, bool? IsActive,
-    int? ValidityDays, DateTimeOffset? CampaignStartsAtUtc, DateTimeOffset? CampaignEndsAtUtc,
-    decimal? CampaignPrice);
+    string Name, string? Description, int SessionCount, decimal Price, bool? IsActive, int? ValidityDays);
+public sealed record CampaignRequest(
+    Guid LessonPackageId, DateTimeOffset StartsAtUtc, DateTimeOffset EndsAtUtc, decimal Price,
+    int? MinLevel, int? MaxLevel);
+public sealed record UpdateCampaignRequest(
+    DateTimeOffset StartsAtUtc, DateTimeOffset EndsAtUtc, decimal Price, int? MinLevel, int? MaxLevel);
 public sealed record AssignSessionRequest(Guid? BoatId, Guid? InstructorId);
 public sealed record UpdateSettingsRequest(
     List<DayScheduleDto> WorkingHours, int SlotMinutes,
     int MinNoticeHours, int MaxAdvanceDays, List<int> ReminderOptions,
-    int DefaultReminderMinutes, string TimeZoneId,
+    string TimeZoneId,
     bool NotifyOnNewAppointment, bool NotifyOnCancellation, bool SendCustomerReminders,
+    bool NotifyOnCampaignCreated,
     List<int> PackageExpiryReminderDays);
 public sealed record CreateCompanyUserRequest(string Email, string Password, string Role);
 public sealed record UpgradePlanRequest(string Plan, string IdempotencyKey);
@@ -713,9 +717,7 @@ public static class CompanyPanelEndpoints
                 return CompanyNotFound();
 
             var package = await sender.Send(new CreatePackageCommand(
-                request.Name, request.Description, request.SessionCount, request.Price,
-                request.ValidityDays, request.CampaignStartsAtUtc, request.CampaignEndsAtUtc,
-                request.CampaignPrice), ct);
+                request.Name, request.Description, request.SessionCount, request.Price, request.ValidityDays), ct);
             return Results.Created($"/api/v1/company/packages/{package.Id}", ApiResponse<PackageDto>.Ok(package));
         }).WithName("CompanyCreatePackage");
 
@@ -728,9 +730,7 @@ public static class CompanyPanelEndpoints
 
             var package = await sender.Send(new UpdatePackageCommand(
                 packageId, request.Name, request.Description, request.SessionCount,
-                request.Price, request.IsActive ?? true,
-                request.ValidityDays, request.CampaignStartsAtUtc, request.CampaignEndsAtUtc,
-                request.CampaignPrice), ct);
+                request.Price, request.IsActive ?? true, request.ValidityDays), ct);
             return Results.Ok(ApiResponse<PackageDto>.Ok(package));
         }).WithName("CompanyUpdatePackage");
 
@@ -784,6 +784,54 @@ public static class CompanyPanelEndpoints
         // yerine bu uca özgü olarak devre dışı bırakılır.
         .DisableAntiforgery();
 
+        // ---- Kampanyalar ----
+
+        group.MapGet("/campaigns", async (
+            ICurrentUser user, TenantResolver resolver, ISender sender, CancellationToken ct) =>
+        {
+            if (await ResolveOwnCompanyAsync(user, resolver, ct) is null)
+                return CompanyNotFound();
+
+            var campaigns = await sender.Send(new GetCampaignsQuery(), ct);
+            return Results.Ok(ApiResponse<List<CampaignDto>>.Ok(campaigns));
+        }).WithName("CompanyCampaigns");
+
+        group.MapPost("/campaigns", async (
+            [FromBody] CampaignRequest request, ICurrentUser user, TenantResolver resolver,
+            ISender sender, CancellationToken ct) =>
+        {
+            if (await ResolveOwnCompanyAsync(user, resolver, ct) is null)
+                return CompanyNotFound();
+
+            var campaign = await sender.Send(new CreateCampaignCommand(
+                request.LessonPackageId, request.StartsAtUtc, request.EndsAtUtc, request.Price,
+                request.MinLevel, request.MaxLevel), ct);
+            return Results.Created($"/api/v1/company/campaigns/{campaign.Id}", ApiResponse<CampaignDto>.Ok(campaign));
+        }).WithName("CompanyCreateCampaign");
+
+        group.MapPut("/campaigns/{campaignId:guid}", async (
+            Guid campaignId, [FromBody] UpdateCampaignRequest request, ICurrentUser user,
+            TenantResolver resolver, ISender sender, CancellationToken ct) =>
+        {
+            if (await ResolveOwnCompanyAsync(user, resolver, ct) is null)
+                return CompanyNotFound();
+
+            var campaign = await sender.Send(new UpdateCampaignCommand(
+                campaignId, request.StartsAtUtc, request.EndsAtUtc, request.Price,
+                request.MinLevel, request.MaxLevel), ct);
+            return Results.Ok(ApiResponse<CampaignDto>.Ok(campaign));
+        }).WithName("CompanyUpdateCampaign");
+
+        group.MapDelete("/campaigns/{campaignId:guid}", async (
+            Guid campaignId, ICurrentUser user, TenantResolver resolver, ISender sender, CancellationToken ct) =>
+        {
+            if (await ResolveOwnCompanyAsync(user, resolver, ct) is null)
+                return CompanyNotFound();
+
+            await sender.Send(new DeleteCampaignCommand(campaignId), ct);
+            return Results.Ok(ApiResponse.Ok("Kampanya silindi."));
+        }).WithName("CompanyDeleteCampaign");
+
         // ---- Firma ayarları (çalışma saatleri, randevu ve hatırlatma kuralları) ----
 
         group.MapGet("/settings", async (
@@ -806,8 +854,9 @@ public static class CompanyPanelEndpoints
             var settings = await sender.Send(new UpdateSettingsCommand(
                 request.WorkingHours, request.SlotMinutes,
                 request.MinNoticeHours, request.MaxAdvanceDays, request.ReminderOptions,
-                request.DefaultReminderMinutes, request.TimeZoneId,
+                request.TimeZoneId,
                 request.NotifyOnNewAppointment, request.NotifyOnCancellation, request.SendCustomerReminders,
+                request.NotifyOnCampaignCreated,
                 request.PackageExpiryReminderDays), ct);
             return Results.Ok(ApiResponse<CompanySettingsDto>.Ok(settings, "Ayarlar güncellendi."));
         }).WithName("CompanyUpdateSettings");

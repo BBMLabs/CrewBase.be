@@ -24,5 +24,8 @@ public sealed class CompanyPaymentRepository(RowingClubDbContext context) : ICom
         return (items, totalCount);
     }
 
+    public Task<List<CompanyPayment>> GetAllSucceededAsync(CancellationToken cancellationToken) =>
+        context.Set<CompanyPayment>().Where(p => p.Status == CompanyPaymentStatus.Succeeded).ToListAsync(cancellationToken);
+
     public void Add(CompanyPayment payment) => context.Set<CompanyPayment>().Add(payment);
 }

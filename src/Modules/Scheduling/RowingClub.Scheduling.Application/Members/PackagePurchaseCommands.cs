@@ -3,32 +3,51 @@ using RowingClub.BuildingBlocks.Application.Messaging;
 using RowingClub.BuildingBlocks.Domain;
 using RowingClub.Scheduling.Application.Billing;
 using RowingClub.Scheduling.Domain;
+using RowingClub.Scheduling.Domain.Campaigns;
 using RowingClub.Scheduling.Domain.Customers;
 using RowingClub.Scheduling.Domain.Logs;
 using RowingClub.Scheduling.Domain.Packages;
 
 namespace RowingClub.Scheduling.Application.Members;
 
-/// <summary>Üyenin kendi satın alabileceği (aktif VE kampanya penceresi içinde/sınırsız) paket kataloğu.</summary>
-public sealed record GetPurchasablePackagesQuery : IRequest<List<PurchasablePackageDto>>;
+/// <summary>Üyenin kendi satın alabileceği paket kataloğu; kendi seviyesine görünen aktif kampanya varsa fiyata yansır.</summary>
+public sealed record GetPurchasablePackagesQuery(Guid CustomerId) : IRequest<List<PurchasablePackageDto>>;
 
 public sealed record PurchasablePackageDto(
     Guid Id, string Name, string? Description, int SessionCount, decimal Price,
     string? ImagePath, int? ValidityDays);
 
-public sealed class GetPurchasablePackagesQueryHandler(ILessonPackageRepository repository)
+internal static class CampaignEligibility
+{
+    public static Campaign? FindFor(
+        IEnumerable<Campaign> campaigns, Guid lessonPackageId, int customerLevel, DateTimeOffset now) =>
+        campaigns.FirstOrDefault(c =>
+            c.LessonPackageId == lessonPackageId && c.IsActiveAt(now) && c.IsVisibleToLevel(customerLevel));
+}
+
+public sealed class GetPurchasablePackagesQueryHandler(
+    ILessonPackageRepository packageRepository, ICampaignRepository campaignRepository, ICustomerRepository customerRepository)
     : IRequestHandler<GetPurchasablePackagesQuery, List<PurchasablePackageDto>>
 {
     public async Task<List<PurchasablePackageDto>> Handle(
         GetPurchasablePackagesQuery request, CancellationToken cancellationToken)
     {
+        var customer = await customerRepository.GetByIdAsync(request.CustomerId, cancellationToken)
+            ?? throw new NotFoundException("Customer", request.CustomerId.ToString());
+
         var now = DateTimeOffset.UtcNow;
-        var packages = await repository.GetAllAsync(cancellationToken);
+        var packages = await packageRepository.GetAllAsync(cancellationToken);
+        var campaigns = await campaignRepository.GetAllAsync(cancellationToken);
+
         return packages
-            .Where(p => p.IsCurrentlyPurchasable(now))
-            .OrderBy(p => p.GetEffectivePrice(now))
-            .Select(p => new PurchasablePackageDto(
-                p.Id, p.Name, p.Description, p.SessionCount, p.GetEffectivePrice(now), p.ImagePath, p.ValidityDays))
+            .Where(p => p.IsActive)
+            .Select(p =>
+            {
+                var campaign = CampaignEligibility.FindFor(campaigns, p.Id, customer.Level, now);
+                return new PurchasablePackageDto(
+                    p.Id, p.Name, p.Description, p.SessionCount, campaign?.Price ?? p.Price, p.ImagePath, p.ValidityDays);
+            })
+            .OrderBy(p => p.Price)
             .ToList();
     }
 }
@@ -51,6 +70,7 @@ public sealed record ConfirmPackagePurchaseCommand(Guid CustomerId, Guid Package
 public sealed class PurchasePackageCommandHandler(
     ICustomerRepository customerRepository,
     ILessonPackageRepository packageRepository,
+    ICampaignRepository campaignRepository,
     IIyzicoPaymentClient iyzicoClient)
     : IRequestHandler<PurchasePackageCommand, PurchasePackageResult>
 {
@@ -63,10 +83,12 @@ public sealed class PurchasePackageCommandHandler(
             ?? throw new NotFoundException("Customer", request.CustomerId.ToString());
 
         var package = await packageRepository.GetByIdAsync(request.PackageId, cancellationToken);
-        if (package is null || !package.IsCurrentlyPurchasable(DateTimeOffset.UtcNow))
+        if (package is null || !package.IsActive)
             throw new DomainException("invalid_package", "Paket bulunamadı veya şu anda satın alınabilir değil.");
 
-        var effectivePrice = package.GetEffectivePrice(DateTimeOffset.UtcNow);
+        var campaigns = await campaignRepository.GetAllAsync(cancellationToken);
+        var campaign = CampaignEligibility.FindFor(campaigns, package.Id, customer.Level, DateTimeOffset.UtcNow);
+        var effectivePrice = campaign?.Price ?? package.Price;
         if (effectivePrice <= 0)
             throw new DomainException("invalid_package_price", "Bu paketin satın alınabilir bir fiyatı yok.");
 
@@ -95,6 +117,7 @@ public sealed class PurchasePackageCommandHandler(
 public sealed class ConfirmPackagePurchaseCommandHandler(
     ICustomerRepository customerRepository,
     ILessonPackageRepository packageRepository,
+    ICampaignRepository campaignRepository,
     ICustomerPackageRepository customerPackageRepository,
     IMemberLogRepository memberLogRepository,
     IIyzicoPaymentClient iyzicoClient,
@@ -120,18 +143,23 @@ public sealed class ConfirmPackagePurchaseCommandHandler(
             return GetMemberPackagesQueryHandler.ToDto(existing);
         }
 
-        // iyzico dönüşü gecikmiş olabilir; ödeme başarılı olsa bile bu arada kampanya kapanmış ya
-        // da paket pasife alınmışsa yeni bir geçerli paket oluşturulmaz (bkz. plan Aşama 5).
-        if (!package.IsCurrentlyPurchasable(DateTimeOffset.UtcNow))
+        // iyzico dönüşü gecikmiş olabilir; ödeme başarılı olsa bile bu arada paket pasife
+        // alınmışsa yeni bir geçerli paket oluşturulmaz (bkz. plan Aşama 5).
+        if (!package.IsActive)
             throw new DomainException(
                 "package_no_longer_purchasable",
                 "Ödemeniz alındı ancak bu paket artık satın alınamıyor; lütfen firmayla iletişime geçin.");
 
-        var purchased = CustomerPackage.Assign(customer.Id, package, CustomerPackageSource.Purchased, result.PaymentReferenceCode);
+        var campaigns = await campaignRepository.GetAllAsync(cancellationToken);
+        var campaign = CampaignEligibility.FindFor(campaigns, package.Id, customer.Level, DateTimeOffset.UtcNow);
+        var pricePaid = result.PaidPrice ?? campaign?.Price ?? package.Price;
+
+        var purchased = CustomerPackage.Assign(
+            customer.Id, package, CustomerPackageSource.Purchased, result.PaymentReferenceCode,
+            pricePaid, campaign?.Id);
         customerPackageRepository.Add(purchased);
         memberLogRepository.Add(MemberLog.Record(
-            customer.Id, MemberEvents.PackagePurchased,
-            $"{package.Name} ({package.SessionCount} ders, {package.GetEffectivePrice(DateTimeOffset.UtcNow):0.00} TRY)"));
+            customer.Id, MemberEvents.PackagePurchased, $"{package.Name} ({package.SessionCount} ders, {pricePaid:0.00} TRY)"));
 
         await unitOfWork.SaveChangesAsync(cancellationToken);
         return GetMemberPackagesQueryHandler.ToDto(purchased);

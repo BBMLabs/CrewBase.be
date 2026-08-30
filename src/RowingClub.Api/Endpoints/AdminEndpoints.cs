@@ -4,6 +4,8 @@ using Microsoft.AspNetCore.Mvc;
 using RowingClub.BuildingBlocks.Application.Abstractions;
 using RowingClub.BuildingBlocks.Application.Messaging;
 using RowingClub.Identity.Application.Companies.ApproveCompany;
+using RowingClub.Identity.Application.Companies.Billing.CancelSubscription;
+using RowingClub.Identity.Application.Companies.Billing.RecordManualPaymentCorrection;
 using RowingClub.Identity.Application.Companies.GetPendingCompanies;
 using RowingClub.Identity.Application.Companies.ResetCompanyAdminPassword;
 using RowingClub.Identity.Application.Companies.RestoreCompany;
@@ -17,7 +19,11 @@ namespace RowingClub.Api.Endpoints;
 
 public sealed record UpdateCompanyRequest(string Name, string? Phone, string? ContactEmail, string? Address, string? TaxNumber);
 public sealed record SetCompanyPlanRequest(
-    string Plan, int? CustomMaxBranches, int? CustomMaxMembers, int? CustomMaxBoats, int? CustomMaxInstructors);
+    string Plan, int? CustomMaxBranches, int? CustomMaxMembers, int? CustomMaxBoats, int? CustomMaxInstructors,
+    int? CustomMaxManagers, int? CustomMaxEmployees, bool? CustomCanExportData, bool? CustomHasAdvancedReports,
+    bool? CustomHasAutomaticDuesReminders);
+public sealed record RecordManualPaymentCorrectionRequest(
+    decimal Amount, string Currency, string Kind, string Status, string Note);
 
 public static class AdminEndpoints
 {
@@ -81,7 +87,8 @@ public static class AdminEndpoints
         {
             await mediator.Send(new SetCompanyPlanCommand(
                 companyId, request.Plan, request.CustomMaxBranches, request.CustomMaxMembers, request.CustomMaxBoats,
-                request.CustomMaxInstructors));
+                request.CustomMaxInstructors, request.CustomMaxManagers, request.CustomMaxEmployees,
+                request.CustomCanExportData, request.CustomHasAdvancedReports, request.CustomHasAutomaticDuesReminders));
             return Results.Ok(ApiResponse.Ok("Şirket paketi güncellendi."));
         })
         .WithName("SetCompanyPlan");
@@ -117,6 +124,38 @@ public static class AdminEndpoints
             return Results.Ok(ApiResponse<PagedResult<PlatformActivityLogDto>>.Ok(logs));
         })
         .WithName("GetPlatformActivityLogs");
+
+        platformAdminGroup.MapGet("/revenue", async (IMediator mediator) =>
+        {
+            var revenue = await mediator.Send(new GetPlatformRevenueQuery());
+            return Results.Ok(ApiResponse<PlatformRevenueDto>.Ok(revenue));
+        })
+        .WithName("GetPlatformRevenue");
+
+        platformAdminGroup.MapGet("/companies/{companyId:guid}/subscription", async (
+            Guid companyId, int? page, int? pageSize, IMediator mediator) =>
+        {
+            var subscription = await mediator.Send(new GetCompanySubscriptionQuery(companyId, page ?? 1, pageSize ?? 25));
+            return Results.Ok(ApiResponse<CompanySubscriptionDetailDto>.Ok(subscription));
+        })
+        .WithName("GetCompanySubscription");
+
+        platformAdminGroup.MapPost("/companies/{companyId:guid}/subscription/cancel", async (
+            Guid companyId, [FromServices] IMediator mediator) =>
+        {
+            await mediator.Send(new CancelCompanySubscriptionCommand(companyId));
+            return Results.Ok(ApiResponse.Ok("Abonelik iptal edildi."));
+        })
+        .WithName("CancelCompanySubscription");
+
+        platformAdminGroup.MapPost("/companies/{companyId:guid}/payments/manual-correction", async (
+            Guid companyId, [FromBody] RecordManualPaymentCorrectionRequest request, [FromServices] IMediator mediator) =>
+        {
+            await mediator.Send(new RecordManualPaymentCorrectionCommand(
+                companyId, request.Amount, request.Currency, request.Kind, request.Status, request.Note));
+            return Results.Ok(ApiResponse.Ok("Manuel ödeme kaydı eklendi."));
+        })
+        .WithName("RecordManualPaymentCorrection");
 
         platformAdminGroup.MapGet("/companies/{companyId:guid}/overview", async (
             Guid companyId, RowingClub.Api.Tenancy.TenantResolver resolver, IMediator mediator, CancellationToken ct) =>

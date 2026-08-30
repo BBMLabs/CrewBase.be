@@ -13,11 +13,11 @@ public sealed record CompanySettingsDto(
     int MinNoticeHours,
     int MaxAdvanceDays,
     List<int> ReminderOptions,
-    int DefaultReminderMinutes,
     string TimeZoneId,
     bool NotifyOnNewAppointment,
     bool NotifyOnCancellation,
     bool SendCustomerReminders,
+    bool NotifyOnCampaignCreated,
     List<int> PackageExpiryReminderDays);
 
 public sealed record GetSettingsQuery : IRequest<CompanySettingsDto>;
@@ -29,11 +29,11 @@ public sealed record UpdateSettingsCommand(
     int MinNoticeHours,
     int MaxAdvanceDays,
     List<int> ReminderOptions,
-    int DefaultReminderMinutes,
     string TimeZoneId,
     bool NotifyOnNewAppointment,
     bool NotifyOnCancellation,
     bool SendCustomerReminders,
+    bool NotifyOnCampaignCreated,
     List<int> PackageExpiryReminderDays) : ICommand<CompanySettingsDto>;
 
 public sealed class GetSettingsQueryHandler(ISettingsRepository settingsRepository)
@@ -66,10 +66,10 @@ public sealed class UpdateSettingsCommandHandler(
 
         settings.UpdateWorkingHours(days, request.SlotMinutes);
         settings.UpdateBookingRules(
-            request.MinNoticeHours, request.MaxAdvanceDays, request.ReminderOptions, request.DefaultReminderMinutes,
-            request.TimeZoneId);
+            request.MinNoticeHours, request.MaxAdvanceDays, request.ReminderOptions, request.TimeZoneId);
         settings.UpdateNotifications(
-            request.NotifyOnNewAppointment, request.NotifyOnCancellation, request.SendCustomerReminders);
+            request.NotifyOnNewAppointment, request.NotifyOnCancellation, request.SendCustomerReminders,
+            request.NotifyOnCampaignCreated);
         settings.UpdatePackageExpirySettings(request.PackageExpiryReminderDays);
 
         await unitOfWork.SaveChangesAsync(cancellationToken);
@@ -95,10 +95,10 @@ internal static class SettingsMapper
         settings.MinNoticeHours,
         settings.MaxAdvanceDays,
         settings.ReminderOptions().ToList(),
-        settings.DefaultReminderMinutes,
         settings.TimeZoneId,
         settings.NotifyOnNewAppointment,
         settings.NotifyOnCancellation,
         settings.SendCustomerReminders,
+        settings.NotifyOnCampaignCreated,
         settings.PackageExpiryReminderDays().ToList());
 }

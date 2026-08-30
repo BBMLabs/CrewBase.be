@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using RowingClub.Scheduling.Infrastructure.Persistence;
@@ -11,9 +12,11 @@ using RowingClub.Scheduling.Infrastructure.Persistence;
 namespace RowingClub.Scheduling.Infrastructure.Persistence.Migrations
 {
     [DbContext(typeof(TenantDbContext))]
-    partial class TenantDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260829183539_AddCampaigns")]
+    partial class AddCampaigns
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -876,9 +879,6 @@ namespace RowingClub.Scheduling.Infrastructure.Persistence.Migrations
 
                     b.Property<int>("MinNoticeHours")
                         .HasColumnType("integer");
-
-                    b.Property<bool>("NotifyOnCampaignCreated")
-                        .HasColumnType("boolean");
 
                     b.Property<bool>("NotifyOnCancellation")
                         .HasColumnType("boolean");

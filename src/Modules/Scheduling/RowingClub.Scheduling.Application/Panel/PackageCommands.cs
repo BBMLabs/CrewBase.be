@@ -9,22 +9,17 @@ namespace RowingClub.Scheduling.Application.Panel;
 
 public sealed record PackageDto(
     Guid Id, string Name, string? Description, int SessionCount, decimal Price, bool IsActive,
-    string? ImagePath, int? ValidityDays, DateTimeOffset? CampaignStartsAtUtc, DateTimeOffset? CampaignEndsAtUtc,
-    decimal? CampaignPrice, bool IsCurrentlyPurchasable);
+    string? ImagePath, int? ValidityDays);
 
 public sealed record GetPackagesQuery(string? Search = null, int Page = 1, int PageSize = 25)
     : IRequest<PagedResult<PackageDto>>;
 
 public sealed record CreatePackageCommand(
-    string Name, string? Description, int SessionCount, decimal Price,
-    int? ValidityDays, DateTimeOffset? CampaignStartsAtUtc, DateTimeOffset? CampaignEndsAtUtc,
-    decimal? CampaignPrice)
+    string Name, string? Description, int SessionCount, decimal Price, int? ValidityDays)
     : ICommand<PackageDto>;
 
 public sealed record UpdatePackageCommand(
-    Guid Id, string Name, string? Description, int SessionCount, decimal Price, bool IsActive,
-    int? ValidityDays, DateTimeOffset? CampaignStartsAtUtc, DateTimeOffset? CampaignEndsAtUtc,
-    decimal? CampaignPrice)
+    Guid Id, string Name, string? Description, int SessionCount, decimal Price, bool IsActive, int? ValidityDays)
     : ICommand<PackageDto>;
 
 /// <summary>Görsel yüklendikten sonra (bkz. IFileStorageService) yolunu pakete yazar.</summary>
@@ -52,19 +47,16 @@ public sealed class GetPackagesQueryHandler(ILessonPackageRepository repository)
             packages = packages.Where(p => p.Name.Contains(term, StringComparison.OrdinalIgnoreCase)).ToList();
         }
 
-        var now = DateTimeOffset.UtcNow;
         var dtos = packages
             .OrderBy(p => p.Price)
-            .Select(ToDto(now))
+            .Select(ToDto)
             .ToList();
 
         return PagedResult<PackageDto>.Create(dtos, request.Page, request.PageSize);
     }
 
-    internal static Func<LessonPackage, PackageDto> ToDto(DateTimeOffset now) => p => new PackageDto(
-        p.Id, p.Name, p.Description, p.SessionCount, p.Price, p.IsActive,
-        p.ImagePath, p.ValidityDays, p.CampaignStartsAtUtc, p.CampaignEndsAtUtc,
-        p.CampaignPrice, p.IsCurrentlyPurchasable(now));
+    internal static PackageDto ToDto(LessonPackage p) => new(
+        p.Id, p.Name, p.Description, p.SessionCount, p.Price, p.IsActive, p.ImagePath, p.ValidityDays);
 }
 
 public sealed class CreatePackageCommandHandler(
@@ -77,13 +69,11 @@ public sealed class CreatePackageCommandHandler(
             throw new DomainException("invalid_name", "Paket adı boş olamaz.");
 
         var package = LessonPackage.Create(
-            request.Name, request.Description, request.SessionCount, request.Price,
-            request.ValidityDays, request.CampaignStartsAtUtc, request.CampaignEndsAtUtc,
-            request.CampaignPrice);
+            request.Name, request.Description, request.SessionCount, request.Price, request.ValidityDays);
         repository.Add(package);
         await unitOfWork.SaveChangesAsync(cancellationToken);
 
-        return GetPackagesQueryHandler.ToDto(DateTimeOffset.UtcNow)(package);
+        return GetPackagesQueryHandler.ToDto(package);
     }
 }
 
@@ -98,11 +88,10 @@ public sealed class UpdatePackageCommandHandler(
 
         package.Update(
             request.Name, request.Description, request.SessionCount, request.Price, request.IsActive,
-            request.ValidityDays, request.CampaignStartsAtUtc, request.CampaignEndsAtUtc,
-            request.CampaignPrice);
+            request.ValidityDays);
         await unitOfWork.SaveChangesAsync(cancellationToken);
 
-        return GetPackagesQueryHandler.ToDto(DateTimeOffset.UtcNow)(package);
+        return GetPackagesQueryHandler.ToDto(package);
     }
 }
 
@@ -118,7 +107,7 @@ public sealed class SetPackageImageCommandHandler(
         package.SetImage(request.ImagePath);
         await unitOfWork.SaveChangesAsync(cancellationToken);
 
-        return GetPackagesQueryHandler.ToDto(DateTimeOffset.UtcNow)(package);
+        return GetPackagesQueryHandler.ToDto(package);
     }
 }
 

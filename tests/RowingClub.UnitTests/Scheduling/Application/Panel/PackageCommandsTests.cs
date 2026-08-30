@@ -19,7 +19,7 @@ public sealed class CreatePackageCommandHandlerTests
     {
         var handler = CreateHandler();
         var act = () => handler.Handle(
-            new CreatePackageCommand("   ", null, 8, 100m, null, null, null, null), CancellationToken.None);
+            new CreatePackageCommand("   ", null, 8, 100m, null), CancellationToken.None);
 
         var ex = await act.Should().ThrowAsync<DomainException>();
         ex.Which.ErrorCode.Should().Be("invalid_name");
@@ -33,7 +33,7 @@ public sealed class CreatePackageCommandHandlerTests
     {
         var handler = CreateHandler();
         var result = await handler.Handle(
-            new CreatePackageCommand("8 Derslik Paket", "Açıklama", 8, 100m, 30, null, null, null),
+            new CreatePackageCommand("8 Derslik Paket", "Açıklama", 8, 100m, 30),
             CancellationToken.None);
 
         result.Name.Should().Be("8 Derslik Paket");
@@ -52,7 +52,7 @@ public sealed class UpdatePackageCommandHandlerTests
     private UpdatePackageCommandHandler CreateHandler() => new(_repository, _unitOfWork);
 
     private static LessonPackage CreatePackage() =>
-        LessonPackage.Create("Eski Ad", null, 8, 100m, null, null, null);
+        LessonPackage.Create("Eski Ad", null, 8, 100m, null);
 
     [Fact]
     public async Task Throws_not_found_when_package_does_not_exist()
@@ -62,7 +62,7 @@ public sealed class UpdatePackageCommandHandlerTests
 
         var handler = CreateHandler();
         var act = () => handler.Handle(
-            new UpdatePackageCommand(packageId, "Yeni Ad", null, 8, 100m, true, null, null, null, null),
+            new UpdatePackageCommand(packageId, "Yeni Ad", null, 8, 100m, true, null),
             CancellationToken.None);
 
         await act.Should().ThrowAsync<NotFoundException>();
@@ -77,7 +77,7 @@ public sealed class UpdatePackageCommandHandlerTests
 
         var handler = CreateHandler();
         var result = await handler.Handle(
-            new UpdatePackageCommand(package.Id, "Yeni Ad", "Yeni Açıklama", 10, 150m, false, null, null, null, null),
+            new UpdatePackageCommand(package.Id, "Yeni Ad", "Yeni Açıklama", 10, 150m, false, null),
             CancellationToken.None);
 
         result.Name.Should().Be("Yeni Ad");
@@ -111,7 +111,7 @@ public sealed class SetPackageImageCommandHandlerTests
     [Fact]
     public async Task Sets_image_and_persists_when_found()
     {
-        var package = LessonPackage.Create("Paket", null, 8, 100m, null, null, null);
+        var package = LessonPackage.Create("Paket", null, 8, 100m, null);
         _repository.GetByIdAsync(package.Id, Arg.Any<CancellationToken>()).Returns(package);
 
         var handler = CreateHandler();

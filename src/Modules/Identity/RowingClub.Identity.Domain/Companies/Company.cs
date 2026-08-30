@@ -43,6 +43,16 @@ public sealed class Company : AggregateRoot<Guid>
 
     public int? CustomMaxInstructors { get; private set; }
 
+    public int? CustomMaxManagers { get; private set; }
+
+    public int? CustomMaxEmployees { get; private set; }
+
+    public bool? CustomCanExportData { get; private set; }
+
+    public bool? CustomHasAdvancedReports { get; private set; }
+
+    public bool? CustomHasAutomaticDuesReminders { get; private set; }
+
     public DateTimeOffset CreatedAtUtc { get; private set; }
 
     public DateTimeOffset? ApprovedAtUtc { get; private set; }
@@ -126,7 +136,11 @@ public sealed class Company : AggregateRoot<Guid>
         : CompanyPlanLimitsCatalog.For(Plan);
 
     /// <summary>Şu an geçerli nitel özellikler (dışa aktarma, gelişmiş raporlar, yönetici/çalışan kotaları...).</summary>
-    public CompanyPlanFeatures PlanFeatures => CompanyPlanFeaturesCatalog.For(Plan);
+    public CompanyPlanFeatures PlanFeatures => Plan == CompanyPlan.Custom
+        ? new CompanyPlanFeatures(
+            CustomMaxManagers ?? 0, CustomMaxEmployees ?? 0, CustomCanExportData ?? false,
+            CustomHasAdvancedReports ?? false, CustomHasAutomaticDuesReminders ?? false)
+        : CompanyPlanFeaturesCatalog.For(Plan);
 
     /// <summary>
     /// Firma yetkilisinin panelden kendi yaptığı paket değişikliği: yalnızca sabit paketler
@@ -148,21 +162,32 @@ public sealed class Company : AggregateRoot<Guid>
         CustomMaxInstructors = null;
     }
 
-    /// <summary>Master panelden serbest paket ataması; Custom seçildiğinde özel limitler zorunludur.</summary>
+    /// <summary>Master panelden serbest paket ataması; Custom seçildiğinde özel limitler ve nitel özellikler zorunludur.</summary>
     public void SetPlan(
-        CompanyPlan plan, int? customMaxBranches, int? customMaxMembers, int? customMaxBoats, int? customMaxInstructors)
+        CompanyPlan plan, int? customMaxBranches, int? customMaxMembers, int? customMaxBoats, int? customMaxInstructors,
+        int? customMaxManagers = null, int? customMaxEmployees = null, bool? customCanExportData = null,
+        bool? customHasAdvancedReports = null, bool? customHasAutomaticDuesReminders = null)
     {
         if (plan == CompanyPlan.Custom)
         {
             if (customMaxBranches is null or <= 0 || customMaxMembers is null or <= 0 ||
-                customMaxBoats is null or <= 0 || customMaxInstructors is null or <= 0)
-                throw new DomainException("custom_limits_required", "Custom paket için şube/üye/tekne/eğitmen limitlerinin hepsi girilmelidir.");
+                customMaxBoats is null or <= 0 || customMaxInstructors is null or <= 0 ||
+                customMaxManagers is null or <= 0 || customMaxEmployees is null or <= 0 ||
+                customCanExportData is null || customHasAdvancedReports is null || customHasAutomaticDuesReminders is null)
+                throw new DomainException(
+                    "custom_limits_required",
+                    "Custom paket için şube/üye/tekne/eğitmen/yönetici/çalışan limitleri ve nitel özelliklerin hepsi girilmelidir.");
 
             Plan = CompanyPlan.Custom;
             CustomMaxBranches = customMaxBranches;
             CustomMaxMembers = customMaxMembers;
             CustomMaxBoats = customMaxBoats;
             CustomMaxInstructors = customMaxInstructors;
+            CustomMaxManagers = customMaxManagers;
+            CustomMaxEmployees = customMaxEmployees;
+            CustomCanExportData = customCanExportData;
+            CustomHasAdvancedReports = customHasAdvancedReports;
+            CustomHasAutomaticDuesReminders = customHasAutomaticDuesReminders;
             return;
         }
 
@@ -171,6 +196,11 @@ public sealed class Company : AggregateRoot<Guid>
         CustomMaxMembers = null;
         CustomMaxBoats = null;
         CustomMaxInstructors = null;
+        CustomMaxManagers = null;
+        CustomMaxEmployees = null;
+        CustomCanExportData = null;
+        CustomHasAdvancedReports = null;
+        CustomHasAutomaticDuesReminders = null;
     }
 
     public void Delete()

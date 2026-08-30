@@ -45,6 +45,9 @@ public sealed class CompanySettings
     /// <summary>Üyelere/misafirlere randevu hatırlatması gönderilsin mi.</summary>
     public bool SendCustomerReminders { get; private set; } = true;
 
+    /// <summary>Yeni kampanya oluşturulunca firma personeline bildirim gönderilsin mi.</summary>
+    public bool NotifyOnCampaignCreated { get; private set; } = true;
+
     private CompanySettings()
     {
     }
@@ -64,6 +67,7 @@ public sealed class CompanySettings
             NotifyOnNewAppointment = true,
             NotifyOnCancellation = true,
             SendCustomerReminders = true,
+            NotifyOnCampaignCreated = true,
         };
 
         foreach (DayOfWeek day in Enum.GetValues<DayOfWeek>())
@@ -99,16 +103,13 @@ public sealed class CompanySettings
 
     public void UpdateBookingRules(
         int minNoticeHours, int maxAdvanceDays, IReadOnlyCollection<int> reminderOptionsMinutes,
-        int defaultReminderMinutes, string timeZoneId)
+        string timeZoneId)
     {
         if (minNoticeHours < 0 || maxAdvanceDays < 1)
             throw new DomainException("invalid_booking_window", "Randevu kısıtları geçersiz.");
 
         if (reminderOptionsMinutes.Count == 0 || reminderOptionsMinutes.Any(m => m < 5))
             throw new DomainException("invalid_reminder_options", "En az bir geçerli hatırlatma seçeneği tanımlanmalıdır.");
-
-        if (!reminderOptionsMinutes.Contains(defaultReminderMinutes))
-            throw new DomainException("invalid_default_reminder", "Varsayılan hatırlatma, seçeneklerden biri olmalıdır.");
 
         try
         {
@@ -122,7 +123,7 @@ public sealed class CompanySettings
         MinNoticeHours = minNoticeHours;
         MaxAdvanceDays = maxAdvanceDays;
         ReminderOptionsMinutes = string.Join(',', reminderOptionsMinutes.Distinct().OrderBy(m => m));
-        DefaultReminderMinutes = defaultReminderMinutes;
+        DefaultReminderMinutes = reminderOptionsMinutes.Min();
         TimeZoneId = timeZoneId;
     }
 
@@ -134,11 +135,14 @@ public sealed class CompanySettings
         PackageExpiryReminderDaysCsv = string.Join(',', reminderDaysBeforeExpiry.Distinct().OrderByDescending(d => d));
     }
 
-    public void UpdateNotifications(bool notifyOnNewAppointment, bool notifyOnCancellation, bool sendCustomerReminders)
+    public void UpdateNotifications(
+        bool notifyOnNewAppointment, bool notifyOnCancellation, bool sendCustomerReminders,
+        bool notifyOnCampaignCreated)
     {
         NotifyOnNewAppointment = notifyOnNewAppointment;
         NotifyOnCancellation = notifyOnCancellation;
         SendCustomerReminders = sendCustomerReminders;
+        NotifyOnCampaignCreated = notifyOnCampaignCreated;
     }
 
     public DaySchedule ScheduleFor(DayOfWeek day) => _daySchedules.First(d => d.Day == day);
