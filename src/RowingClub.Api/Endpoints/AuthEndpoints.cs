@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Mvc;
 using RowingClub.Api.RateLimiting;
 using RowingClub.Api.Tenancy;
 using RowingClub.BuildingBlocks.Application.Abstractions;
+using RowingClub.Identity.Application.Companies.CheckSubdomainAvailability;
 using RowingClub.Identity.Application.Companies.RegisterCompany;
 using RowingClub.Identity.Application.EmailVerification;
 using RowingClub.Identity.Application.Login;
@@ -17,7 +18,9 @@ using RowingClub.Scheduling.Application.Panel;
 namespace RowingClub.Api.Endpoints;
 
 public sealed record RegisterCompanyRequest(
-    string CompanyName, string AdminEmail, string TaxNumber, string Phone, string ContactEmail, string Address);
+    string CompanyName, string AdminEmail, string TaxNumber, string Phone, string ContactEmail, string Address,
+    string? Subdomain = null);
+public sealed record SubdomainAvailabilityResponse(bool Available);
 public sealed record LoginRequest(string Email, string Password, string? RecaptchaToken);
 public sealed record RefreshRequest(string RefreshToken);
 public sealed record LogoutRequest(string RefreshToken);
@@ -45,6 +48,10 @@ public static class AuthEndpoints
             .Produces<ApiResponse<RegisterCompanyResponse>>(StatusCodes.Status201Created)
             .ProducesValidationProblem()
             .ProducesProblem(StatusCodes.Status409Conflict);
+
+        group.MapGet("/companies/subdomain-availability", CheckSubdomainAvailabilityAsync)
+            .WithName("CheckSubdomainAvailability")
+            .Produces<ApiResponse<SubdomainAvailabilityResponse>>(StatusCodes.Status200OK);
 
         group.MapPost("/login", LoginAsync)
             .WithName("Login")
@@ -103,7 +110,8 @@ public static class AuthEndpoints
     {
         var response = await sender.Send(new RegisterCompanyCommand(
             request.CompanyName, request.AdminEmail, request.TaxNumber,
-            request.Phone, request.ContactEmail, request.Address), cancellationToken);
+            request.Phone, request.ContactEmail, request.Address,
+            request.Subdomain?.Trim().ToLowerInvariant()), cancellationToken);
 
         if (await resolver.ResolveByCompanyIdAsync(response.CompanyId, cancellationToken) is not null)
         {
@@ -119,6 +127,13 @@ public static class AuthEndpoints
         }
 
         return Results.Created($"/api/v1/companies/{response.CompanyId}", ApiResponse<RegisterCompanyResponse>.Ok(response));
+    }
+
+    private static async Task<IResult> CheckSubdomainAvailabilityAsync(
+        [FromQuery] string value, ISender sender, CancellationToken cancellationToken)
+    {
+        var available = await sender.Send(new CheckSubdomainAvailabilityQuery(value), cancellationToken);
+        return Results.Ok(ApiResponse<SubdomainAvailabilityResponse>.Ok(new SubdomainAvailabilityResponse(available)));
     }
 
     private static async Task<IResult> LoginAsync(

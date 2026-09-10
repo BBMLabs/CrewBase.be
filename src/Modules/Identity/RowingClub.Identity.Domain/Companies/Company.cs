@@ -21,6 +21,28 @@ public sealed class Company : AggregateRoot<Guid>
 
     public string? LogoPath { get; private set; }
 
+    public string Tagline { get; private set; } = null!;
+
+    public string AboutText { get; private set; } = null!;
+
+    public string? InstagramUrl { get; private set; }
+
+    public string? FacebookUrl { get; private set; }
+
+    public string? YoutubeUrl { get; private set; }
+
+    public string? LinkedinUrl { get; private set; }
+
+    public string? XUrl { get; private set; }
+
+    public string? WhatsappUrl { get; private set; }
+
+    public string? TelegramUrl { get; private set; }
+
+    public string? PinterestUrl { get; private set; }
+
+    public string? GoogleMapsUrl { get; private set; }
+
     public string? Phone { get; private set; }
 
     public string? ContactEmail { get; private set; }
@@ -79,6 +101,8 @@ public sealed class Company : AggregateRoot<Guid>
         ContactEmail = contactEmail;
         Address = address;
         TaxNumber = taxNumber;
+        Tagline = DefaultSiteContent.Tagline;
+        AboutText = DefaultSiteContent.AboutText;
 
         // Firmalar artık onay beklemeden doğrudan aktif olarak açılır.
         Status = CompanyStatus.Active;
@@ -119,6 +143,49 @@ public sealed class Company : AggregateRoot<Guid>
     public void SetLogo(string logoPath)
     {
         LogoPath = logoPath;
+    }
+
+    public void UpdateSiteContent(string tagline, string aboutText)
+    {
+        if (string.IsNullOrWhiteSpace(tagline))
+            throw new DomainException("invalid_tagline", "Tanıtım cümlesi boş olamaz.");
+        if (string.IsNullOrWhiteSpace(aboutText))
+            throw new DomainException("invalid_about_text", "Hakkımızda metni boş olamaz.");
+
+        Tagline = tagline.Trim();
+        AboutText = aboutText.Trim();
+    }
+
+    public void UpdateSocialLinks(
+        string? instagramUrl, string? facebookUrl, string? youtubeUrl, string? linkedinUrl,
+        string? xUrl, string? whatsappUrl, string? telegramUrl, string? pinterestUrl)
+    {
+        InstagramUrl = NormalizeUrl(instagramUrl, "invalid_instagram_url", "Instagram bağlantısı");
+        FacebookUrl = NormalizeUrl(facebookUrl, "invalid_facebook_url", "Facebook bağlantısı");
+        YoutubeUrl = NormalizeUrl(youtubeUrl, "invalid_youtube_url", "YouTube bağlantısı");
+        LinkedinUrl = NormalizeUrl(linkedinUrl, "invalid_linkedin_url", "LinkedIn bağlantısı");
+        XUrl = NormalizeUrl(xUrl, "invalid_x_url", "X bağlantısı");
+        WhatsappUrl = NormalizeUrl(whatsappUrl, "invalid_whatsapp_url", "WhatsApp bağlantısı");
+        TelegramUrl = NormalizeUrl(telegramUrl, "invalid_telegram_url", "Telegram bağlantısı");
+        PinterestUrl = NormalizeUrl(pinterestUrl, "invalid_pinterest_url", "Pinterest bağlantısı");
+    }
+
+    public void UpdateGoogleMapsUrl(string? googleMapsUrl)
+    {
+        GoogleMapsUrl = NormalizeUrl(googleMapsUrl, "invalid_google_maps_url", "Google Haritalar bağlantısı");
+    }
+
+    private static string? NormalizeUrl(string? url, string errorCode, string fieldLabel)
+    {
+        if (string.IsNullOrWhiteSpace(url))
+            return null;
+
+        var trimmed = url.Trim();
+        if (!Uri.TryCreate(trimmed, UriKind.Absolute, out var uri) ||
+            (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps))
+            throw new DomainException(errorCode, $"{fieldLabel} geçerli bir http(s) bağlantısı olmalıdır.");
+
+        return trimmed;
     }
 
     public void UpdateDetails(string name, string? phone, string? contactEmail, string? address, string? taxNumber)

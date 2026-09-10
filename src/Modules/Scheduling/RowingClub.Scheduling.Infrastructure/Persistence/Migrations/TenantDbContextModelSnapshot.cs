@@ -695,6 +695,43 @@ namespace RowingClub.Scheduling.Infrastructure.Persistence.Migrations
                     b.ToTable("member_logs", (string)null);
                 });
 
+            modelBuilder.Entity("RowingClub.Scheduling.Domain.Messages.SiteMessage", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Body")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTimeOffset>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Email")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("FullName")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("IpAddress")
+                        .HasColumnType("text");
+
+                    b.Property<DateTimeOffset?>("RepliedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("ReplyText")
+                        .HasColumnType("text");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreatedAtUtc");
+
+                    b.ToTable("site_messages", (string)null);
+                });
+
             modelBuilder.Entity("RowingClub.Scheduling.Domain.Packages.CustomerPackage", b =>
                 {
                     b.Property<Guid>("Id")

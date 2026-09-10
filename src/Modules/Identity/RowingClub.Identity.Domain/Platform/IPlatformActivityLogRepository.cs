@@ -2,6 +2,8 @@ namespace RowingClub.Identity.Domain.Platform;
 
 public interface IPlatformActivityLogRepository
 {
-    Task<(List<PlatformActivityLog> Items, int TotalCount)> GetPagedAsync(
-        string? search, int page, int pageSize, CancellationToken cancellationToken);
+    Task<List<PlatformActivityLog>> GetPageAsync(
+        string? search, DateTimeOffset? cursorAtUtc, Guid? cursorId, int take, CancellationToken cancellationToken);
+
+    Task<int> CountAsync(string? search, CancellationToken cancellationToken);
 }

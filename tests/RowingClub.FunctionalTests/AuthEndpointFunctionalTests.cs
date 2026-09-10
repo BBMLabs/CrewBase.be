@@ -21,6 +21,7 @@ public sealed class AuthEndpointFunctionalTests(RowingClubWebApplicationFactory 
         foreach (var expected in new[]
                  {
                      "/api/v1/auth/companies/register",
+                     "/api/v1/auth/companies/subdomain-availability",
                      "/api/v1/auth/login",
                      "/api/v1/auth/refresh",
                      "/api/v1/auth/logout",
@@ -53,6 +54,8 @@ public sealed class AuthEndpointFunctionalTests(RowingClubWebApplicationFactory 
                      "/api/v1/platform/companies/{companyId}/suspend",
                      "/api/v1/platform/activity-logs",
                      "/api/v1/platform/revenue",
+                     "/api/v1/platform/payments",
+                     "/api/v1/platform/payments/stats",
                      "/api/v1/platform/companies/{companyId}/subscription",
                      "/api/v1/admin/{companyId}/dashboard",
                      "/api/v1/admin/{companyId}/users",
@@ -82,6 +85,54 @@ public sealed class AuthEndpointFunctionalTests(RowingClubWebApplicationFactory 
         body.GetProperty("errors").TryGetProperty("Phone", out _).Should().BeTrue();
         body.GetProperty("errors").TryGetProperty("ContactEmail", out _).Should().BeTrue();
         body.GetProperty("errors").TryGetProperty("Address", out _).Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task RegisterCompany_with_reserved_subdomain_returns_problem_details()
+    {
+        using var client = factory.CreateClient();
+
+        var response = await client.PostAsJsonAsync("/api/v1/auth/companies/register", new
+        {
+            companyName = "Test Kulübü",
+            adminEmail = "admin@example.com",
+            taxNumber = "12345678901",
+            phone = "+905551234567",
+            contactEmail = "iletisim@example.com",
+            address = "İstanbul",
+            subdomain = "admin",
+        });
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+
+        var body = await response.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>();
+        body.GetProperty("code").GetString().Should().Be("validation_error");
+        body.GetProperty("errors").TryGetProperty("Subdomain", out _).Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task SubdomainAvailability_returns_true_for_a_fresh_valid_value()
+    {
+        using var client = factory.CreateClient();
+
+        var response = await client.GetAsync(
+            $"/api/v1/auth/companies/subdomain-availability?value=fresh-club-{Guid.NewGuid():N}");
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var body = await response.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>();
+        body.GetProperty("data").GetProperty("available").GetBoolean().Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task SubdomainAvailability_returns_false_for_a_reserved_value()
+    {
+        using var client = factory.CreateClient();
+
+        var response = await client.GetAsync("/api/v1/auth/companies/subdomain-availability?value=admin");
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var body = await response.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>();
+        body.GetProperty("data").GetProperty("available").GetBoolean().Should().BeFalse();
     }
 
     [Fact]

@@ -11,6 +11,7 @@ using RowingClub.Scheduling.Domain.Consents;
 using RowingClub.Scheduling.Domain.Customers;
 using RowingClub.Scheduling.Domain.Instructors;
 using RowingClub.Scheduling.Domain.Logs;
+using RowingClub.Scheduling.Domain.Messages;
 using RowingClub.Scheduling.Domain.Packages;
 using RowingClub.Scheduling.Domain.Sessions;
 using RowingClub.Scheduling.Domain.Settings;
@@ -86,6 +87,8 @@ public sealed class TenantDbContext(
 
     public DbSet<Follow> Follows => Set<Follow>();
 
+    public DbSet<SiteMessage> SiteMessages => Set<SiteMessage>();
+
     public static string NormalizePhone(string phone) =>
         new(phone.Where(char.IsDigit).ToArray());
 
@@ -127,6 +130,18 @@ public sealed class TenantDbContext(
                 .WithMany()
                 .HasForeignKey(c => c.BranchId)
                 .OnDelete(DeleteBehavior.SetNull);
+        });
+
+        modelBuilder.Entity<SiteMessage>(builder =>
+        {
+            builder.ToTable("site_messages");
+            builder.HasKey(m => m.Id);
+            builder.Property(m => m.FullName).HasConversion(encrypted).IsRequired();
+            builder.Property(m => m.Email).HasConversion(encrypted).IsRequired();
+            builder.Property(m => m.Body).HasConversion(encrypted).IsRequired();
+            builder.Property(m => m.IpAddress).HasConversion(encrypted!);
+            builder.Property(m => m.ReplyText).HasConversion(encrypted!);
+            builder.HasIndex(m => m.CreatedAtUtc);
         });
 
         modelBuilder.Entity<MemberPasswordSetupToken>(builder =>

@@ -1,4 +1,5 @@
 using System.Text;
+using System.Text.RegularExpressions;
 
 namespace RowingClub.Identity.Domain.Companies;
 
@@ -6,9 +7,26 @@ namespace RowingClub.Identity.Domain.Companies;
 /// Firma adından subdomain ve tenant veritabanı adı üretir:
 /// "Öz Güven Kuaför" -> subdomain "oz-guven-kuafor", veritabanı "tenant_oz_guven_kuafor".
 /// </summary>
-public static class SubdomainSlug
+public static partial class SubdomainSlug
 {
     private const int MaxLength = 40;
+    public const int UserSubdomainMinLength = 3;
+    public const int UserSubdomainMaxLength = 63;
+
+    private static readonly HashSet<string> ReservedSubdomains =
+    [
+        "www", "api", "admin", "app", "mail", "ftp", "master", "panel", "static", "cdn",
+        "assets", "help", "support", "blog", "status", "docs", "dashboard", "test", "staging", "dev",
+    ];
+
+    public static bool IsValidUserSubdomain(string subdomain) =>
+        subdomain.Length is >= UserSubdomainMinLength and <= UserSubdomainMaxLength
+        && UserSubdomainPattern().IsMatch(subdomain);
+
+    public static bool IsReserved(string subdomain) => ReservedSubdomains.Contains(subdomain);
+
+    [GeneratedRegex("^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$")]
+    private static partial Regex UserSubdomainPattern();
 
     public static string FromCompanyName(string companyName)
     {

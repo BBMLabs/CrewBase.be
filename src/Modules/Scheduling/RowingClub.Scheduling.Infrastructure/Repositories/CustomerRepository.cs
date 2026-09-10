@@ -41,6 +41,17 @@ public sealed class CustomerRepository(TenantDbContext context) : ICustomerRepos
     public Task<List<Customer>> GetByBranchIdAsync(Guid branchId, CancellationToken cancellationToken) =>
         context.Customers.Where(c => c.BranchId == branchId).ToListAsync(cancellationToken);
 
+    public async Task<Dictionary<Guid, int>> GetMemberCountsByBranchAsync(CancellationToken cancellationToken)
+    {
+        var counts = await context.Customers
+            .Where(c => c.BranchId != null)
+            .GroupBy(c => c.BranchId!.Value)
+            .Select(g => new { BranchId = g.Key, Count = g.Count() })
+            .ToListAsync(cancellationToken);
+
+        return counts.ToDictionary(x => x.BranchId, x => x.Count);
+    }
+
     public Task<int> CountAsync(CancellationToken cancellationToken) =>
         context.Customers.CountAsync(cancellationToken);
 

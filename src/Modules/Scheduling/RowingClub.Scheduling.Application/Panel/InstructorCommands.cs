@@ -10,8 +10,8 @@ namespace RowingClub.Scheduling.Application.Panel;
 public sealed record InstructorDto(Guid Id, string FullName, string? Phone, string? Email, bool IsActive, Guid? BranchId);
 
 public sealed record GetInstructorsQuery(
-    string? Search = null, Guid? BranchId = null, bool? IsActive = null, int Page = 1, int PageSize = 25)
-    : IRequest<PagedResult<InstructorDto>>;
+    string? Search = null, Guid? BranchId = null, bool? IsActive = null, string? Cursor = null, int Limit = 25)
+    : IRequest<KeysetResult<InstructorDto>>;
 
 public sealed record CreateInstructorCommand(string FullName, string? Phone, string? Email, Guid? BranchId)
     : ICommand<InstructorDto>;
@@ -23,9 +23,9 @@ public sealed record UpdateInstructorCommand(
 public sealed record DeleteInstructorCommand(Guid Id) : ICommand<Unit>;
 
 public sealed class GetInstructorsQueryHandler(IInstructorRepository repository)
-    : IRequestHandler<GetInstructorsQuery, PagedResult<InstructorDto>>
+    : IRequestHandler<GetInstructorsQuery, KeysetResult<InstructorDto>>
 {
-    public async Task<PagedResult<InstructorDto>> Handle(GetInstructorsQuery request, CancellationToken cancellationToken)
+    public async Task<KeysetResult<InstructorDto>> Handle(GetInstructorsQuery request, CancellationToken cancellationToken)
     {
         var instructors = await repository.GetAllAsync(cancellationToken);
 
@@ -45,12 +45,26 @@ public sealed class GetInstructorsQueryHandler(IInstructorRepository repository)
                 .ToList();
         }
 
-        var dtos = instructors
-            .OrderBy(i => i.FullName)
-            .Select(i => new InstructorDto(i.Id, i.FullName, i.Phone, i.Email, i.IsActive, i.BranchId))
-            .ToList();
+        var ordered = instructors.OrderBy(i => i.FullName).ThenBy(i => i.Id).ToList();
 
-        return PagedResult<InstructorDto>.Create(dtos, request.Page, request.PageSize);
+        var limit = Math.Clamp(request.Limit, 1, 200);
+        var hasCursor = KeysetCursor.TryDecode(request.Cursor, 1, out var keyParts, out var cursorId);
+        var candidates = hasCursor
+            ? KeysetPage.SliceAfterCursor(ordered, i => IsAfterCursor(i, keyParts[0], cursorId), limit + 1)
+            : ordered.Take(limit + 1).ToList();
+
+        var (page, nextCursor) = KeysetPage.Trim(candidates, limit, i => i.Id, i => [i.FullName]);
+
+        return new KeysetResult<InstructorDto>(
+            page.Select(i => new InstructorDto(i.Id, i.FullName, i.Phone, i.Email, i.IsActive, i.BranchId)).ToList(),
+            nextCursor, ordered.Count);
+    }
+
+    private static bool IsAfterCursor(Instructor instructor, string cursorFullName, Guid cursorId)
+    {
+        var nameCompare = string.Compare(instructor.FullName, cursorFullName);
+        if (nameCompare != 0) return nameCompare > 0;
+        return instructor.Id.CompareTo(cursorId) > 0;
     }
 }
 

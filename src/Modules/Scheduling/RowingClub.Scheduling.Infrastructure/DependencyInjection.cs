@@ -20,6 +20,7 @@ using RowingClub.Scheduling.Domain.Community;
 using RowingClub.Scheduling.Domain.Consents;
 using RowingClub.Scheduling.Domain.Instructors;
 using RowingClub.Scheduling.Domain.Logs;
+using RowingClub.Scheduling.Domain.Messages;
 using RowingClub.Scheduling.Domain.Packages;
 using RowingClub.Scheduling.Domain.Social;
 using RowingClub.Scheduling.Domain.Sessions;
@@ -77,6 +78,7 @@ public static class DependencyInjection
         services.AddScoped<IMembershipCardRepository, MembershipCardRepository>();
         services.AddScoped<IVerificationCodeRepository, VerificationCodeRepository>();
         services.AddScoped<ICommunityRepository, CommunityRepository>();
+        services.AddScoped<ISiteMessageRepository, SiteMessageRepository>();
         services.AddScoped<ISchedulingUnitOfWork, SchedulingUnitOfWork>();
 
         // Görsel depolama: R2_* env değişkenleri doluysa Cloudflare R2 (S3 uyumlu), boşsa yerel

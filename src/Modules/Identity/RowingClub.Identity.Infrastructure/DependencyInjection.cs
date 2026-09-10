@@ -30,6 +30,7 @@ public static class DependencyInjection
         services.AddScoped<IEmailVerificationTokenRepository, EmailVerificationTokenRepository>();
         services.AddScoped<IPasswordResetTokenRepository, PasswordResetTokenRepository>();
         services.AddScoped<ICompanyRepository, CompanyRepository>();
+        services.AddScoped<ICompanyGalleryImageRepository, CompanyGalleryImageRepository>();
         services.AddScoped<ICompanySubscriptionRepository, CompanySubscriptionRepository>();
         services.AddScoped<ICompanyPaymentRepository, CompanyPaymentRepository>();
         services.AddScoped<IRecoveryCodeRepository, RecoveryCodeRepository>();

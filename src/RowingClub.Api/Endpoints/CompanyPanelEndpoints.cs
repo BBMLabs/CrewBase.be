@@ -11,11 +11,13 @@ using RowingClub.Identity.Application.Companies.Billing.GetSubscriptionStatus;
 using RowingClub.Identity.Application.Companies.Billing.RequestPlanDowngrade;
 using RowingClub.Identity.Application.Companies.Billing.SubscribeToPlan;
 using RowingClub.Identity.Application.Companies.GetCompanySite;
+using RowingClub.Identity.Application.Companies.SiteContent;
 using RowingClub.Identity.Application.Companies.UpgradeCompanyPlan;
 using RowingClub.Identity.Application.CompanyUsers;
 using RowingClub.Identity.Domain.Companies;
 using RowingClub.Scheduling.Application.Community;
 using RowingClub.Scheduling.Application.Files;
+using RowingClub.Scheduling.Application.Messages;
 using RowingClub.Scheduling.Application.Panel;
 
 namespace RowingClub.Api.Endpoints;
@@ -62,6 +64,11 @@ public sealed record CreateMemberRequest(string FullName, string Phone, string? 
 public sealed record AssignPackageRequest(Guid LessonPackageId);
 public sealed record ClosedDateRequest(string Date, string? Reason);
 public sealed record BlockIpAddressRequest(string IpAddress, string? Reason);
+public sealed record ReplySiteMessageRequest(string ReplyText);
+public sealed record UpdateSiteContentRequest(
+    string Tagline, string AboutText, string? InstagramUrl, string? FacebookUrl, string? YoutubeUrl,
+    string? LinkedinUrl, string? XUrl, string? WhatsappUrl, string? TelegramUrl, string? PinterestUrl,
+    string? GoogleMapsUrl);
 
 /// <summary>
 /// Firma yöneticisinin paneli: randevular, seanslar (tekne/hoca atamaları), üye dereceleri,
@@ -97,6 +104,138 @@ public static class CompanyPanelEndpoints
                 }));
         }).WithName("CompanySiteInfo");
 
+        // ---- Site içeriği (logo, tanıtım metni, galeri) ----
+
+        group.MapGet("/site/content", async (
+            ICurrentUser user, TenantResolver resolver, ISender sender, CancellationToken ct) =>
+        {
+            var site = await ResolveOwnCompanyAsync(user, resolver, ct);
+            if (site is null)
+                return CompanyNotFound();
+
+            var content = await sender.Send(new GetCompanySiteContentQuery(site.CompanyId), ct);
+            return Results.Ok(ApiResponse<CompanySiteContentDto>.Ok(content));
+        }).WithName("CompanySiteContent");
+
+        group.MapPut("/site/content", async (
+            [FromBody] UpdateSiteContentRequest request, ICurrentUser user, TenantResolver resolver,
+            ISender sender, CancellationToken ct) =>
+        {
+            var site = await ResolveOwnCompanyAsync(user, resolver, ct);
+            if (site is null)
+                return CompanyNotFound();
+
+            var content = await sender.Send(
+                new UpdateCompanySiteContentCommand(
+                    site.CompanyId, request.Tagline, request.AboutText, request.InstagramUrl,
+                    request.FacebookUrl, request.YoutubeUrl, request.LinkedinUrl, request.XUrl, request.WhatsappUrl,
+                    request.TelegramUrl, request.PinterestUrl, request.GoogleMapsUrl), ct);
+            return Results.Ok(ApiResponse<CompanySiteContentDto>.Ok(content, "Site içeriği güncellendi."));
+        }).WithName("CompanyUpdateSiteContent");
+
+        group.MapPost("/site/logo", async (
+            IFormFile file, ICurrentUser user, TenantResolver resolver,
+            IFileStorageService fileStorage, ISender sender, CancellationToken ct) =>
+        {
+            var site = await ResolveOwnCompanyAsync(user, resolver, ct);
+            if (site is null)
+                return CompanyNotFound();
+
+            const long maxBytes = 2 * 1024 * 1024;
+            var allowedTypes = new[] { "image/jpeg", "image/png", "image/webp" };
+            if (file.Length == 0 || file.Length > maxBytes || !allowedTypes.Contains(file.ContentType))
+            {
+                return Results.BadRequest(ApiResponse.Fail(
+                    "invalid_image", "Görsel jpeg/png/webp olmalı ve 2 MB'ı aşmamalıdır."));
+            }
+
+            await using var stream = file.OpenReadStream();
+            var extension = file.ContentType switch
+            {
+                "image/png" => ".png",
+                "image/webp" => ".webp",
+                _ => ".jpg",
+            };
+
+            var path = await fileStorage.SaveAsync(stream, $"{Guid.NewGuid()}{extension}", $"{site.Subdomain}/logo", ct);
+
+            var content = await sender.Send(new SetCompanyLogoCommand(site.CompanyId, path), ct);
+            return Results.Ok(ApiResponse<CompanySiteContentDto>.Ok(content, "Logo yüklendi."));
+        })
+        .WithName("CompanySetLogo")
+        .DisableAntiforgery();
+
+        group.MapPost("/site/gallery", async (
+            IFormFile file, ICurrentUser user, TenantResolver resolver,
+            IFileStorageService fileStorage, ISender sender, CancellationToken ct) =>
+        {
+            var site = await ResolveOwnCompanyAsync(user, resolver, ct);
+            if (site is null)
+                return CompanyNotFound();
+
+            const long maxBytes = 2 * 1024 * 1024;
+            var allowedTypes = new[] { "image/jpeg", "image/png", "image/webp" };
+            if (file.Length == 0 || file.Length > maxBytes || !allowedTypes.Contains(file.ContentType))
+            {
+                return Results.BadRequest(ApiResponse.Fail(
+                    "invalid_image", "Görsel jpeg/png/webp olmalı ve 2 MB'ı aşmamalıdır."));
+            }
+
+            await using var stream = file.OpenReadStream();
+            var extension = file.ContentType switch
+            {
+                "image/png" => ".png",
+                "image/webp" => ".webp",
+                _ => ".jpg",
+            };
+
+            var path = await fileStorage.SaveAsync(stream, $"{Guid.NewGuid()}{extension}", $"{site.Subdomain}/galeri", ct);
+
+            var content = await sender.Send(new AddCompanyGalleryImageCommand(site.CompanyId, path), ct);
+            return Results.Ok(ApiResponse<CompanySiteContentDto>.Ok(content, "Görsel eklendi."));
+        })
+        .WithName("CompanyAddGalleryImage")
+        .DisableAntiforgery();
+
+        group.MapDelete("/site/gallery/{imageId:guid}", async (
+            Guid imageId, ICurrentUser user, TenantResolver resolver,
+            IFileStorageService fileStorage, ISender sender, CancellationToken ct) =>
+        {
+            var site = await ResolveOwnCompanyAsync(user, resolver, ct);
+            if (site is null)
+                return CompanyNotFound();
+
+            var removedPath = await sender.Send(new RemoveCompanyGalleryImageCommand(site.CompanyId, imageId), ct);
+            await fileStorage.DeleteAsync(removedPath, ct);
+            return Results.Ok(ApiResponse.Ok("Görsel silindi."));
+        }).WithName("CompanyRemoveGalleryImage");
+
+        // ---- Site mesajları ----
+
+        group.MapGet("/site/messages", async (
+            [FromQuery] string? cursor, [FromQuery] int? limit, ICurrentUser user, TenantResolver resolver,
+            ISender sender, CancellationToken ct) =>
+        {
+            if (await ResolveOwnCompanyAsync(user, resolver, ct) is null)
+                return CompanyNotFound();
+
+            var messages = await sender.Send(new GetSiteMessagesQuery(cursor, limit ?? 25), ct);
+            return Results.Ok(ApiResponse<KeysetResult<SiteMessageDto>>.Ok(messages));
+        }).WithName("CompanySiteMessages");
+
+        group.MapPost("/site/messages/{messageId:guid}/reply", async (
+            Guid messageId, [FromBody] ReplySiteMessageRequest request, ICurrentUser user, TenantResolver resolver,
+            ISender sender, CancellationToken ct) =>
+        {
+            var site = await ResolveOwnCompanyAsync(user, resolver, ct);
+            if (site is null)
+                return CompanyNotFound();
+
+            var message = await sender.Send(
+                new ReplySiteMessageCommand(messageId, request.ReplyText, site.Name), ct);
+            return Results.Ok(ApiResponse<SiteMessageDto>.Ok(message, "Yanıt gönderildi."));
+        }).WithName("CompanyReplySiteMessage");
+
         // ---- Abonelik paketi ----
 
         group.MapGet("/plan", async (
@@ -122,14 +261,14 @@ public static class CompanyPanelEndpoints
         }).WithName("CompanyPlan");
 
         group.MapGet("/plan/payments", async (
-            int? page, int? pageSize, ICurrentUser user, TenantResolver resolver, ISender sender, CancellationToken ct) =>
+            string? cursor, int? limit, ICurrentUser user, TenantResolver resolver, ISender sender, CancellationToken ct) =>
         {
             if (await ResolveOwnCompanyAsync(user, resolver, ct) is null)
                 return CompanyNotFound();
 
             var payments = await sender.Send(
-                new GetPaymentHistoryQuery(user.CompanyId!.Value, page ?? 1, pageSize ?? 25), ct);
-            return Results.Ok(ApiResponse<PagedResult<CompanyPaymentDto>>.Ok(payments));
+                new GetPaymentHistoryQuery(user.CompanyId!.Value, cursor, limit ?? 25), ct);
+            return Results.Ok(ApiResponse<KeysetResult<CompanyPaymentDto>>.Ok(payments));
         }).WithName("CompanyPlanPayments");
 
         group.MapPost("/plan/subscribe", async (
@@ -270,7 +409,7 @@ public static class CompanyPanelEndpoints
         // ---- Üyeler ve dereceleri ----
 
         group.MapGet("/customers", async (
-            string? search, Guid? branchId, int? page, int? pageSize,
+            string? search, Guid? branchId, string? cursor, int? limit,
             ICurrentUser user, TenantResolver resolver, ISender sender, CancellationToken ct) =>
         {
             if (await ResolveOwnCompanyAsync(user, resolver, ct) is null)
@@ -280,8 +419,8 @@ public static class CompanyPanelEndpoints
                 await sender.Send(new BackfillMemberCodesCommand(), ct);
 
             var customers = await sender.Send(
-                new GetCustomersQuery(search, branchId, page ?? 1, pageSize ?? 25), ct);
-            return Results.Ok(ApiResponse<PagedResult<CustomerDto>>.Ok(customers));
+                new GetCustomersQuery(search, branchId, cursor, limit ?? 25), ct);
+            return Results.Ok(ApiResponse<KeysetResult<CustomerDto>>.Ok(customers));
         }).WithName("CompanyCustomers");
 
         group.MapPost("/customers", async (
@@ -397,14 +536,14 @@ public static class CompanyPanelEndpoints
         }).WithName("CompanyLogs");
 
         group.MapGet("/activity-logs", async (
-            string? search, int? page, int? pageSize, ICurrentUser user, TenantResolver resolver,
+            string? search, string? cursor, int? limit, ICurrentUser user, TenantResolver resolver,
             ISender sender, CancellationToken ct) =>
         {
             if (await ResolveOwnCompanyAsync(user, resolver, ct) is null)
                 return CompanyNotFound();
 
-            var logs = await sender.Send(new GetActivityLogsQuery(search, page ?? 1, pageSize ?? 25), ct);
-            return Results.Ok(ApiResponse<PagedResult<ActivityLogDto>>.Ok(logs));
+            var logs = await sender.Send(new GetActivityLogsQuery(search, cursor, limit ?? 25), ct);
+            return Results.Ok(ApiResponse<KeysetResult<ActivityLogDto>>.Ok(logs));
         }).WithName("CompanyActivityLogs");
 
         group.MapGet("/stats", async (
@@ -480,15 +619,15 @@ public static class CompanyPanelEndpoints
         // ---- Eğitmenler ----
 
         group.MapGet("/instructors", async (
-            string? search, Guid? branchId, bool? isActive, int? page, int? pageSize,
+            string? search, Guid? branchId, bool? isActive, string? cursor, int? limit,
             ICurrentUser user, TenantResolver resolver, ISender sender, CancellationToken ct) =>
         {
             if (await ResolveOwnCompanyAsync(user, resolver, ct) is null)
                 return CompanyNotFound();
 
             var instructors = await sender.Send(
-                new GetInstructorsQuery(search, branchId, isActive, page ?? 1, pageSize ?? 25), ct);
-            return Results.Ok(ApiResponse<PagedResult<InstructorDto>>.Ok(instructors));
+                new GetInstructorsQuery(search, branchId, isActive, cursor, limit ?? 25), ct);
+            return Results.Ok(ApiResponse<KeysetResult<InstructorDto>>.Ok(instructors));
         }).WithName("CompanyInstructors");
 
         group.MapPost("/instructors", async (
@@ -529,15 +668,15 @@ public static class CompanyPanelEndpoints
         // ---- Şubeler ----
 
         group.MapGet("/branches", async (
-            string? search, bool? isActive, int? page, int? pageSize,
+            string? search, bool? isActive, string? cursor, int? limit,
             ICurrentUser user, TenantResolver resolver, ISender sender, CancellationToken ct) =>
         {
             if (await ResolveOwnCompanyAsync(user, resolver, ct) is null)
                 return CompanyNotFound();
 
             var branches = await sender.Send(
-                new GetBranchesQuery(search, isActive, page ?? 1, pageSize ?? 25), ct);
-            return Results.Ok(ApiResponse<PagedResult<BranchDto>>.Ok(branches));
+                new GetBranchesQuery(search, isActive, cursor, limit ?? 25), ct);
+            return Results.Ok(ApiResponse<KeysetResult<BranchDto>>.Ok(branches));
         }).WithName("CompanyBranches");
 
         group.MapPost("/branches", async (
@@ -652,15 +791,15 @@ public static class CompanyPanelEndpoints
         // ---- Tekneler ----
 
         group.MapGet("/boats", async (
-            string? search, Guid? branchId, bool? isActive, int? page, int? pageSize,
+            string? search, Guid? branchId, bool? isActive, string? cursor, int? limit,
             ICurrentUser user, TenantResolver resolver, ISender sender, CancellationToken ct) =>
         {
             if (await ResolveOwnCompanyAsync(user, resolver, ct) is null)
                 return CompanyNotFound();
 
             var boats = await sender.Send(
-                new GetBoatsQuery(search, branchId, isActive, page ?? 1, pageSize ?? 25), ct);
-            return Results.Ok(ApiResponse<PagedResult<BoatDto>>.Ok(boats));
+                new GetBoatsQuery(search, branchId, isActive, cursor, limit ?? 25), ct);
+            return Results.Ok(ApiResponse<KeysetResult<BoatDto>>.Ok(boats));
         }).WithName("CompanyBoats");
 
         group.MapPost("/boats", async (
@@ -699,14 +838,14 @@ public static class CompanyPanelEndpoints
         // ---- Ders paketleri ----
 
         group.MapGet("/packages", async (
-            string? search, int? page, int? pageSize,
+            string? search, string? cursor, int? limit,
             ICurrentUser user, TenantResolver resolver, ISender sender, CancellationToken ct) =>
         {
             if (await ResolveOwnCompanyAsync(user, resolver, ct) is null)
                 return CompanyNotFound();
 
-            var packages = await sender.Send(new GetPackagesQuery(search, page ?? 1, pageSize ?? 25), ct);
-            return Results.Ok(ApiResponse<PagedResult<PackageDto>>.Ok(packages));
+            var packages = await sender.Send(new GetPackagesQuery(search, cursor, limit ?? 25), ct);
+            return Results.Ok(ApiResponse<KeysetResult<PackageDto>>.Ok(packages));
         }).WithName("CompanyPackages");
 
         group.MapPost("/packages", async (

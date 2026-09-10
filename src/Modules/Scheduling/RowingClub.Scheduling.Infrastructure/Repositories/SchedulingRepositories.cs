@@ -34,6 +34,50 @@ public sealed class BranchRepository(TenantDbContext context) : IBranchRepositor
     public Task<List<Branch>> GetAllAsync(CancellationToken cancellationToken) =>
         context.Branches.ToListAsync(cancellationToken);
 
+    public Task<List<Branch>> GetPageAsync(
+        string? search, bool? isActive, string? cursorName, Guid? cursorId, int take, CancellationToken cancellationToken)
+    {
+        var query = context.Branches.AsQueryable();
+
+        if (isActive is { } active)
+            query = query.Where(b => b.IsActive == active);
+
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            var term = search.Trim();
+            query = query.Where(b =>
+                EF.Functions.ILike(b.Name, $"%{term}%") ||
+                (b.Address != null && EF.Functions.ILike(b.Address, $"%{term}%")) ||
+                (b.Phone != null && EF.Functions.ILike(b.Phone, $"%{term}%")) ||
+                (b.ManagerName != null && EF.Functions.ILike(b.ManagerName, $"%{term}%")));
+        }
+
+        if (cursorName is not null && cursorId is { } id)
+            query = query.Where(b => b.Name.CompareTo(cursorName) > 0 || (b.Name == cursorName && b.Id.CompareTo(id) > 0));
+
+        return query.OrderBy(b => b.Name).ThenBy(b => b.Id).Take(take).ToListAsync(cancellationToken);
+    }
+
+    public Task<int> CountAsync(string? search, bool? isActive, CancellationToken cancellationToken)
+    {
+        var query = context.Branches.AsQueryable();
+
+        if (isActive is { } active)
+            query = query.Where(b => b.IsActive == active);
+
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            var term = search.Trim();
+            query = query.Where(b =>
+                EF.Functions.ILike(b.Name, $"%{term}%") ||
+                (b.Address != null && EF.Functions.ILike(b.Address, $"%{term}%")) ||
+                (b.Phone != null && EF.Functions.ILike(b.Phone, $"%{term}%")) ||
+                (b.ManagerName != null && EF.Functions.ILike(b.ManagerName, $"%{term}%")));
+        }
+
+        return query.CountAsync(cancellationToken);
+    }
+
     public Task<Branch?> GetByIdAsync(Guid id, CancellationToken cancellationToken) =>
         context.Branches.FirstOrDefaultAsync(b => b.Id == id, cancellationToken);
 
@@ -74,6 +118,36 @@ public sealed class LessonPackageRepository(TenantDbContext context) : ILessonPa
 {
     public Task<List<LessonPackage>> GetAllAsync(CancellationToken cancellationToken) =>
         context.LessonPackages.ToListAsync(cancellationToken);
+
+    public Task<List<LessonPackage>> GetPageAsync(
+        string? search, decimal? cursorPrice, Guid? cursorId, int take, CancellationToken cancellationToken)
+    {
+        var query = context.LessonPackages.AsQueryable();
+
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            var term = search.Trim();
+            query = query.Where(p => EF.Functions.ILike(p.Name, $"%{term}%"));
+        }
+
+        if (cursorPrice is { } price && cursorId is { } id)
+            query = query.Where(p => p.Price.CompareTo(price) > 0 || (p.Price == price && p.Id.CompareTo(id) > 0));
+
+        return query.OrderBy(p => p.Price).ThenBy(p => p.Id).Take(take).ToListAsync(cancellationToken);
+    }
+
+    public Task<int> CountAsync(string? search, CancellationToken cancellationToken)
+    {
+        var query = context.LessonPackages.AsQueryable();
+
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            var term = search.Trim();
+            query = query.Where(p => EF.Functions.ILike(p.Name, $"%{term}%"));
+        }
+
+        return query.CountAsync(cancellationToken);
+    }
 
     public Task<LessonPackage?> GetByIdAsync(Guid id, CancellationToken cancellationToken) =>
         context.LessonPackages.FirstOrDefaultAsync(p => p.Id == id, cancellationToken);

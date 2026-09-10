@@ -23,6 +23,9 @@ public sealed class GetCompanySiteQueryHandler(ICompanyRepository companyReposit
         var features = company.PlanFeatures;
         return new CompanySiteDto(
             company.Id, company.Name, company.Subdomain, company.DatabaseName,
+            company.LogoPath, company.Tagline, company.AboutText,
+            company.InstagramUrl, company.FacebookUrl, company.YoutubeUrl, company.LinkedinUrl,
+            company.XUrl, company.WhatsappUrl, company.TelegramUrl, company.PinterestUrl, company.GoogleMapsUrl,
             company.Phone, company.ContactEmail, company.Address, company.TaxNumber, company.Status.ToString(),
             company.Plan.ToString(), limits.MaxBranches, limits.MaxMembers, limits.MaxBoats, limits.MaxInstructors,
             features.MaxManagers, features.MaxEmployees, features.CanExportData,

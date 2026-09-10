@@ -118,10 +118,10 @@ public static class AdminEndpoints
         .WithName("ResetCompanyAdminPassword");
 
         platformAdminGroup.MapGet("/activity-logs", async (
-            string? search, int? page, int? pageSize, IMediator mediator) =>
+            string? search, string? cursor, int? limit, IMediator mediator) =>
         {
-            var logs = await mediator.Send(new GetPlatformActivityLogsQuery(search, page ?? 1, pageSize ?? 25));
-            return Results.Ok(ApiResponse<PagedResult<PlatformActivityLogDto>>.Ok(logs));
+            var logs = await mediator.Send(new GetPlatformActivityLogsQuery(search, cursor, limit ?? 25));
+            return Results.Ok(ApiResponse<KeysetResult<PlatformActivityLogDto>>.Ok(logs));
         })
         .WithName("GetPlatformActivityLogs");
 
@@ -132,10 +132,25 @@ public static class AdminEndpoints
         })
         .WithName("GetPlatformRevenue");
 
-        platformAdminGroup.MapGet("/companies/{companyId:guid}/subscription", async (
-            Guid companyId, int? page, int? pageSize, IMediator mediator) =>
+        platformAdminGroup.MapGet("/payments", async (
+            string? status, string? cursor, int? limit, IMediator mediator) =>
         {
-            var subscription = await mediator.Send(new GetCompanySubscriptionQuery(companyId, page ?? 1, pageSize ?? 25));
+            var payments = await mediator.Send(new GetPlatformPaymentsQuery(status, cursor, limit ?? 25));
+            return Results.Ok(ApiResponse<KeysetResult<PlatformPaymentDto>>.Ok(payments));
+        })
+        .WithName("GetPlatformPayments");
+
+        platformAdminGroup.MapGet("/payments/stats", async (IMediator mediator) =>
+        {
+            var stats = await mediator.Send(new GetPlatformPaymentStatsQuery());
+            return Results.Ok(ApiResponse<PlatformPaymentStatsDto>.Ok(stats));
+        })
+        .WithName("GetPlatformPaymentStats");
+
+        platformAdminGroup.MapGet("/companies/{companyId:guid}/subscription", async (
+            Guid companyId, string? cursor, int? limit, IMediator mediator) =>
+        {
+            var subscription = await mediator.Send(new GetCompanySubscriptionQuery(companyId, cursor, limit ?? 25));
             return Results.Ok(ApiResponse<CompanySubscriptionDetailDto>.Ok(subscription));
         })
         .WithName("GetCompanySubscription");

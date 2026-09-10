@@ -51,7 +51,7 @@ public sealed class RefreshTokenCommandHandler(
                 passwordResetTokenRepository.Add(resetToken);
 
                 var publicAppUrl = (configuration["PUBLIC_APP_URL"] ?? DefaultPublicAppUrl).TrimEnd('/');
-                var resetLink = $"{publicAppUrl}/parola-sifirla?token={Uri.EscapeDataString(rawResetToken)}&email={Uri.EscapeDataString(theftUser.Email.Value)}";
+                var resetLink = $"{publicAppUrl}/reset-password?token={Uri.EscapeDataString(rawResetToken)}&email={Uri.EscapeDataString(theftUser.Email.Value)}";
 
                 var bodyHtml = "<p>Hesabınızda şüpheli aktivite tespit edildi. Tüm oturumlarınız güvenlik amacıyla kapatılmıştır.</p><p>Eğer bu siz değilseniz, lütfen hemen şifrenizi değiştirin.</p>";
                 var htmlBody = EmailTemplate.Render("Güvenlik Uyarısı", bodyHtml, "Şifremi Değiştir", resetLink);

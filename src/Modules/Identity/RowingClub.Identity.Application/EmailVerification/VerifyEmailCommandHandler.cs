@@ -79,7 +79,7 @@ public sealed class VerifyEmailCommandHandler(
         var siteUrl = $"https://{company.Subdomain}.{BaseDomain}";
         var publicAppUrl = (configuration["PUBLIC_APP_URL"] ?? DefaultPublicAppUrl).TrimEnd('/');
         var activationLink =
-            $"{publicAppUrl}/parola-sifirla?token={Uri.EscapeDataString(rawActivationToken)}&email={Uri.EscapeDataString(adminEmail)}";
+            $"{publicAppUrl}/reset-password?token={Uri.EscapeDataString(rawActivationToken)}&email={Uri.EscapeDataString(adminEmail)}";
         var bodyHtml = $"""
             <p>Firmanız başarıyla oluşturuldu ve hemen kullanıma hazır.</p>
             <p style="margin:16px 0;padding:14px 16px;background:#f4f6f8;border-radius:8px;">

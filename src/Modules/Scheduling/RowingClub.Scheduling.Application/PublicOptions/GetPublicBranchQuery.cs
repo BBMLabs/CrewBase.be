@@ -1,5 +1,6 @@
 using MediatR;
 using RowingClub.Scheduling.Domain.Branches;
+using RowingClub.Scheduling.Domain.Customers;
 
 namespace RowingClub.Scheduling.Application.PublicOptions;
 
@@ -30,15 +31,20 @@ public sealed record GetPublicBranchListQuery : IRequest<List<PublicBranchSummar
 
 public sealed record PublicBranchSummaryDto(string Code, string Name, string? Address);
 
-public sealed class GetPublicBranchListQueryHandler(IBranchRepository branchRepository)
+public sealed class GetPublicBranchListQueryHandler(
+    IBranchRepository branchRepository, ICustomerRepository customerRepository)
     : IRequestHandler<GetPublicBranchListQuery, List<PublicBranchSummaryDto>>
 {
     public async Task<List<PublicBranchSummaryDto>> Handle(
         GetPublicBranchListQuery request, CancellationToken cancellationToken)
     {
         var branches = await branchRepository.GetAllAsync(cancellationToken);
+        var memberCounts = await customerRepository.GetMemberCountsByBranchAsync(cancellationToken);
+
         return branches
             .Where(b => b.IsActive)
+            .OrderByDescending(b => memberCounts.GetValueOrDefault(b.Id))
+            .ThenBy(b => b.Name)
             .Select(b => new PublicBranchSummaryDto(b.Code, b.Name, b.Address))
             .ToList();
     }

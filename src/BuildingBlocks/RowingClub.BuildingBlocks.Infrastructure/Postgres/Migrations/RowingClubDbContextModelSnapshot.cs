@@ -190,6 +190,11 @@ namespace RowingClub.BuildingBlocks.Infrastructure.Postgres.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
+                    b.Property<string>("AboutText")
+                        .IsRequired()
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
+
                     b.Property<string>("Address")
                         .HasMaxLength(500)
                         .HasColumnType("character varying(500)");
@@ -242,8 +247,24 @@ namespace RowingClub.BuildingBlocks.Infrastructure.Postgres.Migrations
                     b.Property<DateTimeOffset?>("DeletedAtUtc")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<string>("FacebookUrl")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<string>("GoogleMapsUrl")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<string>("InstagramUrl")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
                     b.Property<bool>("IsDeleted")
                         .HasColumnType("boolean");
+
+                    b.Property<string>("LinkedinUrl")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
 
                     b.Property<string>("LogoPath")
                         .HasMaxLength(500)
@@ -257,6 +278,10 @@ namespace RowingClub.BuildingBlocks.Infrastructure.Postgres.Migrations
                     b.Property<string>("Phone")
                         .HasMaxLength(20)
                         .HasColumnType("character varying(20)");
+
+                    b.Property<string>("PinterestUrl")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
 
                     b.Property<string>("Plan")
                         .IsRequired()
@@ -273,13 +298,34 @@ namespace RowingClub.BuildingBlocks.Infrastructure.Postgres.Migrations
                         .HasMaxLength(63)
                         .HasColumnType("character varying(63)");
 
+                    b.Property<string>("Tagline")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
                     b.Property<string>("TaxNumber")
                         .HasMaxLength(11)
                         .HasColumnType("character varying(11)");
 
+                    b.Property<string>("TelegramUrl")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
                     b.Property<long>("Version")
                         .IsConcurrencyToken()
                         .HasColumnType("bigint");
+
+                    b.Property<string>("WhatsappUrl")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<string>("XUrl")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<string>("YoutubeUrl")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
 
                     b.HasKey("Id");
 
@@ -290,6 +336,30 @@ namespace RowingClub.BuildingBlocks.Infrastructure.Postgres.Migrations
                         .IsUnique();
 
                     b.ToTable("identity_companies", (string)null);
+                });
+
+            modelBuilder.Entity("RowingClub.Identity.Domain.Companies.CompanyGalleryImage", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("CompanyId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("ImagePath")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CompanyId");
+
+                    b.ToTable("identity_company_gallery_images", (string)null);
                 });
 
             modelBuilder.Entity("RowingClub.Identity.Domain.Platform.PlatformActivityLog", b =>
@@ -641,6 +711,15 @@ namespace RowingClub.BuildingBlocks.Infrastructure.Postgres.Migrations
                     b.HasIndex("UserId", "IsUsed");
 
                     b.ToTable("identity_recovery_codes", (string)null);
+                });
+
+            modelBuilder.Entity("RowingClub.Identity.Domain.Companies.CompanyGalleryImage", b =>
+                {
+                    b.HasOne("RowingClub.Identity.Domain.Companies.Company", null)
+                        .WithMany()
+                        .HasForeignKey("CompanyId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
                 });
 #pragma warning restore 612, 618
         }

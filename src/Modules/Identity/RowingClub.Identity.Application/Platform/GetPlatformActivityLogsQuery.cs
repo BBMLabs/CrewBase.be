@@ -1,3 +1,4 @@
+using System.Globalization;
 using MediatR;
 using RowingClub.BuildingBlocks.Application.Messaging;
 using RowingClub.Identity.Domain.Companies;
@@ -5,8 +6,8 @@ using RowingClub.Identity.Domain.Platform;
 
 namespace RowingClub.Identity.Application.Platform;
 
-public sealed record GetPlatformActivityLogsQuery(string? Search = null, int Page = 1, int PageSize = 25)
-    : IRequest<PagedResult<PlatformActivityLogDto>>;
+public sealed record GetPlatformActivityLogsQuery(string? Search = null, string? Cursor = null, int Limit = 25)
+    : IRequest<KeysetResult<PlatformActivityLogDto>>;
 
 public sealed record PlatformActivityLogDto(
     Guid ActorUserId, string ActorEmail, string Action, Guid? TargetCompanyId, string? TargetCompanyName,
@@ -14,26 +15,34 @@ public sealed record PlatformActivityLogDto(
 
 public sealed class GetPlatformActivityLogsQueryHandler(
     IPlatformActivityLogRepository repository, ICompanyRepository companyRepository)
-    : IRequestHandler<GetPlatformActivityLogsQuery, PagedResult<PlatformActivityLogDto>>
+    : IRequestHandler<GetPlatformActivityLogsQuery, KeysetResult<PlatformActivityLogDto>>
 {
-    public async Task<PagedResult<PlatformActivityLogDto>> Handle(
+    public async Task<KeysetResult<PlatformActivityLogDto>> Handle(
         GetPlatformActivityLogsQuery request, CancellationToken cancellationToken)
     {
-        var page = Math.Max(1, request.Page);
-        var pageSize = Math.Clamp(request.PageSize, 1, 200);
-        var (logs, totalCount) = await repository.GetPagedAsync(request.Search, page, pageSize, cancellationToken);
+        var limit = Math.Clamp(request.Limit, 1, 200);
+        var hasCursor = KeysetCursor.TryDecode(request.Cursor, 1, out var keyParts, out var cursorId);
+        var cursorAtUtc = hasCursor ? DateTimeOffset.Parse(keyParts[0], CultureInfo.InvariantCulture) : (DateTimeOffset?)null;
+
+        var logs = await repository.GetPageAsync(
+            request.Search, cursorAtUtc, hasCursor ? cursorId : null, limit + 1, cancellationToken);
 
         var companyIds = logs.Where(l => l.TargetCompanyId.HasValue).Select(l => l.TargetCompanyId!.Value).Distinct().ToList();
         var companies = await companyRepository.GetByIdsAsync(companyIds, cancellationToken);
         var companyNames = companies.ToDictionary(c => c.Id, c => c.Name);
 
-        var dtos = logs
+        var (page, nextCursor) = KeysetPage.Trim(
+            logs, limit, l => l.Id, l => [l.AtUtc.ToString("o", CultureInfo.InvariantCulture)]);
+
+        var dtos = page
             .Select(l => new PlatformActivityLogDto(
                 l.ActorUserId, l.ActorEmail, l.Action, l.TargetCompanyId,
                 l.TargetCompanyId.HasValue ? companyNames.GetValueOrDefault(l.TargetCompanyId.Value) : null,
                 l.IpAddress, l.UserAgent, l.AtUtc))
             .ToList();
 
-        return new PagedResult<PlatformActivityLogDto>(dtos, totalCount, page, pageSize);
+        var totalCount = await repository.CountAsync(request.Search, cancellationToken);
+
+        return new KeysetResult<PlatformActivityLogDto>(dtos, nextCursor, totalCount);
     }
 }

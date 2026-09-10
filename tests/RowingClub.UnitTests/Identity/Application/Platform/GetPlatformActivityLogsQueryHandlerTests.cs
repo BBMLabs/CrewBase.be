@@ -20,8 +20,8 @@ public sealed class GetPlatformActivityLogsQueryHandlerTests
         var company = CompanyTestFactory.Create("Kürek Kulübü");
         var log = PlatformActivityLog.Record(Guid.NewGuid(), "admin@platform.com", "SetCompanyPlan", company.Id, "1.2.3.4", "UA");
         _repository
-            .GetPagedAsync(null, 1, 25, Arg.Any<CancellationToken>())
-            .Returns(([log], 1));
+            .GetPageAsync(null, null, null, 26, Arg.Any<CancellationToken>())
+            .Returns([log]);
         _companyRepository
             .GetByIdsAsync(Arg.Is<IReadOnlyCollection<Guid>>(ids => ids != null && ids.Contains(company.Id)), Arg.Any<CancellationToken>())
             .Returns([company]);
@@ -29,7 +29,6 @@ public sealed class GetPlatformActivityLogsQueryHandlerTests
         var handler = CreateHandler();
         var result = await handler.Handle(new GetPlatformActivityLogsQuery(), CancellationToken.None);
 
-        result.TotalCount.Should().Be(1);
         result.Items.Should().ContainSingle();
         result.Items[0].TargetCompanyId.Should().Be(company.Id);
         result.Items[0].TargetCompanyName.Should().Be("Kürek Kulübü");
@@ -40,8 +39,8 @@ public sealed class GetPlatformActivityLogsQueryHandlerTests
     {
         var log = PlatformActivityLog.Record(Guid.NewGuid(), "admin@platform.com", "ResetCompanyAdminPassword", null, null, null);
         _repository
-            .GetPagedAsync(null, 1, 25, Arg.Any<CancellationToken>())
-            .Returns(([log], 1));
+            .GetPageAsync(null, null, null, 26, Arg.Any<CancellationToken>())
+            .Returns([log]);
         _companyRepository
             .GetByIdsAsync(Arg.Any<IReadOnlyCollection<Guid>>(), Arg.Any<CancellationToken>())
             .Returns([]);

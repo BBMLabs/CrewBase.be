@@ -42,6 +42,8 @@ builder.Services.AddSignalR();
 builder.Services.AddSingleton<Microsoft.AspNetCore.SignalR.IUserIdProvider, TenantUserIdProvider>();
 builder.Services.AddScoped<RowingClub.Scheduling.Application.Members.IChatNotifier, SignalRChatNotifier>();
 builder.Services.AddScoped<RowingClub.Scheduling.Application.Members.IOtpSender, EmailOtpSender>();
+builder.Services.AddScoped<RowingClub.Scheduling.Application.Messages.ISiteMessageReplySender,
+    EmailSiteMessageReplySender>();
 builder.Services.AddHostedService<TenantMigrationHostedService>();
 builder.Services.AddHostedService<PlatformAdminSeeder>();
 builder.Services.AddHostedService<ReminderWorker>();

@@ -1,9 +1,11 @@
 using MediatR;
 using Microsoft.AspNetCore.Mvc;
 using RowingClub.Api.Tenancy;
+using RowingClub.Identity.Application.Companies.SiteContent;
 using RowingClub.Scheduling.Application.Availability;
 using RowingClub.Scheduling.Application.Booking;
 using RowingClub.Scheduling.Application.Members;
+using RowingClub.Scheduling.Application.Messages;
 using RowingClub.Scheduling.Application.PublicOptions;
 
 namespace RowingClub.Api.Endpoints;
@@ -11,6 +13,8 @@ namespace RowingClub.Api.Endpoints;
 public sealed record PublicBookingRequest(
     string FullName, string Phone, string? Email, string Date, string Time,
     string? BoatClass, string? Note, int? ReminderMinutes, List<string>? AcceptedConsents);
+
+public sealed record PublicSiteMessageRequest(string FullName, string Email, string Body);
 
 /// <summary>
 /// Her firmanın müşterilere açık randevu akışı. Gerçekte {subdomain}.faturebase.com'dan servis
@@ -37,11 +41,34 @@ public static class PublicSiteEndpoints
                     company.Name,
                     company.Subdomain,
                     SiteUrl = $"https://{company.Subdomain}.{TenantResolver.BaseDomain}",
+                    company.LogoPath,
+                    company.Tagline,
+                    company.AboutText,
+                    company.InstagramUrl,
+                    company.FacebookUrl,
+                    company.YoutubeUrl,
+                    company.LinkedinUrl,
+                    company.XUrl,
+                    company.WhatsappUrl,
+                    company.TelegramUrl,
+                    company.PinterestUrl,
+                    company.GoogleMapsUrl,
                     company.Phone,
                     company.ContactEmail,
                     company.Address,
                 }));
         }).WithName("PublicCompanyInfo");
+
+        group.MapGet("/gallery", async (
+            string subdomain, TenantResolver resolver, ISender sender, CancellationToken cancellationToken) =>
+        {
+            var company = await resolver.ResolveBySubdomainAsync(subdomain, cancellationToken);
+            if (company is null)
+                return Results.NotFound(ApiResponse.Fail("company_not_found", "Firma bulunamadı."));
+
+            var content = await sender.Send(new GetCompanySiteContentQuery(company.CompanyId), cancellationToken);
+            return Results.Ok(ApiResponse<List<string>>.Ok(content.GalleryImages.Select(i => i.ImagePath).ToList()));
+        }).WithName("PublicCompanyGallery");
 
         // Kök site (/): birden fazla şube varsa seçim listesi için aktif şubeler.
         group.MapGet("/branches", async (
@@ -143,6 +170,26 @@ public static class PublicSiteEndpoints
                 $"/api/v1/public/{subdomain}/appointments/{response.AppointmentId}",
                 ApiResponse<BookAppointmentResponse>.Ok(response, "Randevunuz alındı."));
         }).WithName("PublicBookAppointment");
+
+        group.MapPost("/messages", async (
+            string subdomain, [FromBody] PublicSiteMessageRequest request, HttpContext httpContext,
+            TenantResolver resolver, ISender sender, CancellationToken cancellationToken) =>
+        {
+            var company = await resolver.ResolveBySubdomainAsync(subdomain, cancellationToken);
+            if (company is null)
+                return Results.NotFound(ApiResponse.Fail("company_not_found", "Firma bulunamadı."));
+
+            var forwarded = httpContext.Request.Headers["X-Forwarded-For"].FirstOrDefault();
+            var clientIp = !string.IsNullOrWhiteSpace(forwarded)
+                ? forwarded.Split(',')[0].Trim()
+                : httpContext.Connection.RemoteIpAddress?.ToString();
+
+            await sender.Send(
+                new SubmitSiteMessageCommand(request.FullName, request.Email, request.Body, clientIp),
+                cancellationToken);
+
+            return Results.Ok(ApiResponse.Ok("Mesajınız iletildi."));
+        }).WithName("PublicSubmitSiteMessage");
 
         return app;
     }

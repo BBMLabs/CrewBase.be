@@ -36,7 +36,7 @@ public sealed class RegisterCompanyCommandHandler(
         if (await userRepository.ExistsByEmailAsync(email, cancellationToken))
             throw new DomainException("email_already_registered", "Bu e-posta adresi zaten kayıtlı.");
 
-        var subdomain = await ResolveUniqueSubdomainAsync(request.CompanyName, cancellationToken);
+        var subdomain = await ResolveSubdomainAsync(request.CompanyName, request.Subdomain, cancellationToken);
         var databaseName = SubdomainSlug.ToDatabaseName(subdomain);
 
         // Tenant veritabanı, katalog kaydından önce ayrı bir bağlantıda oluşturulur (Postgres'te
@@ -68,6 +68,18 @@ public sealed class RegisterCompanyCommandHandler(
         return new RegisterCompanyResponse(
             company.Id, adminUser.Id, company.Name, adminUser.Email.Value,
             company.Subdomain, $"https://{company.Subdomain}.{BaseDomain}", company.CreatedAtUtc);
+    }
+
+    private async Task<string> ResolveSubdomainAsync(
+        string companyName, string? preferredSubdomain, CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrEmpty(preferredSubdomain))
+            return await ResolveUniqueSubdomainAsync(companyName, cancellationToken);
+
+        if (await companyRepository.ExistsBySubdomainAsync(preferredSubdomain, cancellationToken))
+            throw new DomainException("subdomain_taken", "Bu site adı zaten kullanılıyor.");
+
+        return preferredSubdomain;
     }
 
     private async Task<string> ResolveUniqueSubdomainAsync(string companyName, CancellationToken cancellationToken)

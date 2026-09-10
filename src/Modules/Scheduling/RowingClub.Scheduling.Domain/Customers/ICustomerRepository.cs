@@ -20,6 +20,8 @@ public interface ICustomerRepository
 
     Task<List<Customer>> GetByBranchIdAsync(Guid branchId, CancellationToken cancellationToken);
 
+    Task<Dictionary<Guid, int>> GetMemberCountsByBranchAsync(CancellationToken cancellationToken);
+
     Task<int> CountAsync(CancellationToken cancellationToken);
 
     void Add(Customer customer);

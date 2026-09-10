@@ -8,7 +8,8 @@ public sealed record RegisterCompanyCommand(
     string TaxNumber,
     string Phone,
     string ContactEmail,
-    string Address) : ICommand<RegisterCompanyResponse>;
+    string Address,
+    string? Subdomain = null) : ICommand<RegisterCompanyResponse>;
 
 public sealed record RegisterCompanyResponse(
     Guid CompanyId,

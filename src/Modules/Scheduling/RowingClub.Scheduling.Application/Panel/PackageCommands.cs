@@ -1,3 +1,4 @@
+using System.Globalization;
 using MediatR;
 using RowingClub.BuildingBlocks.Application.Messaging;
 using RowingClub.BuildingBlocks.Domain;
@@ -11,8 +12,8 @@ public sealed record PackageDto(
     Guid Id, string Name, string? Description, int SessionCount, decimal Price, bool IsActive,
     string? ImagePath, int? ValidityDays);
 
-public sealed record GetPackagesQuery(string? Search = null, int Page = 1, int PageSize = 25)
-    : IRequest<PagedResult<PackageDto>>;
+public sealed record GetPackagesQuery(string? Search = null, string? Cursor = null, int Limit = 25)
+    : IRequest<KeysetResult<PackageDto>>;
 
 public sealed record CreatePackageCommand(
     string Name, string? Description, int SessionCount, decimal Price, int? ValidityDays)
@@ -35,24 +36,23 @@ public sealed record SetPackageImageCommand(Guid PackageId, string ImagePath) : 
 public sealed record DeletePackageCommand(Guid Id) : ICommand<Unit>;
 
 public sealed class GetPackagesQueryHandler(ILessonPackageRepository repository)
-    : IRequestHandler<GetPackagesQuery, PagedResult<PackageDto>>
+    : IRequestHandler<GetPackagesQuery, KeysetResult<PackageDto>>
 {
-    public async Task<PagedResult<PackageDto>> Handle(GetPackagesQuery request, CancellationToken cancellationToken)
+    public async Task<KeysetResult<PackageDto>> Handle(GetPackagesQuery request, CancellationToken cancellationToken)
     {
-        var packages = await repository.GetAllAsync(cancellationToken);
+        var limit = Math.Clamp(request.Limit, 1, 200);
+        var hasCursor = KeysetCursor.TryDecode(request.Cursor, 1, out var keyParts, out var cursorId);
+        var cursorPrice = hasCursor ? decimal.Parse(keyParts[0], CultureInfo.InvariantCulture) : (decimal?)null;
 
-        if (!string.IsNullOrWhiteSpace(request.Search))
-        {
-            var term = request.Search.Trim();
-            packages = packages.Where(p => p.Name.Contains(term, StringComparison.OrdinalIgnoreCase)).ToList();
-        }
+        var packages = await repository.GetPageAsync(
+            request.Search, cursorPrice, hasCursor ? cursorId : null, limit + 1, cancellationToken);
 
-        var dtos = packages
-            .OrderBy(p => p.Price)
-            .Select(ToDto)
-            .ToList();
+        var (page, nextCursor) = KeysetPage.Trim(
+            packages, limit, p => p.Id, p => [p.Price.ToString(CultureInfo.InvariantCulture)]);
 
-        return PagedResult<PackageDto>.Create(dtos, request.Page, request.PageSize);
+        var totalCount = await repository.CountAsync(request.Search, cancellationToken);
+
+        return new KeysetResult<PackageDto>(page.Select(ToDto).ToList(), nextCursor, totalCount);
     }
 
     internal static PackageDto ToDto(LessonPackage p) => new(
