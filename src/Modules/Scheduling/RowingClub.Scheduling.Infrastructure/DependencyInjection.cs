@@ -53,6 +53,7 @@ public static class DependencyInjection
             var tenantDatabase = provider.GetRequiredService<ITenantDatabase>();
             var connectionStringFactory = provider.GetRequiredService<TenantConnectionStringFactory>();
             options.UseNpgsql(connectionStringFactory.Create(tenantDatabase.DatabaseName));
+            options.ConfigureWarnings(w => w.Ignore(Microsoft.EntityFrameworkCore.Diagnostics.RelationalEventId.PendingModelChangesWarning));
         });
 
         services.AddScoped<IAppointmentRepository, AppointmentRepository>();
