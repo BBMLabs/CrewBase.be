@@ -30,7 +30,8 @@ public sealed class RequestPlanDowngradeCommandHandler(
         if (subscription is not { Status: CompanySubscriptionStatus.Active, CurrentPeriodEndUtc: not null })
             throw new DomainException("no_active_subscription", "Aktif bir ücretli aboneliğiniz yok.");
 
-        CompanyPlanLimitsCatalog.EnsureUsageFits(targetPlan, request.UsedBranches, request.UsedMembers, request.UsedBoats);
+        CompanyPlanLimitsCatalog.EnsureUsageFits(
+            targetPlan, request.UsedBranches, request.UsedMembers, request.UsedBoats, request.UsedInstructors);
 
         subscription.RequestPendingPlan(targetPlan, subscription.CurrentPeriodEndUtc.Value);
         subscriptionRepository.Update(subscription);

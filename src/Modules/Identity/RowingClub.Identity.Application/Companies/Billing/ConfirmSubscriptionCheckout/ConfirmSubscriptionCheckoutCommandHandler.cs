@@ -41,7 +41,9 @@ public sealed class ConfirmSubscriptionCheckoutCommandHandler(
 
         // Ücretli bir pakete yeni ödeme yapıldı; limit kontrolü gerekmez (ücretsiz Mico'dan her
         // zaman daha geniş limitlere geçiliyor) - SetPlan doğrudan uygular.
-        company.SetPlan(plan, customMaxBranches: null, customMaxMembers: null, customMaxBoats: null);
+        company.SetPlan(
+            plan, customMaxBranches: null, customMaxMembers: null, customMaxBoats: null,
+            customMaxInstructors: null);
         companyRepository.Update(company);
 
         var dedupeKey = result.PaymentReferenceCode ?? $"{result.SubscriptionReferenceCode}:initial";

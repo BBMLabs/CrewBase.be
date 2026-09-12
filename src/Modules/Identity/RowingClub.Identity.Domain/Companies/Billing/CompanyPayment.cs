@@ -76,4 +76,14 @@ public sealed class CompanyPayment : AggregateRoot<Guid>
         CompanyPaymentKind kind, string? iyzicoPaymentReferenceCode, string failureReason) =>
         new(Guid.NewGuid(), companyId, plan, amount, currency, kind,
             CompanyPaymentStatus.Failed, iyzicoPaymentReferenceCode, failureReason);
+
+    /// <summary>
+    /// Master panelden elle eklenen düzeltme kaydı (ör. iyzico webhook'u kaçırıldığında). iyzico
+    /// referans kodu taşımaz - bu satırın gerçek bir iyzico tahsilatını temsil ETMEDİĞİNİ ayırt
+    /// eder. Not, hem başarılı hem başarısız düzeltmeler için admin'in gerekçesini taşır.
+    /// </summary>
+    public static CompanyPayment RecordManualCorrection(
+        Guid companyId, CompanyPlan plan, decimal amount, string currency,
+        CompanyPaymentKind kind, CompanyPaymentStatus status, string note) =>
+        new(Guid.NewGuid(), companyId, plan, amount, currency, kind, status, iyzicoPaymentReferenceCode: null, note);
 }

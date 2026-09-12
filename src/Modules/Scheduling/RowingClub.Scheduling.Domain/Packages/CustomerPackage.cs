@@ -48,12 +48,19 @@ public sealed class CustomerPackage
     /// <summary>Yalnızca <see cref="CustomerPackageSource.Purchased"/> için dolu; iyzico ödeme referans kodu.</summary>
     public string? PaymentReferenceCode { get; private set; }
 
+    /// <summary>Yalnızca <see cref="CustomerPackageSource.Purchased"/> için dolu; o an ödenen tutar (kampanyalıysa kampanya fiyatı).</summary>
+    public decimal? PricePaid { get; private set; }
+
+    /// <summary>Satın alma anında aktif bir kampanya üzerinden yapıldıysa o kampanyanın kimliği; ciro/katılım analizleri için.</summary>
+    public Guid? CampaignId { get; private set; }
+
     private CustomerPackage()
     {
     }
 
     public static CustomerPackage Assign(
-        Guid customerId, LessonPackage package, CustomerPackageSource source, string? paymentReferenceCode = null)
+        Guid customerId, LessonPackage package, CustomerPackageSource source, string? paymentReferenceCode = null,
+        decimal? pricePaid = null, Guid? campaignId = null)
     {
         var now = DateTimeOffset.UtcNow;
         return new CustomerPackage
@@ -68,6 +75,8 @@ public sealed class CustomerPackage
             ExpiresAtUtc = package.ValidityDays is { } days ? now.AddDays(days) : null,
             Source = source,
             PaymentReferenceCode = paymentReferenceCode,
+            PricePaid = pricePaid,
+            CampaignId = campaignId,
         };
     }
 

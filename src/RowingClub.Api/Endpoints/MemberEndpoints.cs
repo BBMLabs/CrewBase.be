@@ -12,7 +12,8 @@ using RowingClub.Scheduling.Application.Members;
 namespace RowingClub.Api.Endpoints;
 
 public sealed record MemberRegisterRequest(
-    string FullName, string Phone, string Email, string Password, List<string>? AcceptedConsents);
+    string FullName, string Phone, string Email, string Password, List<string>? AcceptedConsents,
+    string? BranchCode);
 public sealed record MemberLoginRequest(string Email, string Password);
 public sealed record MemberSetPasswordRequest(string Email, string Token, string NewPassword);
 public sealed record MemberForgotPasswordRequest(string Email);
@@ -59,7 +60,7 @@ public static class MemberEndpoints
 
             var member = await sender.Send(new RegisterMemberCommand(
                 request.FullName, request.Phone, request.Email, request.Password,
-                request.AcceptedConsents ?? [], ClientIp(http)), ct);
+                request.AcceptedConsents ?? [], ClientIp(http), request.BranchCode), ct);
 
             var (token, expiresAt) = tokenIssuer.Issue(member, company);
             return Results.Ok(ApiResponse<object>.Ok(
@@ -188,7 +189,7 @@ public static class MemberEndpoints
 
         group.MapGet("/packages/catalog", Guarded(async (ctx, sender, ct) =>
         {
-            var catalog = await sender.Send(new GetPurchasablePackagesQuery(), ct);
+            var catalog = await sender.Send(new GetPurchasablePackagesQuery(ctx.CustomerId), ct);
             return Results.Ok(ApiResponse<List<PurchasablePackageDto>>.Ok(catalog));
         })).WithName("MemberPackageCatalog");
 

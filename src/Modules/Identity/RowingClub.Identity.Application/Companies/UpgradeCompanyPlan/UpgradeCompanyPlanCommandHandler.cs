@@ -42,7 +42,8 @@ public sealed class UpgradeCompanyPlanCommandHandler(
         }
 
         // Ücret çekilmeden ÖNCE doğrula - limit aşımı varsa müşteriden hiç para çekilmez.
-        CompanyPlanLimitsCatalog.EnsureUsageFits(newPlan, request.UsedBranches, request.UsedMembers, request.UsedBoats);
+        CompanyPlanLimitsCatalog.EnsureUsageFits(
+            newPlan, request.UsedBranches, request.UsedMembers, request.UsedBoats, request.UsedInstructors);
 
         var chargeResult = await iyzicoClient.UpgradeSubscriptionAsync(
             subscription.IyzicoSubscriptionReferenceCode, newPlan, IyzicoUpgradePeriod.Now, cancellationToken);
@@ -50,7 +51,7 @@ public sealed class UpgradeCompanyPlanCommandHandler(
         if (!chargeResult.Success)
             throw new DomainException("payment_failed", chargeResult.ErrorMessage ?? "Ödeme alınamadı.");
 
-        company.ChangePlan(newPlan, request.UsedBranches, request.UsedMembers, request.UsedBoats);
+        company.ChangePlan(newPlan, request.UsedBranches, request.UsedMembers, request.UsedBoats, request.UsedInstructors);
         companyRepository.Update(company);
 
         if (chargeResult.CurrentPeriodEndUtc is { } newPeriodEnd)

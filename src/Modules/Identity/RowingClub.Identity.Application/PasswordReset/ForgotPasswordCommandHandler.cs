@@ -35,7 +35,7 @@ public sealed class ForgotPasswordCommandHandler(
         passwordResetTokenRepository.Add(resetToken);
 
         var publicAppUrl = (configuration["PUBLIC_APP_URL"] ?? DefaultPublicAppUrl).TrimEnd('/');
-        var resetLink = $"{publicAppUrl}/parola-sifirla?token={Uri.EscapeDataString(rawToken)}&email={Uri.EscapeDataString(request.Email)}";
+        var resetLink = $"{publicAppUrl}/reset-password?token={Uri.EscapeDataString(rawToken)}&email={Uri.EscapeDataString(request.Email)}";
 
         try
         {

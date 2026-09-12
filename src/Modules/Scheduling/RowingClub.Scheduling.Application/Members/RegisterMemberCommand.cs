@@ -5,20 +5,16 @@ using RowingClub.BuildingBlocks.Application.Messaging;
 using RowingClub.BuildingBlocks.Domain;
 using RowingClub.BuildingBlocks.Security.Passwords;
 using RowingClub.Scheduling.Domain;
+using RowingClub.Scheduling.Domain.Branches;
 using RowingClub.Scheduling.Domain.Consents;
 using RowingClub.Scheduling.Domain.Customers;
 using RowingClub.Scheduling.Domain.Logs;
 
 namespace RowingClub.Scheduling.Application.Members;
 
-/// <summary>
-/// Public siteden üye kaydı. Aynı telefonla daha önce misafir olarak randevu alınmışsa mevcut
-/// kayda hesap iliştirilir; hesabı zaten olan telefon/e-posta reddedilir. Üyelik beyanları
-/// (KVKK, sağlık verisi açık rıza...) kayıtta bir kez onaylanır ve tarih+IP ile saklanır.
-/// </summary>
 public sealed record RegisterMemberCommand(
     string FullName, string Phone, string Email, string Password,
-    List<string> AcceptedConsents, string? IpAddress) : ICommand<MemberDto>;
+    List<string> AcceptedConsents, string? IpAddress, string? BranchCode) : ICommand<MemberDto>;
 
 public sealed class RegisterMemberCommandValidator : AbstractValidator<RegisterMemberCommand>
 {
@@ -33,6 +29,7 @@ public sealed class RegisterMemberCommandValidator : AbstractValidator<RegisterM
 
 public sealed class RegisterMemberCommandHandler(
     ICustomerRepository customerRepository,
+    IBranchRepository branchRepository,
     IConsentRecordRepository consentRepository,
     IMemberLogRepository memberLogRepository,
     IPasswordHasher passwordHasher,
@@ -45,6 +42,15 @@ public sealed class RegisterMemberCommandHandler(
         if (await customerRepository.GetByEmailAsync(request.Email, cancellationToken) is not null)
             throw new DomainException("email_taken", "Bu e-posta adresiyle bir üyelik zaten var.");
 
+        Guid? branchId = null;
+        if (!string.IsNullOrWhiteSpace(request.BranchCode))
+        {
+            var branch = await branchRepository.GetByCodeAsync(request.BranchCode, cancellationToken);
+            if (branch is null || !branch.IsActive)
+                throw new DomainException("invalid_branch", "Seçilen şube bulunamadı.");
+            branchId = branch.Id;
+        }
+
         var customer = await customerRepository.GetByPhoneAsync(request.Phone, cancellationToken);
         if (customer is null)
         {
@@ -52,7 +58,7 @@ public sealed class RegisterMemberCommandHandler(
                 throw new DomainException("member_limit_reached",
                     $"Üye limitine ulaşıldı. Mevcut paketiniz en fazla {tenantDatabase.MaxMembers} üyeye izin verir; devam etmek için kulübünüz paketini yükseltmelidir.");
 
-            customer = Customer.Create(request.FullName, request.Phone, request.Email);
+            customer = Customer.Create(request.FullName, request.Phone, request.Email, branchId);
             customerRepository.Add(customer);
         }
         else if (customer.HasAccount)
@@ -62,6 +68,8 @@ public sealed class RegisterMemberCommandHandler(
         else
         {
             customer.UpdateContact(request.FullName, request.Email);
+            if (branchId is not null)
+                customer.SetBranch(branchId);
         }
 
         // Üyelik beyanları (KVKK, sağlık verisi vb.): zorunlular kabul edilmiş olmalı.

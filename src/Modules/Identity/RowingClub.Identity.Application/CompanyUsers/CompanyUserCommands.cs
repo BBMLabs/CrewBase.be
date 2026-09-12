@@ -56,6 +56,32 @@ internal static class CompanyUserGuards
         "Employee" => UserRole.Employee,
         _ => throw new DomainException("invalid_role", "Rol CompanyAdmin veya Employee olmalıdır."),
     };
+
+    /// <summary>
+    /// Yönetici (CompanyAdmin) ve çalışan (Employee) kotaları ayrıdır - bir tarafın dolu olması
+    /// diğerine yeni kullanıcı eklenmesini engellemez. `existingUsers` hedef rolün dışındaki
+    /// mevcut kullanıcıları da içerebilir; sayım burada role göre yapılır.
+    /// </summary>
+    public static void EnsureRoleQuotaAvailable(
+        CompanyPlanFeatures features, IReadOnlyCollection<User> existingUsers, UserRole targetRole)
+    {
+        if (targetRole == UserRole.CompanyAdmin)
+        {
+            var managerCount = existingUsers.Count(u => u.Role == UserRole.CompanyAdmin);
+            if (managerCount >= features.MaxManagers)
+                throw new DomainException(
+                    "plan_limit_exceeded",
+                    $"Firma yöneticisi sayısı paket limitine ulaştı ({features.MaxManagers}).");
+        }
+        else
+        {
+            var employeeCount = existingUsers.Count(u => u.Role == UserRole.Employee);
+            if (employeeCount >= features.MaxEmployees)
+                throw new DomainException(
+                    "plan_limit_exceeded",
+                    $"Çalışan sayısı paket limitine ulaştı ({features.MaxEmployees}).");
+        }
+    }
 }
 
 public sealed class GetCompanyUsersQueryHandler(IUserRepository userRepository)
@@ -95,12 +121,8 @@ public sealed class CreateCompanyUserCommandHandler(
         var features = company.PlanFeatures;
 
         var role = CompanyUserGuards.ParseCompanyRole(request.Role);
-        if (role == UserRole.Employee && !features.CanAssignEmployeeRole)
-            throw new DomainException("plan_feature_not_available", "Rol ve yetkilendirme özelliği mevcut paketinizde yer almıyor.");
-
         var existingUsers = await userRepository.GetByCompanyIdAsync(companyId, cancellationToken);
-        if (existingUsers.Count >= features.MaxCompanyUsers)
-            throw new DomainException("plan_limit_exceeded", "Firma kullanıcı sayısı paket limitine ulaştı.");
+        CompanyUserGuards.EnsureRoleQuotaAvailable(features, existingUsers, role);
 
         var email = EmailAddress.Create(request.Email);
 
@@ -135,13 +157,6 @@ public sealed class ChangeCompanyUserRoleCommandHandler(
             userRepository, request.CallerUserId, cancellationToken);
 
         var role = CompanyUserGuards.ParseCompanyRole(request.Role);
-        if (role == UserRole.Employee)
-        {
-            var company = await companyRepository.GetByIdAsync(companyId, cancellationToken)
-                ?? throw new DomainException("company_not_found", "Firma bulunamadı.");
-            if (!company.PlanFeatures.CanAssignEmployeeRole)
-                throw new DomainException("plan_feature_not_available", "Rol ve yetkilendirme özelliği mevcut paketinizde yer almıyor.");
-        }
 
         var target = await userRepository.GetByIdAsync(request.TargetUserId, cancellationToken)
             ?? throw new DomainException("user_not_found", "Kullanıcı bulunamadı.");
@@ -152,6 +167,15 @@ public sealed class ChangeCompanyUserRoleCommandHandler(
 
         if (target.Id == caller.Id && role != UserRole.CompanyAdmin)
             throw new DomainException("cannot_demote_self", "Kendi yönetici yetkinizi kaldıramazsınız.");
+
+        if (role != target.Role)
+        {
+            var company = await companyRepository.GetByIdAsync(companyId, cancellationToken)
+                ?? throw new DomainException("company_not_found", "Firma bulunamadı.");
+            var existingUsers = await userRepository.GetByCompanyIdAsync(companyId, cancellationToken);
+            var othersInCompany = existingUsers.Where(u => u.Id != target.Id).ToList();
+            CompanyUserGuards.EnsureRoleQuotaAvailable(company.PlanFeatures, othersInCompany, role);
+        }
 
         target.ChangeRole(role);
 

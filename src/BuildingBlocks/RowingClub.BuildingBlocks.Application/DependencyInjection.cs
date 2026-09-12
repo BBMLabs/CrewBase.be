@@ -31,6 +31,7 @@ public static class DependencyInjection
             cfg.AddOpenBehavior(typeof(ValidationBehavior<,>));
             cfg.AddOpenBehavior(typeof(IdempotencyBehavior<,>));
             cfg.AddOpenBehavior(typeof(ActivityLogBehavior<,>));
+            cfg.AddOpenBehavior(typeof(PlatformActivityLogBehavior<,>));
             cfg.AddOpenBehavior(typeof(TransactionBehavior<,>));
         });
 

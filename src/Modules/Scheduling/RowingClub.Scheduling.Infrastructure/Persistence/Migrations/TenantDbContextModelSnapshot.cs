@@ -167,6 +167,41 @@ namespace RowingClub.Scheduling.Infrastructure.Persistence.Migrations
                     b.ToTable("branches", (string)null);
                 });
 
+            modelBuilder.Entity("RowingClub.Scheduling.Domain.Campaigns.Campaign", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTimeOffset>("EndsAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("LessonPackageId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int?>("MaxLevel")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("MinLevel")
+                        .HasColumnType("integer");
+
+                    b.Property<decimal>("Price")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)");
+
+                    b.Property<DateTimeOffset>("StartsAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("LessonPackageId");
+
+                    b.ToTable("campaigns", (string)null);
+                });
+
             modelBuilder.Entity("RowingClub.Scheduling.Domain.Cards.MembershipCard", b =>
                 {
                     b.Property<Guid>("Id")
@@ -660,6 +695,43 @@ namespace RowingClub.Scheduling.Infrastructure.Persistence.Migrations
                     b.ToTable("member_logs", (string)null);
                 });
 
+            modelBuilder.Entity("RowingClub.Scheduling.Domain.Messages.SiteMessage", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Body")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTimeOffset>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Email")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("FullName")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("IpAddress")
+                        .HasColumnType("text");
+
+                    b.Property<DateTimeOffset?>("RepliedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("ReplyText")
+                        .HasColumnType("text");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreatedAtUtc");
+
+                    b.ToTable("site_messages", (string)null);
+                });
+
             modelBuilder.Entity("RowingClub.Scheduling.Domain.Packages.CustomerPackage", b =>
                 {
                     b.Property<Guid>("Id")
@@ -668,6 +740,9 @@ namespace RowingClub.Scheduling.Infrastructure.Persistence.Migrations
 
                     b.Property<DateTimeOffset>("AssignedAtUtc")
                         .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("CampaignId")
+                        .HasColumnType("uuid");
 
                     b.Property<Guid>("CustomerId")
                         .HasColumnType("uuid");
@@ -690,6 +765,10 @@ namespace RowingClub.Scheduling.Infrastructure.Persistence.Migrations
                         .HasMaxLength(100)
                         .HasColumnType("character varying(100)");
 
+                    b.Property<decimal?>("PricePaid")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)");
+
                     b.Property<int>("RemainingSessions")
                         .HasColumnType("integer");
 
@@ -704,6 +783,8 @@ namespace RowingClub.Scheduling.Infrastructure.Persistence.Migrations
                         .HasColumnType("integer");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("CampaignId");
 
                     b.HasIndex("CustomerId");
 
@@ -722,16 +803,6 @@ namespace RowingClub.Scheduling.Infrastructure.Persistence.Migrations
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
-
-                    b.Property<DateTimeOffset?>("CampaignEndsAtUtc")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<decimal?>("CampaignPrice")
-                        .HasPrecision(12, 2)
-                        .HasColumnType("numeric(12,2)");
-
-                    b.Property<DateTimeOffset?>("CampaignStartsAtUtc")
-                        .HasColumnType("timestamp with time zone");
 
                     b.Property<DateTimeOffset>("CreatedAtUtc")
                         .HasColumnType("timestamp with time zone");
@@ -842,6 +913,9 @@ namespace RowingClub.Scheduling.Infrastructure.Persistence.Migrations
 
                     b.Property<int>("MinNoticeHours")
                         .HasColumnType("integer");
+
+                    b.Property<bool>("NotifyOnCampaignCreated")
+                        .HasColumnType("boolean");
 
                     b.Property<bool>("NotifyOnCancellation")
                         .HasColumnType("boolean");
@@ -1002,6 +1076,15 @@ namespace RowingClub.Scheduling.Infrastructure.Persistence.Migrations
                         .OnDelete(DeleteBehavior.SetNull);
                 });
 
+            modelBuilder.Entity("RowingClub.Scheduling.Domain.Campaigns.Campaign", b =>
+                {
+                    b.HasOne("RowingClub.Scheduling.Domain.Packages.LessonPackage", null)
+                        .WithMany()
+                        .HasForeignKey("LessonPackageId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("RowingClub.Scheduling.Domain.Cards.MembershipCard", b =>
                 {
                     b.HasOne("RowingClub.Scheduling.Domain.Customers.Customer", null)
@@ -1133,6 +1216,11 @@ namespace RowingClub.Scheduling.Infrastructure.Persistence.Migrations
 
             modelBuilder.Entity("RowingClub.Scheduling.Domain.Packages.CustomerPackage", b =>
                 {
+                    b.HasOne("RowingClub.Scheduling.Domain.Campaigns.Campaign", null)
+                        .WithMany()
+                        .HasForeignKey("CampaignId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
                     b.HasOne("RowingClub.Scheduling.Domain.Customers.Customer", null)
                         .WithMany()
                         .HasForeignKey("CustomerId")

@@ -37,4 +37,14 @@ public sealed class DaySchedule
             ClosingTime = closingTime,
         };
     }
+
+    public void Update(bool isOpen, TimeOnly openingTime, TimeOnly closingTime)
+    {
+        if (isOpen && closingTime <= openingTime)
+            throw new DomainException("invalid_hours", "Kapanış saati açılış saatinden sonra olmalıdır.");
+
+        IsOpen = isOpen;
+        OpeningTime = openingTime;
+        ClosingTime = closingTime;
+    }
 }

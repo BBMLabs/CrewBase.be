@@ -13,7 +13,8 @@ namespace RowingClub.Identity.Application.Companies.UpgradeCompanyPlan;
 /// engellenir (bkz. IdempotencyBehavior).
 /// </summary>
 public sealed record UpgradeCompanyPlanCommand(
-    Guid CompanyId, string Plan, int UsedBranches, int UsedMembers, int UsedBoats, string IdempotencyKey)
+    Guid CompanyId, string Plan, int UsedBranches, int UsedMembers, int UsedBoats, int UsedInstructors,
+    string IdempotencyKey)
     : ICommand<UpgradeCompanyPlanResult>, IIdempotentCommand;
 
 public sealed record UpgradeCompanyPlanResult(

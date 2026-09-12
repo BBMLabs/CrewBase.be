@@ -37,12 +37,21 @@ public sealed class GoogleRecaptchaVerifier(
 
             if (!response.IsSuccessStatusCode)
             {
+                logger.LogWarning("reCAPTCHA siteverify HTTP {StatusCode} döndürdü.", (int)response.StatusCode);
                 return false;
             }
 
             var result = await response.Content.ReadFromJsonAsync<RecaptchaVerifyResponse>(cancellationToken: cancellationToken);
+            var passed = result is { Success: true } && result.Score >= _options.MinimumScore && result.Action == action;
 
-            return result is { Success: true } && result.Score >= _options.MinimumScore && result.Action == action;
+            if (!passed)
+            {
+                logger.LogWarning(
+                    "reCAPTCHA doğrulaması reddedildi. Success={Success} Score={Score} Action={ActualAction} BeklenenAction={ExpectedAction} ErrorCodes={ErrorCodes}",
+                    result?.Success, result?.Score, result?.Action, action, result?.ErrorCodes is null ? null : string.Join(",", result.ErrorCodes));
+            }
+
+            return passed;
         }
         catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or System.Text.Json.JsonException)
         {
@@ -54,5 +63,6 @@ public sealed class GoogleRecaptchaVerifier(
     private sealed record RecaptchaVerifyResponse(
         [property: JsonPropertyName("success")] bool Success,
         [property: JsonPropertyName("score")] double Score,
-        [property: JsonPropertyName("action")] string? Action);
+        [property: JsonPropertyName("action")] string? Action,
+        [property: JsonPropertyName("error-codes")] string[]? ErrorCodes);
 }

@@ -2,7 +2,10 @@ using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using RowingClub.BuildingBlocks.Application.Abstractions;
+using RowingClub.BuildingBlocks.Application.Messaging;
 using RowingClub.Identity.Application.Companies.ApproveCompany;
+using RowingClub.Identity.Application.Companies.Billing.CancelSubscription;
+using RowingClub.Identity.Application.Companies.Billing.RecordManualPaymentCorrection;
 using RowingClub.Identity.Application.Companies.GetPendingCompanies;
 using RowingClub.Identity.Application.Companies.ResetCompanyAdminPassword;
 using RowingClub.Identity.Application.Companies.RestoreCompany;
@@ -15,7 +18,12 @@ using RowingClub.Identity.Application.Platform;
 namespace RowingClub.Api.Endpoints;
 
 public sealed record UpdateCompanyRequest(string Name, string? Phone, string? ContactEmail, string? Address, string? TaxNumber);
-public sealed record SetCompanyPlanRequest(string Plan, int? CustomMaxBranches, int? CustomMaxMembers, int? CustomMaxBoats);
+public sealed record SetCompanyPlanRequest(
+    string Plan, int? CustomMaxBranches, int? CustomMaxMembers, int? CustomMaxBoats, int? CustomMaxInstructors,
+    int? CustomMaxManagers, int? CustomMaxEmployees, bool? CustomCanExportData, bool? CustomHasAdvancedReports,
+    bool? CustomHasAutomaticDuesReminders);
+public sealed record RecordManualPaymentCorrectionRequest(
+    decimal Amount, string Currency, string Kind, string Status, string Note);
 
 public static class AdminEndpoints
 {
@@ -78,7 +86,9 @@ public static class AdminEndpoints
             Guid companyId, [FromBody] SetCompanyPlanRequest request, [FromServices] IMediator mediator) =>
         {
             await mediator.Send(new SetCompanyPlanCommand(
-                companyId, request.Plan, request.CustomMaxBranches, request.CustomMaxMembers, request.CustomMaxBoats));
+                companyId, request.Plan, request.CustomMaxBranches, request.CustomMaxMembers, request.CustomMaxBoats,
+                request.CustomMaxInstructors, request.CustomMaxManagers, request.CustomMaxEmployees,
+                request.CustomCanExportData, request.CustomHasAdvancedReports, request.CustomHasAutomaticDuesReminders));
             return Results.Ok(ApiResponse.Ok("Şirket paketi güncellendi."));
         })
         .WithName("SetCompanyPlan");
@@ -106,6 +116,61 @@ public static class AdminEndpoints
             return Results.Ok(ApiResponse.Ok("Parola sıfırlama bağlantısı gönderildi."));
         })
         .WithName("ResetCompanyAdminPassword");
+
+        platformAdminGroup.MapGet("/activity-logs", async (
+            string? search, string? cursor, int? limit, IMediator mediator) =>
+        {
+            var logs = await mediator.Send(new GetPlatformActivityLogsQuery(search, cursor, limit ?? 25));
+            return Results.Ok(ApiResponse<KeysetResult<PlatformActivityLogDto>>.Ok(logs));
+        })
+        .WithName("GetPlatformActivityLogs");
+
+        platformAdminGroup.MapGet("/revenue", async (IMediator mediator) =>
+        {
+            var revenue = await mediator.Send(new GetPlatformRevenueQuery());
+            return Results.Ok(ApiResponse<PlatformRevenueDto>.Ok(revenue));
+        })
+        .WithName("GetPlatformRevenue");
+
+        platformAdminGroup.MapGet("/payments", async (
+            string? status, string? cursor, int? limit, IMediator mediator) =>
+        {
+            var payments = await mediator.Send(new GetPlatformPaymentsQuery(status, cursor, limit ?? 25));
+            return Results.Ok(ApiResponse<KeysetResult<PlatformPaymentDto>>.Ok(payments));
+        })
+        .WithName("GetPlatformPayments");
+
+        platformAdminGroup.MapGet("/payments/stats", async (IMediator mediator) =>
+        {
+            var stats = await mediator.Send(new GetPlatformPaymentStatsQuery());
+            return Results.Ok(ApiResponse<PlatformPaymentStatsDto>.Ok(stats));
+        })
+        .WithName("GetPlatformPaymentStats");
+
+        platformAdminGroup.MapGet("/companies/{companyId:guid}/subscription", async (
+            Guid companyId, string? cursor, int? limit, IMediator mediator) =>
+        {
+            var subscription = await mediator.Send(new GetCompanySubscriptionQuery(companyId, cursor, limit ?? 25));
+            return Results.Ok(ApiResponse<CompanySubscriptionDetailDto>.Ok(subscription));
+        })
+        .WithName("GetCompanySubscription");
+
+        platformAdminGroup.MapPost("/companies/{companyId:guid}/subscription/cancel", async (
+            Guid companyId, [FromServices] IMediator mediator) =>
+        {
+            await mediator.Send(new CancelCompanySubscriptionCommand(companyId));
+            return Results.Ok(ApiResponse.Ok("Abonelik iptal edildi."));
+        })
+        .WithName("CancelCompanySubscription");
+
+        platformAdminGroup.MapPost("/companies/{companyId:guid}/payments/manual-correction", async (
+            Guid companyId, [FromBody] RecordManualPaymentCorrectionRequest request, [FromServices] IMediator mediator) =>
+        {
+            await mediator.Send(new RecordManualPaymentCorrectionCommand(
+                companyId, request.Amount, request.Currency, request.Kind, request.Status, request.Note));
+            return Results.Ok(ApiResponse.Ok("Manuel ödeme kaydı eklendi."));
+        })
+        .WithName("RecordManualPaymentCorrection");
 
         platformAdminGroup.MapGet("/companies/{companyId:guid}/overview", async (
             Guid companyId, RowingClub.Api.Tenancy.TenantResolver resolver, IMediator mediator, CancellationToken ct) =>

@@ -1,4 +1,5 @@
 using FluentValidation;
+using RowingClub.Identity.Domain.Companies;
 using RowingClub.Identity.Domain.ValueObjects;
 
 namespace RowingClub.Identity.Application.Companies.RegisterCompany;
@@ -34,5 +35,14 @@ public sealed class RegisterCompanyCommandValidator : AbstractValidator<Register
         RuleFor(x => x.Address)
             .NotEmpty().WithMessage("Adres zorunludur.")
             .MaximumLength(500);
+
+        When(x => !string.IsNullOrEmpty(x.Subdomain), () =>
+        {
+            RuleFor(x => x.Subdomain!)
+                .Must(SubdomainSlug.IsValidUserSubdomain)
+                .WithMessage("Site adı 3-63 karakter olmalı, yalnızca küçük harf, rakam ve tire içermelidir.")
+                .Must(value => !SubdomainSlug.IsReserved(value))
+                .WithMessage("Bu site adı kullanılamaz, lütfen başka bir ad seçin.");
+        });
     }
 }

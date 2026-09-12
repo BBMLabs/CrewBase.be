@@ -16,22 +16,22 @@ public enum CompanyPlan
     Custom = 4,
 }
 
-/// <summary>Bir paketin izin verdiği üst sınırlar: şube, aktif üye, tekne sayısı.</summary>
-public sealed record CompanyPlanLimits(int MaxBranches, int MaxMembers, int MaxBoats);
+/// <summary>Bir paketin izin verdiği üst sınırlar: şube, aktif üye, tekne, eğitmen sayısı.</summary>
+public sealed record CompanyPlanLimits(int MaxBranches, int MaxMembers, int MaxBoats, int MaxInstructors);
 
 public static class CompanyPlanLimitsCatalog
 {
     /// <summary>
-    /// Sabit paketlerin limitleri (fiyatlandırma sayfasıyla aynı: şube/üye). Tekne limiti
+    /// Sabit paketlerin limitleri (fiyatlandırma sayfasıyla aynı: şube/üye). Tekne/eğitmen limiti
     /// fiyatlandırma sayfasında sayısal olarak verilmez; üye sayısıyla orantılı makul bir üst
-    /// sınır olarak burada tanımlanmıştır.
+    /// sınır olarak burada tanımlanmıştır (eğitmen, tekne limitiyle bire bir aynı tutulur).
     /// </summary>
     private static readonly Dictionary<CompanyPlan, CompanyPlanLimits> Fixed = new()
     {
-        [CompanyPlan.Mico] = new CompanyPlanLimits(MaxBranches: 1, MaxMembers: 15, MaxBoats: 3),
-        [CompanyPlan.Tayfa] = new CompanyPlanLimits(MaxBranches: 1, MaxMembers: 50, MaxBoats: 8),
-        [CompanyPlan.Kaptan] = new CompanyPlanLimits(MaxBranches: 2, MaxMembers: 100, MaxBoats: 15),
-        [CompanyPlan.Amiral] = new CompanyPlanLimits(MaxBranches: 4, MaxMembers: 200, MaxBoats: 30),
+        [CompanyPlan.Mico] = new CompanyPlanLimits(MaxBranches: 1, MaxMembers: 15, MaxBoats: 3, MaxInstructors: 3),
+        [CompanyPlan.Tayfa] = new CompanyPlanLimits(MaxBranches: 1, MaxMembers: 50, MaxBoats: 8, MaxInstructors: 8),
+        [CompanyPlan.Kaptan] = new CompanyPlanLimits(MaxBranches: 2, MaxMembers: 100, MaxBoats: 15, MaxInstructors: 15),
+        [CompanyPlan.Amiral] = new CompanyPlanLimits(MaxBranches: 4, MaxMembers: 200, MaxBoats: 30, MaxInstructors: 30),
     };
 
     /// <summary>Sabit paketlerin fiyatlandırma sayfasındaki sırası; self-servis yükseltme yalnızca bu sırada ileri gidebilir.</summary>
@@ -51,7 +51,8 @@ public static class CompanyPlanLimitsCatalog
     /// yükseltme/düşürme talepleri (ücret çekmeden/dönem sonunu planlamadan ÖNCE) tarafından
     /// ortak kullanılır.
     /// </summary>
-    public static void EnsureUsageFits(CompanyPlan plan, int usedBranches, int usedMembers, int usedBoats)
+    public static void EnsureUsageFits(
+        CompanyPlan plan, int usedBranches, int usedMembers, int usedBoats, int usedInstructors)
     {
         var targetLimits = For(plan);
         var exceeded = new List<string>();
@@ -61,6 +62,8 @@ public static class CompanyPlanLimitsCatalog
             exceeded.Add($"aktif üye ({usedMembers}/{targetLimits.MaxMembers})");
         if (usedBoats > targetLimits.MaxBoats)
             exceeded.Add($"tekne ({usedBoats}/{targetLimits.MaxBoats})");
+        if (usedInstructors > targetLimits.MaxInstructors)
+            exceeded.Add($"eğitmen ({usedInstructors}/{targetLimits.MaxInstructors})");
 
         if (exceeded.Count > 0)
         {
@@ -71,9 +74,13 @@ public static class CompanyPlanLimitsCatalog
     }
 }
 
-/// <summary>Bir paketin fiyatlandırma sayfasında vaat ettiği nitel özellikler (sayısal limitler hariç).</summary>
+/// <summary>
+/// Bir paketin fiyatlandırma sayfasında vaat ettiği nitel özellikler ve firma kullanıcı kotaları.
+/// Yönetici (CompanyAdmin) ve çalışan (Employee) kotaları ayrıdır: her paket, ücretsiz Miço dahil,
+/// en az bir çalışan hesabına izin verir - üst paketlerde her ikisi de artar.
+/// </summary>
 public sealed record CompanyPlanFeatures(
-    int MaxCompanyUsers, bool CanExportData, bool CanAssignEmployeeRole,
+    int MaxManagers, int MaxEmployees, bool CanExportData,
     bool HasAdvancedReports, bool HasAutomaticDuesReminders);
 
 public static class CompanyPlanFeaturesCatalog
@@ -81,16 +88,16 @@ public static class CompanyPlanFeaturesCatalog
     private static readonly Dictionary<CompanyPlan, CompanyPlanFeatures> Fixed = new()
     {
         [CompanyPlan.Mico] = new CompanyPlanFeatures(
-            MaxCompanyUsers: 1, CanExportData: false, CanAssignEmployeeRole: false,
+            MaxManagers: 1, MaxEmployees: 1, CanExportData: false,
             HasAdvancedReports: false, HasAutomaticDuesReminders: false),
         [CompanyPlan.Tayfa] = new CompanyPlanFeatures(
-            MaxCompanyUsers: 3, CanExportData: true, CanAssignEmployeeRole: false,
+            MaxManagers: 3, MaxEmployees: 2, CanExportData: true,
             HasAdvancedReports: false, HasAutomaticDuesReminders: false),
         [CompanyPlan.Kaptan] = new CompanyPlanFeatures(
-            MaxCompanyUsers: 5, CanExportData: true, CanAssignEmployeeRole: true,
+            MaxManagers: 5, MaxEmployees: 4, CanExportData: true,
             HasAdvancedReports: true, HasAutomaticDuesReminders: true),
         [CompanyPlan.Amiral] = new CompanyPlanFeatures(
-            MaxCompanyUsers: int.MaxValue, CanExportData: true, CanAssignEmployeeRole: true,
+            MaxManagers: int.MaxValue, MaxEmployees: int.MaxValue, CanExportData: true,
             HasAdvancedReports: true, HasAutomaticDuesReminders: true),
     };
 

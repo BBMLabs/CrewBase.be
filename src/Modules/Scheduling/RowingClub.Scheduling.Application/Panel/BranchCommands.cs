@@ -12,8 +12,8 @@ public sealed record BranchDto(
     string? ManagerName, string? ManagerPhone, string? ManagerEmail,
     string? TaxNumber, string? Description, string? LogoPath);
 
-public sealed record GetBranchesQuery(string? Search = null, bool? IsActive = null, int Page = 1, int PageSize = 25)
-    : IRequest<PagedResult<BranchDto>>;
+public sealed record GetBranchesQuery(string? Search = null, bool? IsActive = null, string? Cursor = null, int Limit = 25)
+    : IRequest<KeysetResult<BranchDto>>;
 
 public sealed record CreateBranchCommand(
     string Name, string? Address, string? Phone,
@@ -26,32 +26,22 @@ public sealed record UpdateBranchCommand(
     string? TaxNumber, string? Description) : ICommand<BranchDto>;
 
 public sealed class GetBranchesQueryHandler(IBranchRepository repository)
-    : IRequestHandler<GetBranchesQuery, PagedResult<BranchDto>>
+    : IRequestHandler<GetBranchesQuery, KeysetResult<BranchDto>>
 {
-    public async Task<PagedResult<BranchDto>> Handle(GetBranchesQuery request, CancellationToken cancellationToken)
+    public async Task<KeysetResult<BranchDto>> Handle(GetBranchesQuery request, CancellationToken cancellationToken)
     {
-        var branches = await repository.GetAllAsync(cancellationToken);
+        var limit = Math.Clamp(request.Limit, 1, 200);
+        var hasCursor = KeysetCursor.TryDecode(request.Cursor, 1, out var keyParts, out var cursorId);
 
-        if (request.IsActive is { } isActive)
-            branches = branches.Where(b => b.IsActive == isActive).ToList();
+        var branches = await repository.GetPageAsync(
+            request.Search, request.IsActive, hasCursor ? keyParts[0] : null, hasCursor ? cursorId : null,
+            limit + 1, cancellationToken);
 
-        if (!string.IsNullOrWhiteSpace(request.Search))
-        {
-            var term = request.Search.Trim();
-            branches = branches.Where(b =>
-                b.Name.Contains(term, StringComparison.OrdinalIgnoreCase) ||
-                (b.Address?.Contains(term, StringComparison.OrdinalIgnoreCase) ?? false) ||
-                (b.Phone?.Contains(term, StringComparison.OrdinalIgnoreCase) ?? false) ||
-                (b.ManagerName?.Contains(term, StringComparison.OrdinalIgnoreCase) ?? false))
-                .ToList();
-        }
+        var (page, nextCursor) = KeysetPage.Trim(branches, limit, b => b.Id, b => [b.Name]);
 
-        var dtos = branches
-            .OrderBy(b => b.Name)
-            .Select(BranchMapper.ToDto)
-            .ToList();
+        var totalCount = await repository.CountAsync(request.Search, request.IsActive, cancellationToken);
 
-        return PagedResult<BranchDto>.Create(dtos, request.Page, request.PageSize);
+        return new KeysetResult<BranchDto>(page.Select(BranchMapper.ToDto).ToList(), nextCursor, totalCount);
     }
 }
 

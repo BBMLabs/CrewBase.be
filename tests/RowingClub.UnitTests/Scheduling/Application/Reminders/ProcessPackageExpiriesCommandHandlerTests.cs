@@ -29,14 +29,14 @@ public sealed class ProcessPackageExpiriesCommandHandlerTests
     private static CustomerPackage CreateUpcomingPackage(Guid customerId, int validityDays) =>
         CustomerPackage.Assign(
             customerId,
-            LessonPackage.Create("Paket", null, 8, 100m, validityDays, null, null),
+            LessonPackage.Create("Paket", null, 8, 100m, validityDays),
             CustomerPackageSource.Assigned);
 
     private static CustomerPackage CreateExpiredPackage(Guid customerId)
     {
         var package = CustomerPackage.Assign(
             customerId,
-            LessonPackage.Create("Paket", null, 8, 100m, 1, null, null),
+            LessonPackage.Create("Paket", null, 8, 100m, 1),
             CustomerPackageSource.Assigned);
 
         typeof(CustomerPackage)

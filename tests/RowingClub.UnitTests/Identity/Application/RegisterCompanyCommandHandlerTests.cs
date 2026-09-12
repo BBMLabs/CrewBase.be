@@ -82,4 +82,34 @@ public sealed class RegisterCompanyCommandHandlerTests
         var ex = await act.Should().ThrowAsync<DomainException>();
         ex.Which!.ErrorCode.Should().Be("email_already_registered");
     }
+
+    [Fact]
+    public async Task Handle_uses_preferred_subdomain_when_available()
+    {
+        _companyRepository.ExistsByNameAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns(false);
+        _userRepository.ExistsByEmailAsync(Arg.Any<EmailAddress>(), Arg.Any<CancellationToken>()).Returns(false);
+        _companyRepository.ExistsBySubdomainAsync("deniz-kurek", Arg.Any<CancellationToken>()).Returns(false);
+
+        var response = await CreateHandler().Handle(
+            new RegisterCompanyCommand("Rowing Club", "admin@example.com", "1234567890",
+                "+905551234567", "contact@example.com", "İstanbul", "deniz-kurek"), CancellationToken.None);
+
+        response.Subdomain.Should().Be("deniz-kurek");
+        await _provisioner.Received(1).ProvisionAsync("tenant_deniz_kurek", Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task Handle_throws_when_preferred_subdomain_is_taken()
+    {
+        _companyRepository.ExistsByNameAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns(false);
+        _userRepository.ExistsByEmailAsync(Arg.Any<EmailAddress>(), Arg.Any<CancellationToken>()).Returns(false);
+        _companyRepository.ExistsBySubdomainAsync("deniz-kurek", Arg.Any<CancellationToken>()).Returns(true);
+
+        var act = () => CreateHandler().Handle(
+            new RegisterCompanyCommand("Rowing Club", "admin@example.com", "1234567890",
+                "+905551234567", "contact@example.com", "İstanbul", "deniz-kurek"), CancellationToken.None);
+
+        var ex = await act.Should().ThrowAsync<DomainException>();
+        ex.Which!.ErrorCode.Should().Be("subdomain_taken");
+    }
 }

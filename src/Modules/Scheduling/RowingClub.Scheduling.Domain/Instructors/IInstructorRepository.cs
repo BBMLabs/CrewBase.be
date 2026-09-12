@@ -8,6 +8,8 @@ public interface IInstructorRepository
 
     Task<List<Instructor>> GetByBranchIdAsync(Guid branchId, CancellationToken cancellationToken);
 
+    Task<int> CountActiveAsync(CancellationToken cancellationToken);
+
     void Add(Instructor instructor);
 
     void Remove(Instructor instructor);

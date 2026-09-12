@@ -21,9 +21,12 @@ public sealed class GetActiveCompanySitesQueryHandler(ICompanyRepository company
                 var features = c.PlanFeatures;
                 return new CompanySiteDto(
                     c.Id, c.Name, c.Subdomain, c.DatabaseName,
+                    c.LogoPath, c.Tagline, c.AboutText,
+                    c.InstagramUrl, c.FacebookUrl, c.YoutubeUrl, c.LinkedinUrl,
+                    c.XUrl, c.WhatsappUrl, c.TelegramUrl, c.PinterestUrl, c.GoogleMapsUrl,
                     c.Phone, c.ContactEmail, c.Address, c.TaxNumber, c.Status.ToString(),
-                    c.Plan.ToString(), limits.MaxBranches, limits.MaxMembers, limits.MaxBoats,
-                    features.MaxCompanyUsers, features.CanExportData, features.CanAssignEmployeeRole,
+                    c.Plan.ToString(), limits.MaxBranches, limits.MaxMembers, limits.MaxBoats, limits.MaxInstructors,
+                    features.MaxManagers, features.MaxEmployees, features.CanExportData,
                     features.HasAdvancedReports, features.HasAutomaticDuesReminders);
             })
             .ToList();

@@ -94,11 +94,17 @@ Platform ve firma kullanıcılarının kimlik akışı. Endpoint kaynağı: `Aut
   "taxNumber": "1234567890",
   "phone": "+905551234567",
   "contactEmail": "iletisim@sirket.com",
-  "address": "İstanbul"
+  "address": "İstanbul",
+  "subdomain": "ornek-kurek-kulubu"
 }
 ```
 `taxNumber` 10 haneli vergi kimlik no veya 11 haneli T.C. kimlik no olmalıdır. `phone`,
 `contactEmail`, `address`, `taxNumber` **zorunludur** — istekte **parola alanı yoktur**.
+`subdomain` **isteğe bağlıdır**: gönderilirse `[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?` desenine uyan,
+3-63 karakterlik, ayrılmış kelimeler listesinde olmayan ve daha önce kullanılmayan bir değer olmak
+zorundadır — aksi halde `400 validation_error` veya (başka bir firma tarafından alınmışsa)
+`409 subdomain_taken` döner. Gönderilmezse, önceki davranış korunur: `companyName`'den otomatik bir
+subdomain üretilir (çakışmada `-2`, `-3`... eklenir).
 
 **Başarılı yanıt `201 Created`:**
 ```json
@@ -121,10 +127,23 @@ Platform ve firma kullanıcılarının kimlik akışı. Endpoint kaynağı: `Aut
 - **Kayıt parolasız tamamlanır**: yönetici hesabı, kullanıcının hiçbir zaman bilmediği rastgele bir
   parola hash'iyle açılır. Kayıt sonrası gönderilen hoş geldin e-postası, parolayı belirlemesi için
   `/reset-password` ile aynı `PasswordResetToken` mekanizmasını kullanan **48 saat geçerli** bir
-  bağlantı içerir (`{PUBLIC_APP_URL}/parola-sifirla?token=&email=`). Bağlantı ulaşmaz/kaybolursa
+  bağlantı içerir (`{PUBLIC_APP_URL}/reset-password?token=&email=`). Bağlantı ulaşmaz/kaybolursa
   kullanıcı `/forgot-password` ile aynı akışı yeniden tetikleyebilir — ayrı bir "aktivasyon" ucu
   yoktur. Parola belirlenene kadar `/login` denemeleri doğal biçimde `401 unauthorized` döner.
-- Hata: `409 company_name_taken`, `409 email_already_registered`.
+- `subdomain` gönderilmişse, otomatik üretim atlanır ve doğrudan bu değer kullanılır — zaten
+  kayıtlıysa `409 subdomain_taken`.
+- Hata: `409 company_name_taken`, `409 email_already_registered`, `409 subdomain_taken`.
+
+### 1.1.1 Site Adı Uygunluk Kontrolü — `GET /companies/subdomain-availability?value=`
+
+Anonim, `AuthPolicy` rate limiti altında. `value` sorgu parametresindeki adayı normalize edip
+(küçük harfe çevirip) format+ayrılmış-kelime+veritabanı benzersizliğini tek seferde kontrol eder;
+her zaman `200 OK` döner:
+```json
+{ "success": true, "data": { "available": true }, "message": null, "code": null }
+```
+Kayıt formundaki site adı alanı için canlı geri bildirim amaçlıdır — asıl benzersizlik garantisi
+yine kayıt anında (`POST /companies/register`) uygulanır.
 
 ### 1.2 Giriş — `POST /login`
 
@@ -161,7 +180,7 @@ sinyali sayılır: aynı `familyId`'ye sahip **tüm** token'lar ve ilişkili otu
 |---|---|---|
 | `POST /logout` | `{ "refreshToken": "..." }` | `{ "message": "Oturum kapatıldı." }` — idempotent |
 | `POST /logout-all` | (yok, Bearer zorunlu) | `{ "message": "Tüm oturumlar kapatıldı." }` |
-| `POST /forgot-password` | `{ "email": "..." }` | `{ "message": "Parola sıfırlama bağlantısı e-posta adresinize gönderildi." }` — link `{PUBLIC_APP_URL}/parola-sifirla?token=&email=` şeklinde kurulur (`PUBLIC_APP_URL` env, varsayılan `https://faturebase.com`) |
+| `POST /forgot-password` | `{ "email": "..." }` | `{ "message": "Parola sıfırlama bağlantısı e-posta adresinize gönderildi." }` — link `{PUBLIC_APP_URL}/reset-password?token=&email=` şeklinde kurulur (`PUBLIC_APP_URL` env, varsayılan `https://faturebase.com`) |
 | `POST /reset-password` | `{ "email", "token", "newPassword" }` | `{ "message": "Parolanız başarıyla sıfırlandı." }` |
 | `POST /verify-email` | `{ "email", "token" }` — `token` = e-postaya giden **6 haneli kod** | `{ "message": "E-posta adresiniz başarıyla doğrulandı." }` |
 | `POST /send-verification-email` | `{ "email": "..." }` | `{ "message": "Doğrulama e-postası gönderildi." }` |
@@ -185,6 +204,9 @@ değişkenleri doluysa `PlatformAdminSeeder` bu rolde bir hesabı otomatik oluş
 | POST | `/companies/{companyId}/approve` | Firmayı aktifleştirir (askıya alınmışsa da geri açar) |
 | POST | `/companies/{companyId}/suspend` | Firmayı askıya alır — site ve panel erişimi kapanır |
 | GET | `/companies/{companyId}/overview` | Firmanın üye/eğitmen/tekne/şube sayıları + her şubenin `id, code, name, isActive` bilgisi ("Bilgi" menüsü) |
+| GET | `/revenue` | Platform geneli **başarılı** tahsilatların firma bazında özeti (`PlatformRevenueDto`) |
+| GET | `/payments?status=&cursor=&limit=` | Platform geneli **tüm** ödeme işlemleri (başarılı+başarısız), en yeni önce, keyset sayfalı. `status` isteğe bağlı (`Succeeded`/`Failed`) filtre. Her kayıt `companyId, companyName, plan, amount, currency, kind, status, occurredAtUtc, failureReason` taşır — "Ödeme İşlemleri" ekranının veri kaynağı |
+| GET | `/payments/stats` | `{ total, succeeded, failed }` — tüm zamanların işlem sayıları |
 
 `PlatformCompanyDto`: `id, name, subdomain, status, phone, contactEmail, createdAtUtc`.
 

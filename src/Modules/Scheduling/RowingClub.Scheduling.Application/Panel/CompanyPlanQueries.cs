@@ -3,6 +3,7 @@ using RowingClub.BuildingBlocks.Application.Abstractions;
 using RowingClub.Scheduling.Domain.Boats;
 using RowingClub.Scheduling.Domain.Branches;
 using RowingClub.Scheduling.Domain.Customers;
+using RowingClub.Scheduling.Domain.Instructors;
 
 namespace RowingClub.Scheduling.Application.Panel;
 
@@ -14,15 +15,17 @@ public sealed record CompanyPlanDto(
     int MaxBranches, int UsedBranches,
     int MaxMembers, int UsedMembers,
     int MaxBoats, int UsedBoats,
-    int MaxCompanyUsers,
-    bool CanExportData, bool CanAssignEmployeeRole,
+    int MaxInstructors, int UsedInstructors,
+    int MaxManagers, int MaxEmployees,
+    bool CanExportData,
     bool HasAdvancedReports, bool HasAutomaticDuesReminders);
 
 public sealed class GetCompanyPlanQueryHandler(
     ITenantDatabase tenantDatabase,
     IBranchRepository branchRepository,
     ICustomerRepository customerRepository,
-    IBoatRepository boatRepository)
+    IBoatRepository boatRepository,
+    IInstructorRepository instructorRepository)
     : IRequestHandler<GetCompanyPlanQuery, CompanyPlanDto>
 {
     public async Task<CompanyPlanDto> Handle(GetCompanyPlanQuery request, CancellationToken cancellationToken)
@@ -30,14 +33,16 @@ public sealed class GetCompanyPlanQueryHandler(
         var usedBranches = await branchRepository.CountActiveAsync(cancellationToken);
         var usedMembers = await customerRepository.CountAsync(cancellationToken);
         var usedBoats = await boatRepository.CountActiveAsync(cancellationToken);
+        var usedInstructors = await instructorRepository.CountActiveAsync(cancellationToken);
 
         return new CompanyPlanDto(
             tenantDatabase.Plan,
             tenantDatabase.MaxBranches, usedBranches,
             tenantDatabase.MaxMembers, usedMembers,
             tenantDatabase.MaxBoats, usedBoats,
-            tenantDatabase.MaxCompanyUsers,
-            tenantDatabase.CanExportData, tenantDatabase.CanAssignEmployeeRole,
+            tenantDatabase.MaxInstructors, usedInstructors,
+            tenantDatabase.MaxManagers, tenantDatabase.MaxEmployees,
+            tenantDatabase.CanExportData,
             tenantDatabase.HasAdvancedReports, tenantDatabase.HasAutomaticDuesReminders);
     }
 }

@@ -13,4 +13,6 @@ public static class IdentityTableNames
     public const string PendingTwoFactorTokens = "identity_pending_two_factor_tokens";
     public const string CompanySubscriptions = "identity_company_subscriptions";
     public const string CompanyPayments = "identity_company_payments";
+    public const string PlatformActivityLogs = "identity_platform_activity_logs";
+    public const string CompanyGalleryImages = "identity_company_gallery_images";
 }

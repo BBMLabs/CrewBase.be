@@ -50,8 +50,8 @@ public sealed class MemberLogRepository(TenantDbContext context) : IMemberLogRep
 
 public sealed class ActivityLogRepository(TenantDbContext context) : IActivityLogRepository
 {
-    public async Task<(List<ActivityLog> Items, int TotalCount)> GetPagedAsync(
-        string? search, int page, int pageSize, CancellationToken cancellationToken)
+    public Task<List<ActivityLog>> GetPageAsync(
+        string? search, DateTimeOffset? cursorAtUtc, Guid? cursorId, int take, CancellationToken cancellationToken)
     {
         var query = context.ActivityLogs.AsQueryable();
 
@@ -64,14 +64,29 @@ public sealed class ActivityLogRepository(TenantDbContext context) : IActivityLo
                 (l.IpAddress != null && EF.Functions.ILike(l.IpAddress, $"%{term}%")));
         }
 
-        var totalCount = await query.CountAsync(cancellationToken);
-        var items = await query
-            .OrderByDescending(l => l.AtUtc)
-            .Skip((page - 1) * pageSize)
-            .Take(pageSize)
-            .ToListAsync(cancellationToken);
+        if (cursorAtUtc is { } atUtc && cursorId is { } id)
+            query = query.Where(l => l.AtUtc.CompareTo(atUtc) < 0 || (l.AtUtc == atUtc && l.Id.CompareTo(id) < 0));
 
-        return (items, totalCount);
+        return query
+            .OrderByDescending(l => l.AtUtc).ThenByDescending(l => l.Id)
+            .Take(take)
+            .ToListAsync(cancellationToken);
+    }
+
+    public Task<int> CountAsync(string? search, CancellationToken cancellationToken)
+    {
+        var query = context.ActivityLogs.AsQueryable();
+
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            var term = search.Trim();
+            query = query.Where(l =>
+                EF.Functions.ILike(l.ActorEmail, $"%{term}%") ||
+                EF.Functions.ILike(l.Action, $"%{term}%") ||
+                (l.IpAddress != null && EF.Functions.ILike(l.IpAddress, $"%{term}%")));
+        }
+
+        return query.CountAsync(cancellationToken);
     }
 
     public void Add(ActivityLog log) => context.ActivityLogs.Add(log);

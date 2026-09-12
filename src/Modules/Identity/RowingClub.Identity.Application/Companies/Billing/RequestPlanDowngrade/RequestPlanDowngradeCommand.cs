@@ -8,6 +8,7 @@ namespace RowingClub.Identity.Application.Companies.Billing.RequestPlanDowngrade
 /// (API katmanı) tenant veritabanından önceden çözülüp taşınır.
 /// </summary>
 public sealed record RequestPlanDowngradeCommand(
-    Guid CompanyId, string Plan, int UsedBranches, int UsedMembers, int UsedBoats) : ICommand<RequestPlanDowngradeResult>;
+    Guid CompanyId, string Plan, int UsedBranches, int UsedMembers, int UsedBoats, int UsedInstructors)
+    : ICommand<RequestPlanDowngradeResult>;
 
 public sealed record RequestPlanDowngradeResult(string PendingPlan, DateTimeOffset EffectiveAtUtc);

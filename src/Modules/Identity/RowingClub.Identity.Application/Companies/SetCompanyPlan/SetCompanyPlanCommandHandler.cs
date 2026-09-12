@@ -17,7 +17,10 @@ public sealed class SetCompanyPlanCommandHandler(
         if (!Enum.TryParse<CompanyPlan>(request.Plan, ignoreCase: true, out var plan))
             throw new DomainException("invalid_plan", "Geçersiz paket.");
 
-        company.SetPlan(plan, request.CustomMaxBranches, request.CustomMaxMembers, request.CustomMaxBoats);
+        company.SetPlan(
+            plan, request.CustomMaxBranches, request.CustomMaxMembers, request.CustomMaxBoats,
+            request.CustomMaxInstructors, request.CustomMaxManagers, request.CustomMaxEmployees,
+            request.CustomCanExportData, request.CustomHasAdvancedReports, request.CustomHasAutomaticDuesReminders);
         companyRepository.Update(company);
 
         auditLogger.Log("COMPANY_PLAN_SET", company.Id.ToString(), $"Master admin paketi ayarladı: {plan}");

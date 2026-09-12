@@ -1,4 +1,5 @@
 using MediatR;
+using Microsoft.Extensions.Configuration;
 using RowingClub.BuildingBlocks.Domain;
 using RowingClub.BuildingBlocks.Security.Tokens;
 using RowingClub.Identity.Application.Audit;
@@ -16,9 +17,14 @@ public sealed class RefreshTokenCommandHandler(
     IRefreshTokenHasher refreshTokenHasher,
     TokenPairIssuer tokenPairIssuer,
     IAuditLogger auditLogger,
-    IEmailSender emailSender)
+    IEmailSender emailSender,
+    IPasswordResetTokenRepository passwordResetTokenRepository,
+    IOpaqueTokenGenerator opaqueTokenGenerator,
+    IConfiguration configuration)
     : IRequestHandler<RefreshTokenCommand, RefreshTokenResponse>
 {
+    private const string DefaultPublicAppUrl = "https://faturebase.com";
+
     private static readonly AuthenticationFailedException InvalidRefreshToken =
         new("Refresh token geçersiz veya süresi dolmuş.");
 
@@ -39,8 +45,16 @@ public sealed class RefreshTokenCommandHandler(
             var theftUser = await userRepository.GetByIdAsync(presentedToken.UserId, cancellationToken);
             if (theftUser is not null)
             {
+                var rawResetToken = opaqueTokenGenerator.Generate();
+                var resetTokenHash = refreshTokenHasher.Hash(rawResetToken);
+                var resetToken = PasswordResetToken.Issue(theftUser.Id, resetTokenHash, TimeSpan.FromHours(1));
+                passwordResetTokenRepository.Add(resetToken);
+
+                var publicAppUrl = (configuration["PUBLIC_APP_URL"] ?? DefaultPublicAppUrl).TrimEnd('/');
+                var resetLink = $"{publicAppUrl}/reset-password?token={Uri.EscapeDataString(rawResetToken)}&email={Uri.EscapeDataString(theftUser.Email.Value)}";
+
                 var bodyHtml = "<p>Hesabınızda şüpheli aktivite tespit edildi. Tüm oturumlarınız güvenlik amacıyla kapatılmıştır.</p><p>Eğer bu siz değilseniz, lütfen hemen şifrenizi değiştirin.</p>";
-                var htmlBody = EmailTemplate.Render("Güvenlik Uyarısı", bodyHtml);
+                var htmlBody = EmailTemplate.Render("Güvenlik Uyarısı", bodyHtml, "Şifremi Değiştir", resetLink);
                 var msg = new EmailMessage(theftUser.Email.Value, "Hesabınızda Şüpheli Aktivite Tespit Edildi", htmlBody);
                 await emailSender.SendAsync(msg, cancellationToken);
             }

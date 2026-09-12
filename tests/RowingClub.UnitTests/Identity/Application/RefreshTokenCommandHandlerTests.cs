@@ -1,4 +1,5 @@
 using FluentAssertions;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Options;
 using NSubstitute;
 using RowingClub.BuildingBlocks.Domain;
@@ -25,6 +26,8 @@ public sealed class RefreshTokenCommandHandlerTests
     private readonly IOpaqueTokenGenerator _opaqueTokenGenerator = Substitute.For<IOpaqueTokenGenerator>();
     private readonly IAuditLogger _auditLogger = Substitute.For<IAuditLogger>();
     private readonly IEmailSender _emailSender = Substitute.For<IEmailSender>();
+    private readonly IPasswordResetTokenRepository _passwordResetTokenRepository = Substitute.For<IPasswordResetTokenRepository>();
+    private readonly IConfiguration _configuration = Substitute.For<IConfiguration>();
 
     private readonly IdentityOptions _options = new()
     {
@@ -39,7 +42,8 @@ public sealed class RefreshTokenCommandHandlerTests
 
         return new RefreshTokenCommandHandler(
             _refreshTokenRepository, _userSessionRepository, _userRepository,
-            _refreshTokenHasher, tokenPairIssuer, _auditLogger, _emailSender);
+            _refreshTokenHasher, tokenPairIssuer, _auditLogger, _emailSender,
+            _passwordResetTokenRepository, _opaqueTokenGenerator, _configuration);
     }
 
     private static User CreateActiveUser()
@@ -124,6 +128,8 @@ public sealed class RefreshTokenCommandHandlerTests
         _userSessionRepository.GetActiveByUserIdAsync(userId, Arg.Any<CancellationToken>())
             .Returns(new List<UserSession> { session });
         _userRepository.GetByIdAsync(userId, Arg.Any<CancellationToken>()).Returns(user);
+        _opaqueTokenGenerator.Generate().Returns("raw-reset-token");
+        _refreshTokenHasher.Hash("raw-reset-token").Returns("reset-token-hash");
 
         var act = () => CreateHandler().Handle(
             new RefreshTokenCommand("hash"), CancellationToken.None);
@@ -137,6 +143,7 @@ public sealed class RefreshTokenCommandHandlerTests
         session.IsActive.Should().BeFalse();
         _auditLogger.Received(1).Log("TOKEN_THEFT", userId.ToString(), Arg.Any<string>());
         await _emailSender.Received(1).SendAsync(Arg.Any<EmailMessage>(), Arg.Any<CancellationToken>());
+        _passwordResetTokenRepository.Received(1).Add(Arg.Is<PasswordResetToken>(t => t != null && t.UserId == user.Id));
     }
 
     [Fact]
