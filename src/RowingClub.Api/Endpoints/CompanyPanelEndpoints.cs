@@ -57,6 +57,11 @@ public sealed record AssignPackageRequest(Guid LessonPackageId);
 public sealed record ClosedDateRequest(string Date, string? Reason);
 public sealed record BlockIpAddressRequest(string IpAddress, string? Reason);
 
+public sealed record SessionAppointmentDto(
+    Guid Id, string MemberName, string MemberPhone, Guid SessionId,
+    string Date, string StartTime, string BoatClass, string? BoatName,
+    string? InstructorName, string Status, bool UsePackage, DateTimeOffset CreatedAtUtc);
+
 /// <summary>
 /// Firma yöneticisinin paneli: randevular, seanslar (tekne/hoca atamaları), üye dereceleri,
 /// eğitmen/tekne/paket tanımları, çalışma-saati ve hatırlatma kuralları, firma kullanıcıları.
@@ -246,6 +251,27 @@ public static class CompanyPanelEndpoints
             return Results.Ok(ApiResponse<List<SessionDto>>.Ok(sessions));
         }).WithName("CompanySessions");
 
+        group.MapGet("/sessions/{sessionId:guid}/appointments", async (
+            Guid sessionId, ICurrentUser user, TenantResolver resolver,
+            ISender sender, CancellationToken ct) =>
+        {
+            if (await ResolveOwnCompanyAsync(user, resolver, ct) is null)
+                return CompanyNotFound();
+
+            var sessions = await sender.Send(new GetSessionsQuery(DateOnly.FromDateTime(DateTime.UtcNow)), ct);
+            var session = sessions.FirstOrDefault(s => s.Id == sessionId);
+            if (session is null)
+                return Results.NotFound(ApiResponse.Fail("session_not_found", "Seans bulunamadı."));
+
+            var appointments = session.Members.Select(m => new SessionAppointmentDto(
+                m.AppointmentId, m.FullName, m.Phone, sessionId,
+                session.Date.ToString("yyyy-MM-dd"), session.StartTime, session.BoatClass,
+                session.BoatName, session.InstructorName, m.Status,
+                false, DateTimeOffset.UtcNow)).ToList();
+
+            return Results.Ok(ApiResponse<List<SessionAppointmentDto>>.Ok(appointments));
+        }).WithName("CompanySessionAppointments");
+
         group.MapPost("/sessions/{sessionId:guid}/assign", async (
             Guid sessionId, [FromBody] AssignSessionRequest request, ICurrentUser user,
             TenantResolver resolver, ISender sender, CancellationToken ct) =>
@@ -289,6 +315,19 @@ public static class CompanyPanelEndpoints
             return Results.Created($"/api/v1/company/customers/{customer.Id}",
                 ApiResponse<CustomerDto>.Ok(customer, "Üye eklendi."));
         }).WithName("CompanyCreateMember");
+
+        group.MapGet("/customers/{customerId:guid}", async (
+            Guid customerId, ICurrentUser user, TenantResolver resolver, ISender sender, CancellationToken ct) =>
+        {
+            if (await ResolveOwnCompanyAsync(user, resolver, ct) is null)
+                return CompanyNotFound();
+
+            var detail = await sender.Send(new GetCustomerDetailQuery(customerId), ct);
+            if (detail is null)
+                return Results.NotFound(ApiResponse.Fail("customer_not_found", "Üye bulunamadı."));
+
+            return Results.Ok(ApiResponse<CustomerDetailDto>.Ok(detail));
+        }).WithName("CompanyCustomerDetail");
 
         group.MapPost("/customers/{customerId:guid}/branch", async (
             Guid customerId, [FromBody] SetCustomerBranchRequest request, ICurrentUser user,

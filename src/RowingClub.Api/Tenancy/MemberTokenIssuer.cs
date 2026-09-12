@@ -18,6 +18,7 @@ public sealed class MemberTokenIssuer(IJwtTokenService jwtTokenService)
         {
             new(ClaimTypes.Role, "Member"),
             new("company_id", company.CompanyId.ToString()),
+            new("subdomain", company.Subdomain),
         };
 
         var issued = jwtTokenService.IssueAccessToken(member.CustomerId, member.Email ?? string.Empty, claims);

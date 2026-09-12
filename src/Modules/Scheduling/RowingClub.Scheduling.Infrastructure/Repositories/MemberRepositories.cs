@@ -75,6 +75,12 @@ public sealed class ActivityLogRepository(TenantDbContext context) : IActivityLo
     }
 
     public void Add(ActivityLog log) => context.ActivityLogs.Add(log);
+
+    public Task<List<ActivityLog>> GetRecentAsync(int take, CancellationToken cancellationToken) =>
+        context.ActivityLogs
+            .OrderByDescending(l => l.AtUtc)
+            .Take(take)
+            .ToListAsync(cancellationToken);
 }
 
 public sealed class BlockedIpAddressRepository(TenantDbContext context) : IBlockedIpAddressRepository
