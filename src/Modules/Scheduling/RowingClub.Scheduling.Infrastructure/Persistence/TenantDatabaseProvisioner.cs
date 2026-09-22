@@ -34,6 +34,7 @@ public sealed class TenantDatabaseProvisioner(
 
         var options = new DbContextOptionsBuilder<TenantDbContext>()
             .UseNpgsql(connectionStringFactory.Create(databaseName))
+            .ConfigureWarnings(w => w.Ignore(Microsoft.EntityFrameworkCore.Diagnostics.RelationalEventId.PendingModelChangesWarning))
             .Options;
 
         await using var tenantContext = new TenantDbContext(options, fieldEncryptor, blindIndexer);

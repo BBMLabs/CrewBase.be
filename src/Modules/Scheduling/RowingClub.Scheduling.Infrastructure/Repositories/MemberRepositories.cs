@@ -73,7 +73,7 @@ public sealed class ActivityLogRepository(TenantDbContext context) : IActivityLo
             .ToListAsync(cancellationToken);
     }
 
-    public Task<int> CountAsync(string? search, CancellationToken cancellationToken)
+    public Task<long> CountAsync(string? search, CancellationToken cancellationToken)
     {
         var query = context.ActivityLogs.AsQueryable();
 
@@ -86,10 +86,16 @@ public sealed class ActivityLogRepository(TenantDbContext context) : IActivityLo
                 (l.IpAddress != null && EF.Functions.ILike(l.IpAddress, $"%{term}%")));
         }
 
-        return query.CountAsync(cancellationToken);
+        return query.LongCountAsync(cancellationToken);
     }
 
     public void Add(ActivityLog log) => context.ActivityLogs.Add(log);
+
+    public Task<List<ActivityLog>> GetRecentAsync(int take, CancellationToken cancellationToken) =>
+        context.ActivityLogs
+            .OrderByDescending(l => l.AtUtc)
+            .Take(take)
+            .ToListAsync(cancellationToken);
 }
 
 public sealed class BlockedIpAddressRepository(TenantDbContext context) : IBlockedIpAddressRepository
