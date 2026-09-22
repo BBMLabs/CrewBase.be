@@ -3,7 +3,7 @@ namespace RowingClub.Scheduling.Domain.Community;
 /// <summary>Akış modülünün tek deposu - post, beğeni, yorum, katılım ve takip birlikte yaşar.</summary>
 public interface ICommunityRepository
 {
-    Task<List<Post>> GetFeedAsync(int take, CancellationToken cancellationToken);
+    Task<List<Post>> GetFeedAsync(int take, bool clubOnly, CancellationToken cancellationToken);
 
     Task<Post?> GetPostAsync(Guid postId, CancellationToken cancellationToken);
 

@@ -17,7 +17,8 @@ public sealed record FriendDto(
     int Level,
     string Direction,   // "incoming" | "outgoing" | "friend"
     string Status,
-    int UnreadCount);
+    int UnreadCount,
+    DateTimeOffset? LastSeenAtUtc);
 
 /// <summary>Üyenin kendi benzersiz kodu (yoksa atanır) - arkadaşlar bu kodla ekler.</summary>
 public sealed record GetMyCodeQuery(Guid CustomerId) : ICommand<string>;
@@ -111,7 +112,7 @@ public sealed class SendFriendRequestCommandHandler(
 
         return new FriendDto(
             friendship.Id, target.Id, target.FullName, target.MemberCode, target.Level,
-            "outgoing", friendship.Status.ToString(), 0);
+            "outgoing", friendship.Status.ToString(), 0, target.LastSeenAtUtc);
     }
 }
 
@@ -160,7 +161,7 @@ public sealed class GetFriendsQueryHandler(
 
             result.Add(new FriendDto(
                 friendship.Id, other.Id, other.FullName, other.MemberCode, other.Level,
-                direction, friendship.Status.ToString(), unread.GetValueOrDefault(otherId)));
+                direction, friendship.Status.ToString(), unread.GetValueOrDefault(otherId), other.LastSeenAtUtc));
         }
 
         return result

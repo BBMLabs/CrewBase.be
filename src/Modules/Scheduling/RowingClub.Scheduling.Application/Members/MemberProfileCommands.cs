@@ -30,6 +30,8 @@ public sealed class UpdateMemberProfileCommandValidator : AbstractValidator<Upda
 /// </summary>
 public sealed record DeleteMemberAccountCommand(Guid CustomerId, string Password) : ICommand<Unit>;
 
+public sealed record RecordMemberActivityCommand(Guid CustomerId) : ICommand<Unit>;
+
 public sealed class GetMemberProfileQueryHandler(ICustomerRepository customerRepository)
     : IRequestHandler<GetMemberProfileQuery, MemberDto>
 {
@@ -87,6 +89,23 @@ public sealed class DeleteMemberAccountCommandHandler(
 
         // Hard delete: randevular/paketler/loglar FK cascade ile birlikte silinir.
         customerRepository.Remove(customer);
+        await unitOfWork.SaveChangesAsync(cancellationToken);
+
+        return Unit.Value;
+    }
+}
+
+public sealed class RecordMemberActivityCommandHandler(
+    ICustomerRepository customerRepository,
+    ISchedulingUnitOfWork unitOfWork)
+    : IRequestHandler<RecordMemberActivityCommand, Unit>
+{
+    public async Task<Unit> Handle(RecordMemberActivityCommand request, CancellationToken cancellationToken)
+    {
+        var customer = await customerRepository.GetByIdAsync(request.CustomerId, cancellationToken)
+            ?? throw new NotFoundException("Customer", request.CustomerId.ToString());
+
+        customer.Touch();
         await unitOfWork.SaveChangesAsync(cancellationToken);
 
         return Unit.Value;

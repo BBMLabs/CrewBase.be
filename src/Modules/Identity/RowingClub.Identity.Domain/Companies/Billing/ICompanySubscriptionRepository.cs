@@ -14,4 +14,6 @@ public interface ICompanySubscriptionRepository
     void Add(CompanySubscription subscription);
 
     void Update(CompanySubscription subscription);
+
+    void Remove(CompanySubscription subscription);
 }

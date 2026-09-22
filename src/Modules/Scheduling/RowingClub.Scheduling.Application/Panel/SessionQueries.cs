@@ -30,6 +30,8 @@ public sealed record GetSessionsQuery(DateOnly Date) : IRequest<List<SessionDto>
 public sealed record AssignSessionResourcesCommand(Guid SessionId, Guid? BoatId, Guid? InstructorId)
     : ICommand<SessionDto>;
 
+public sealed record MoveAppointmentToSessionCommand(Guid AppointmentId, Guid TargetSessionId) : ICommand<Unit>;
+
 public sealed class GetSessionsQueryHandler(ITrainingSessionRepository sessionRepository)
     : IRequestHandler<GetSessionsQuery, List<SessionDto>>
 {
@@ -83,6 +85,27 @@ public sealed class AssignSessionResourcesCommandHandler(
 
         await unitOfWork.SaveChangesAsync(cancellationToken);
         return SessionMapper.ToDto(session);
+    }
+}
+
+public sealed class MoveAppointmentToSessionCommandHandler(
+    IAppointmentRepository appointmentRepository,
+    ITrainingSessionRepository sessionRepository,
+    ISchedulingUnitOfWork unitOfWork)
+    : IRequestHandler<MoveAppointmentToSessionCommand, Unit>
+{
+    public async Task<Unit> Handle(MoveAppointmentToSessionCommand request, CancellationToken cancellationToken)
+    {
+        var appointment = await appointmentRepository.GetByIdAsync(request.AppointmentId, cancellationToken)
+            ?? throw new NotFoundException("Appointment", request.AppointmentId.ToString());
+
+        var targetSession = await sessionRepository.GetByIdAsync(request.TargetSessionId, cancellationToken)
+            ?? throw new NotFoundException("TrainingSession", request.TargetSessionId.ToString());
+
+        appointment.MoveToSession(targetSession);
+
+        await unitOfWork.SaveChangesAsync(cancellationToken);
+        return Unit.Value;
     }
 }
 

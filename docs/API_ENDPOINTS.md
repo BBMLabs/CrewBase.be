@@ -263,6 +263,8 @@ bağlantısında (`lib/tenant.ts#siteUrlForBranch`) kullanılır.
   "date": "2026-08-25",
   "time": "10:00",
   "boatClass": "4x",
+  "experienceAcknowledged": false,
+  "teammateName": null,
   "note": "İlk dersim",
   "reminderMinutes": 60,
   "acceptedConsents": ["swim", "health", "rules", "kvkk"]
@@ -272,17 +274,31 @@ bağlantısında (`lib/tenant.ts#siteUrlForBranch`) kullanılır.
 **İş kuralları (kritik):**
 1. **Kimlik eşleştirme**: önce `phone`, sonra (bulunamazsa) `email` ile mevcut üye/misafir kaydı
    aranır — bir üye giriş yapmadan bu formu kullanırsa **kayıtlı derecesiyle** gruplanır.
-2. **Misafir tekne kısıtı**: hesabı olmayan (üye olmayan) kişiler **yalnızca `4x`** rezervasyonu
-   yapabilir; `1x`/`2x` denemesi `409 guest_class_restricted` ile reddedilir. Telefon/e-posta bir
-   üyelikle eşleşirse tüm sınıflar açılır.
-3. **Beyan zorunluluğu**: `Booking` kapsamındaki zorunlu beyanlar (yüzme, sağlık, kurallar, KVKK)
+2. **Misafir deneyim onayı**: hesabı olmayan (üye olmayan) kişiler `1x`/`2x` seçtiğinde istekte
+   `experienceAcknowledged: true` göndermelidir (frontend, seçim anında bir uyarı + onay kutusuyla
+   bunu alır); onay yoksa `409 guest_class_restricted`. Telefon/e-posta bir üyelikle eşleşirse
+   onay gerekmez, tüm sınıflar açılır.
+3. **Takım arkadaşı eşleştirmesi (`teammateName`)**: `2x` seçilip `teammateName` gönderilirse,
+   önce o slot+sınıftaki mevcut seanslarda **karşılıklı (çapraz) eşleşme** aranır: bir başka
+   randevunun sahibinin adı bu isteğin `teammateName`'iyle eşleşiyor VE o randevunun kendi
+   `teammateName`'i bu isteğin `fullName`'iyle eşleşiyorsa (case-insensitive), doğrudan o seansa
+   eklenir — derece/hesap durumu fark etmez. Tek taraflı isim girişi (karşı taraf henüz
+   rezervasyon yapmadıysa veya farklı bir isim yazdıysa) hiçbir şey yapmaz, akış aşağıdaki
+   kurallara devam eder.
+4. **Misafir 2x eşleştirmesi**: takım arkadaşı eşleşmesi bulunamazsa VE hesabı olmayan biri `2x`
+   rezervasyonu yaparsa **kendi derecesiyle yeni boş bir seans asla açılmaz** (2 kişilik teknede
+   tek başına kalmasın diye) — bunun yerine o slot+sınıftaki, boş koltuğu olan **en düşük dereceli
+   mevcut seansa** eklenir. Uygun bir seans yoksa `409 no_2x_partner_available` (başka bir saat
+   veya `4x` önerilir). Bu kural yalnızca hesabı olmayanlar için geçerlidir; üyeler için
+   grupla(n)ma her zamanki gibi kendi derecesine göre çalışır (gerekirse yeni seans açılır).
+5. **Beyan zorunluluğu**: `Booking` kapsamındaki zorunlu beyanlar (yüzme, sağlık, kurallar, KVKK)
    her istekte kontrol edilir. **Misafir her randevuda yeniden onaylamalıdır**; kayıtlı üye
    (`HasAccount=true`) için önceki onaylar geçerli sayılır — eksikse `409 consents_required`.
-4. Paket düşümü **kapatılmıştır** (`UsePackage: false` sabit) — yalnızca telefon numarasıyla
+6. Paket düşümü **kapatılmıştır** (`UsePackage: false` sabit) — yalnızca telefon numarasıyla
    başkasının paketi eritilemesin diye. Paketten düşerek randevu almak için üye girişi gerekir.
-5. Aynı saatte aynı kişi için ikinci randevu: `409 already_booked`.
-6. Slot/kısıt ihlalleri: `closed_date`, `too_soon`, `too_far`, `invalid_slot`, `slot_full`,
-   `boat_class_unavailable`, `invalid_reminder`.
+7. Aynı saatte aynı kişi için ikinci randevu: `409 already_booked`.
+8. Slot/kısıt ihlalleri: `closed_date`, `too_soon`, `too_far`, `invalid_slot`, `slot_full`,
+   `boat_class_unavailable`, `invalid_reminder`, `no_2x_partner_available`.
 
 **Başarılı yanıt `201 Created`:**
 ```json
@@ -378,8 +394,9 @@ Kod 10 dakika geçerlidir, en fazla 5 yanlış deneme hakkı vardır (`otp_expir
 | POST | `/packages/purchase/checkout-result` | `{ packageId, token }` - checkout dönüşünde ödemeyi doğrular, paketi bakiyeye ekler |
 
 `POST /appointments` request'i misafir formundakiyle aynıdır, `fullName`/`phone`/`email` yerine
-profilden alınır; ek olarak `usePackage: boolean` taşır. `1x`/`2x`/`4x` kısıtı üyeler için
-uygulanmaz (yalnızca hesabı olmayanlar `4x`'e sınırlıdır).
+profilden alınır; ek olarak `usePackage: boolean` taşır. `experienceAcknowledged` alanı üyeler için
+anlamsızdır (üye hesabı olduğu için deneyim onayı/1x-2x kısıtı zaten uygulanmaz, gruplama her
+zamanki gibi kendi derecesine göre yapılır).
 
 `POST /packages/{packageId}/purchase` iyzico'nun klasik CheckoutForm API'sini kullanır (firma
 abonelik faturalamasındaki Abonelik API'sinden AYRI - bkz. `IIyzicoPaymentClient`). Dönen
@@ -516,6 +533,7 @@ Her şubenin kendi tekil kodu (`Code`, 6 rakam + 2 harf) ve kendi public sitesi 
 |---|---|---|
 | GET | `/appointments?date=` | Randevu listesi (tarih verilmezse tümü) |
 | POST | `/appointments/{id}/status` | `{ "status": "Pending"\|"Confirmed"\|"Cancelled"\|"Completed" }` — iptalde paket otomatik iade edilir, iptalden geri açmada tekrar düşülür |
+| POST | `/appointments/{id}/move` | `{ sessionId }` — randevuyu aynı tekne sınıfındaki başka bir seansa taşır; sınıf uyuşmazsa `boat_class_mismatch`, hedef doluysa `session_full`, iptal edilmişse `appointment_cancelled` |
 | GET | `/sessions?date=` | O günün seansları: tekne/eğitmen ataması, kapasite, üye listesi |
 | POST | `/sessions/{id}/assign` | `{ boatId?, instructorId? }` — otomatik atamayı elle ezer; çakışma varsa `boat_taken`/`instructor_busy` |
 

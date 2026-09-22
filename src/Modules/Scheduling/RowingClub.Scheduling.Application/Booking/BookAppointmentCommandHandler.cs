@@ -61,13 +61,12 @@ public sealed class BookAppointmentCommandHandler(
             }
         }
 
-        // Üyelik hesabı olmayanlar YALNIZCA 4x rezervasyonu yapabilir; telefon/e-posta bir üye
-        // hesabıyla eşleştiyse tüm sınıflar açıktır.
-        if (!customer.HasAccount && boatClass != BoatClass.Quad4x)
+        // Üyelik hesabı olmayanlar 1x/2x için deneyim onayı vermelidir; onay yoksa reddedilir.
+        if (!customer.HasAccount && boatClass != BoatClass.Quad4x && !request.ExperienceAcknowledged)
         {
             throw new DomainException(
                 "guest_class_restricted",
-                "Üye olmayan kullanıcılar yalnızca 4x randevusu alabilir. 2x ve 1x için üye olun veya giriş yapın.");
+                "1x ve 2x tekneler deneyimli kürekçiler içindir. Devam etmek için deneyim onayını işaretleyin.");
         }
 
         // Randevu beyanları (yüzme, sağlık, kurallar, KVKK): kayıtlı üye BİR KEZ onaylar
@@ -92,14 +91,36 @@ public sealed class BookAppointmentCommandHandler(
             usedPackage.Deduct();
         }
 
-        // Aynı slot + sınıf + derecede boş koltuğu olan seans varsa üye ona gruplanır;
-        // yoksa boş tekne ve müsait eğitmenle yeni seans açılır.
-        var session = await sessionRepository.FindJoinableAsync(
-            request.Date, request.StartTime, boatClass, customer.Level, cancellationToken);
+        TrainingSession? session = null;
+        if (boatClass == BoatClass.Double2x && !string.IsNullOrWhiteSpace(request.TeammateName))
+        {
+            session = await sessionRepository.FindMutualTeammateSessionAsync(
+                request.Date, request.StartTime, boatClass, request.FullName, request.TeammateName, cancellationToken);
+        }
 
-        session ??= await OpenSessionAsync(request.Date, request.StartTime, boatClass, customer.Level, cancellationToken);
+        if (session is null && !customer.HasAccount && boatClass == BoatClass.Double2x)
+        {
+            session = await sessionRepository.FindJoinableLowestLevelAsync(
+                request.Date, request.StartTime, boatClass, cancellationToken);
 
-        var appointment = Appointment.Book(customer, session, request.Note, reminderMinutes, usedPackage?.Id);
+            if (session is null)
+            {
+                throw new DomainException(
+                    "no_2x_partner_available",
+                    "Bu saatte size eşlik edecek bir 2x ekip bulunamadı. Lütfen başka bir saat deneyin veya 4x seçin.");
+            }
+        }
+        else if (session is null)
+        {
+            // Aynı slot + sınıf + derecede boş koltuğu olan seans varsa üye ona gruplanır;
+            // yoksa boş tekne ve müsait eğitmenle yeni seans açılır.
+            session = await sessionRepository.FindJoinableAsync(
+                request.Date, request.StartTime, boatClass, customer.Level, cancellationToken);
+
+            session ??= await OpenSessionAsync(request.Date, request.StartTime, boatClass, customer.Level, cancellationToken);
+        }
+
+        var appointment = Appointment.Book(customer, session, request.Note, reminderMinutes, usedPackage?.Id, request.TeammateName);
         appointmentRepository.Add(appointment);
 
         memberLogRepository.Add(MemberLog.Record(

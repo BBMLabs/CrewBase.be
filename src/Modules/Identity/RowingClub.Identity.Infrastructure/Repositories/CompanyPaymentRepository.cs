@@ -56,5 +56,10 @@ public sealed class CompanyPaymentRepository(RowingClubDbContext context) : ICom
         return counts.ToDictionary(x => x.Key, x => x.Count);
     }
 
+    public Task<List<CompanyPayment>> GetAllByCompanyIdAsync(Guid companyId, CancellationToken cancellationToken) =>
+        context.Set<CompanyPayment>().Where(p => p.CompanyId == companyId).ToListAsync(cancellationToken);
+
     public void Add(CompanyPayment payment) => context.Set<CompanyPayment>().Add(payment);
+
+    public void RemoveRange(IEnumerable<CompanyPayment> payments) => context.Set<CompanyPayment>().RemoveRange(payments);
 }

@@ -172,6 +172,28 @@ public static class AdminEndpoints
         })
         .WithName("RecordManualPaymentCorrection");
 
+        platformAdminGroup.MapPost("/dev/wipe-all-data", async (IMediator mediator, CancellationToken cancellationToken) =>
+        {
+            var result = await mediator.Send(new WipeAllDevDataCommand(), cancellationToken);
+            return Results.Ok(ApiResponse<WipeAllDevDataResult>.Ok(result, "Tüm geliştirme verileri silindi."));
+        })
+        .WithName("WipeAllDevData");
+
+        platformAdminGroup.MapGet("/databases", async (IMediator mediator, CancellationToken cancellationToken) =>
+        {
+            var overview = await mediator.Send(new GetTenantDatabaseOverviewQuery(), cancellationToken);
+            return Results.Ok(ApiResponse<List<TenantDatabaseOverviewDto>>.Ok(overview));
+        })
+        .WithName("GetTenantDatabaseOverview");
+
+        platformAdminGroup.MapPost("/databases/{databaseName}/drop", async (
+            string databaseName, IMediator mediator, CancellationToken cancellationToken) =>
+        {
+            await mediator.Send(new DropOrphanTenantDatabaseCommand(databaseName), cancellationToken);
+            return Results.Ok(ApiResponse.Ok("Yetim veritabanı silindi."));
+        })
+        .WithName("DropOrphanTenantDatabase");
+
         platformAdminGroup.MapGet("/companies/{companyId:guid}/overview", async (
             Guid companyId, RowingClub.Api.Tenancy.TenantResolver resolver, IMediator mediator, CancellationToken ct) =>
         {

@@ -4,7 +4,7 @@ using RowingClub.Scheduling.Domain.Customers;
 
 namespace RowingClub.Scheduling.Application.PublicOptions;
 
-/// <summary>Şubenin kendi tekil sitesi (/sube/{code}) için genel bilgileri.</summary>
+/// <summary>Şubenin kendi tekil sitesi (/branch/{code}) için genel bilgileri.</summary>
 public sealed record GetPublicBranchQuery(string Code) : IRequest<PublicBranchDto?>;
 
 public sealed record PublicBranchDto(

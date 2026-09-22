@@ -114,6 +114,7 @@ public sealed class TenantDbContext(
             builder.Property(c => c.Level);
             builder.Property(c => c.PasswordHash).HasMaxLength(500);
             builder.Property(c => c.DefaultReminderMinutes);
+            builder.Property(c => c.LastSeenAtUtc);
 
             // Şifreli telefon/e-posta kolonları aranamaz; benzersizlik ve arama blind index üzerinden.
             builder.Property<string>(PhoneIndexColumn).HasMaxLength(128).IsRequired();
@@ -465,6 +466,7 @@ public sealed class TenantDbContext(
             builder.ToTable("appointments");
             builder.HasKey(a => a.Id);
             builder.Property(a => a.Note).HasConversion(encrypted!);
+            builder.Property(a => a.TeammateName).HasConversion(encrypted!);
             builder.Property(a => a.Status).HasConversion<string>().HasMaxLength(20);
 
             builder.HasOne(a => a.Session)

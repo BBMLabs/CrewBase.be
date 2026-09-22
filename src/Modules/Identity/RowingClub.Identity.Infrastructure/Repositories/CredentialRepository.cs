@@ -10,4 +10,6 @@ public sealed class CredentialRepository(RowingClubDbContext context) : ICredent
         context.Set<Credential>().FirstOrDefaultAsync(c => c.UserId == userId, cancellationToken);
 
     public void Add(Credential credential) => context.Set<Credential>().Add(credential);
+
+    public void Remove(Credential credential) => context.Set<Credential>().Remove(credential);
 }

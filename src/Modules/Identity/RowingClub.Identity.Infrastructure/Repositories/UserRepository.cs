@@ -25,4 +25,6 @@ public sealed class UserRepository(RowingClubDbContext context) : IUserRepositor
         context.Set<User>().Where(u => u.CompanyId == companyId).ToListAsync(cancellationToken);
 
     public void Add(User user) => context.Set<User>().Add(user);
+
+    public void Remove(User user) => context.Set<User>().Remove(user);
 }

@@ -18,5 +18,9 @@ public interface ICompanyPaymentRepository
 
     Task<Dictionary<CompanyPaymentStatus, int>> GetStatusCountsAsync(CancellationToken cancellationToken);
 
+    Task<List<CompanyPayment>> GetAllByCompanyIdAsync(Guid companyId, CancellationToken cancellationToken);
+
     void Add(CompanyPayment payment);
+
+    void RemoveRange(IEnumerable<CompanyPayment> payments);
 }

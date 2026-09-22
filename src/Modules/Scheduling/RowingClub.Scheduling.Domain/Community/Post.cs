@@ -55,6 +55,8 @@ public sealed class Post
         if (body.Length > MaxBodyLength)
             throw new DomainException("post_too_long", $"Paylaşım en fazla {MaxBodyLength} karakter olabilir.");
 
+        if (isEvent && authorCustomerId is not null)
+            throw new DomainException("event_club_only", "Etkinlik yalnızca kulüp tarafından oluşturulabilir.");
         if (isEvent && string.IsNullOrWhiteSpace(eventTitle))
             throw new DomainException("event_title_required", "Etkinlik başlığı zorunludur.");
 

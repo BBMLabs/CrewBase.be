@@ -1,3 +1,7 @@
+using System.Net;
+using System.Net.Http;
+using System.Net.Sockets;
+using System.Linq;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using RowingClub.BuildingBlocks.Application.Abstractions;
@@ -44,7 +48,8 @@ public static class DependencyInjection
             .ValidateOnStart();
 
         services.AddHttpClient<IRecaptchaVerifier, GoogleRecaptchaVerifier>(
-            c => c.Timeout = TimeSpan.FromSeconds(10));
+                c => c.Timeout = TimeSpan.FromSeconds(10))
+            .ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler { ConnectCallback = Ipv4PreferringConnectCallback });
         services.AddOptions<RecaptchaOptions>()
             .Bind(configuration.GetSection(RecaptchaOptions.SectionName))
             .ValidateOnStart();
@@ -57,5 +62,30 @@ public static class DependencyInjection
         services.AddSingleton(new PersistenceAssemblyMarker(typeof(DependencyInjection).Assembly));
 
         return services;
+    }
+
+    private static async ValueTask<Stream> Ipv4PreferringConnectCallback(
+        SocketsHttpConnectionContext context, CancellationToken cancellationToken)
+    {
+        var addresses = await Dns.GetHostAddressesAsync(context.DnsEndPoint.Host, cancellationToken);
+        var orderedAddresses = addresses.OrderBy(a => a.AddressFamily == AddressFamily.InterNetwork ? 0 : 1);
+
+        Exception? lastConnectError = null;
+        foreach (var address in orderedAddresses)
+        {
+            var socket = new Socket(address.AddressFamily, SocketType.Stream, ProtocolType.Tcp) { NoDelay = true };
+            try
+            {
+                await socket.ConnectAsync(address, context.DnsEndPoint.Port, cancellationToken);
+                return new NetworkStream(socket, ownsSocket: true);
+            }
+            catch (Exception ex)
+            {
+                lastConnectError = ex;
+                socket.Dispose();
+            }
+        }
+
+        throw lastConnectError ?? new SocketException((int)SocketError.HostUnreachable);
     }
 }

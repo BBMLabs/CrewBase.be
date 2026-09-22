@@ -1,9 +1,10 @@
 using FluentValidation;
 using MediatR;
+using Microsoft.Extensions.Logging;
 using RowingClub.BuildingBlocks.Application.Abstractions;
 using RowingClub.BuildingBlocks.Application.Messaging;
 using RowingClub.BuildingBlocks.Domain;
-using RowingClub.BuildingBlocks.Security.Passwords;
+using RowingClub.BuildingBlocks.Security.Tokens;
 using RowingClub.Scheduling.Domain;
 using RowingClub.Scheduling.Domain.Branches;
 using RowingClub.Scheduling.Domain.Consents;
@@ -13,8 +14,9 @@ using RowingClub.Scheduling.Domain.Logs;
 namespace RowingClub.Scheduling.Application.Members;
 
 public sealed record RegisterMemberCommand(
-    string FullName, string Phone, string Email, string Password,
-    List<string> AcceptedConsents, string? IpAddress, string? BranchCode) : ICommand<MemberDto>;
+    string FullName, string Phone, string Email,
+    List<string> AcceptedConsents, string? IpAddress, string? BranchCode,
+    string CompanyName, string Subdomain) : ICommand<MemberDto>;
 
 public sealed class RegisterMemberCommandValidator : AbstractValidator<RegisterMemberCommand>
 {
@@ -23,7 +25,6 @@ public sealed class RegisterMemberCommandValidator : AbstractValidator<RegisterM
         RuleFor(c => c.FullName).NotEmpty().MaximumLength(200);
         RuleFor(c => c.Phone).NotEmpty().MaximumLength(20);
         RuleFor(c => c.Email).NotEmpty().EmailAddress().MaximumLength(254);
-        RuleFor(c => c.Password).MinimumLength(8).MaximumLength(128);
     }
 }
 
@@ -32,9 +33,13 @@ public sealed class RegisterMemberCommandHandler(
     IBranchRepository branchRepository,
     IConsentRecordRepository consentRepository,
     IMemberLogRepository memberLogRepository,
-    IPasswordHasher passwordHasher,
+    IMemberPasswordSetupTokenRepository setupTokenRepository,
+    IOpaqueTokenGenerator tokenGenerator,
+    IRefreshTokenHasher tokenHasher,
+    IMemberWelcomeEmailSender welcomeEmailSender,
     ISchedulingUnitOfWork unitOfWork,
-    ITenantDatabase tenantDatabase)
+    ITenantDatabase tenantDatabase,
+    ILogger<RegisterMemberCommandHandler> logger)
     : IRequestHandler<RegisterMemberCommand, MemberDto>
 {
     public async Task<MemberDto> Handle(RegisterMemberCommand request, CancellationToken cancellationToken)
@@ -72,16 +77,30 @@ public sealed class RegisterMemberCommandHandler(
                 customer.SetBranch(branchId);
         }
 
-        // Üyelik beyanları (KVKK, sağlık verisi vb.): zorunlular kabul edilmiş olmalı.
         await ConsentGuard.EnforceAsync(
             consentRepository, customer.Id, ConsentScope.Member,
             request.AcceptedConsents, request.IpAddress, trustExisting: true, cancellationToken);
 
-        customer.AttachAccount(request.Email, passwordHasher.Hash(request.Password));
         await MemberCodeAssigner.EnsureCodeAsync(customer, customerRepository, cancellationToken);
         memberLogRepository.Add(MemberLog.Record(customer.Id, MemberEvents.Registered));
 
+        var rawSetupToken = tokenGenerator.Generate();
+        setupTokenRepository.Add(
+            MemberPasswordSetupToken.Issue(customer.Id, tokenHasher.Hash(rawSetupToken), TimeSpan.FromDays(7)));
+
         await unitOfWork.SaveChangesAsync(cancellationToken);
+
+        try
+        {
+            await welcomeEmailSender.SendRegistrationSetupAsync(
+                customer.Email!, customer.FullName, request.CompanyName, rawSetupToken, request.Subdomain,
+                cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Üye şifre oluşturma e-postası gönderilemedi: {CustomerId}", customer.Id);
+        }
+
         return ToDto(customer);
     }
 

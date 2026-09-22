@@ -32,6 +32,7 @@
 `company_not_found`, `company_name_taken`, `email_already_registered`, `slot_full`,
 `session_full`, `already_booked`, `closed_day`, `too_soon`, `too_far`, `invalid_slot`,
 `invalid_reminder`, `invalid_package`, `boat_class_unavailable`, `boat_taken`,
-`instructor_busy`, `invalid_level`, `forbidden`, `invalid_role`, `cannot_demote_self`.
+`instructor_busy`, `invalid_level`, `forbidden`, `invalid_role`, `cannot_demote_self`,
+`guest_class_restricted`, `no_2x_partner_available`.
 
 Yeni kod eklerken: snake_case, İngilizce, mesaj Türkçe ve kullanıcıya gösterilebilir olmalı.

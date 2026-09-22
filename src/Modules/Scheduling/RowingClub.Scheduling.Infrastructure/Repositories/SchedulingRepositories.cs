@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using RowingClub.Scheduling.Domain.Appointments;
 using RowingClub.Scheduling.Domain.Boats;
 using RowingClub.Scheduling.Domain.Branches;
 using RowingClub.Scheduling.Domain.Campaigns;
@@ -193,6 +194,40 @@ public sealed class TrainingSessionRepository(TenantDbContext context) : ITraini
             .ToListAsync(cancellationToken);
 
         return candidates.FirstOrDefault(s => s.HasFreeSeat);
+    }
+
+    public async Task<TrainingSession?> FindJoinableLowestLevelAsync(
+        DateOnly date, TimeOnly startTime, BoatClass boatClass, CancellationToken cancellationToken)
+    {
+        var candidates = await context.TrainingSessions
+            .Include(s => s.Appointments)
+            .Include(s => s.Boat)
+            .Include(s => s.Instructor)
+            .Where(s => s.Date == date && s.StartTime == startTime && s.BoatClass == boatClass)
+            .OrderBy(s => s.Level)
+            .ToListAsync(cancellationToken);
+
+        return candidates.FirstOrDefault(s => s.HasFreeSeat);
+    }
+
+    public async Task<TrainingSession?> FindMutualTeammateSessionAsync(
+        DateOnly date, TimeOnly startTime, BoatClass boatClass,
+        string callerFullName, string teammateFullName, CancellationToken cancellationToken)
+    {
+        var candidates = await context.TrainingSessions
+            .Include(s => s.Appointments).ThenInclude(a => a.Customer)
+            .Include(s => s.Boat)
+            .Include(s => s.Instructor)
+            .Where(s => s.Date == date && s.StartTime == startTime && s.BoatClass == boatClass)
+            .ToListAsync(cancellationToken);
+
+        return candidates.FirstOrDefault(s =>
+            s.HasFreeSeat &&
+            s.Appointments.Any(a =>
+                a.Status != AppointmentStatus.Cancelled &&
+                a.TeammateName != null &&
+                string.Equals(a.Customer.FullName.Trim(), teammateFullName.Trim(), StringComparison.OrdinalIgnoreCase) &&
+                string.Equals(a.TeammateName.Trim(), callerFullName.Trim(), StringComparison.OrdinalIgnoreCase)));
     }
 
     public Task<List<TrainingSession>> GetBySlotAsync(

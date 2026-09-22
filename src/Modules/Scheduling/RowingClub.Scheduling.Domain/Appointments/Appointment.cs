@@ -34,6 +34,8 @@ public sealed class Appointment
 
     public string? Note { get; private set; }
 
+    public string? TeammateName { get; private set; }
+
     public AppointmentStatus Status { get; private set; }
 
     /// <summary>Ders başlangıcından kaç dakika önce hatırlatma gönderileceği (null = hatırlatma yok).</summary>
@@ -52,7 +54,7 @@ public sealed class Appointment
 
     public static Appointment Book(
         Customer customer, TrainingSession session, string? note,
-        int? reminderMinutes, Guid? customerPackageId)
+        int? reminderMinutes, Guid? customerPackageId, string? teammateName = null)
     {
         if (!session.HasFreeSeat)
             throw new DomainException("session_full", "Bu seansta boş koltuk kalmadı.");
@@ -67,6 +69,7 @@ public sealed class Appointment
             Date = session.Date,
             StartTime = session.StartTime,
             Note = string.IsNullOrWhiteSpace(note) ? null : note.Trim(),
+            TeammateName = string.IsNullOrWhiteSpace(teammateName) ? null : teammateName.Trim(),
             Status = AppointmentStatus.Pending,
             ReminderMinutes = reminderMinutes,
             CustomerPackageId = customerPackageId,
@@ -88,4 +91,26 @@ public sealed class Appointment
     }
 
     public void MarkReminderSent() => ReminderSentAtUtc = DateTimeOffset.UtcNow;
+
+    public void MoveToSession(TrainingSession targetSession)
+    {
+        if (targetSession.Id == SessionId)
+            return;
+
+        if (Status == AppointmentStatus.Cancelled)
+            throw new DomainException("appointment_cancelled", "İptal edilmiş randevu taşınamaz.");
+
+        if (targetSession.BoatClass != Session.BoatClass)
+            throw new DomainException("boat_class_mismatch", "Randevu farklı tekne sınıfındaki bir seansa taşınamaz.");
+
+        if (!targetSession.HasFreeSeat)
+            throw new DomainException("session_full", "Hedef seansta boş koltuk kalmadı.");
+
+        Session.Appointments.Remove(this);
+        SessionId = targetSession.Id;
+        Session = targetSession;
+        Date = targetSession.Date;
+        StartTime = targetSession.StartTime;
+        targetSession.Appointments.Add(this);
+    }
 }

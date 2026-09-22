@@ -8,5 +8,9 @@ public interface IRefreshTokenRepository
     /// chain when reuse of a revoked token is detected (spec section 11).</summary>
     Task<IReadOnlyCollection<RefreshToken>> GetFamilyAsync(Guid familyId, CancellationToken cancellationToken);
 
+    Task<List<RefreshToken>> GetByUserIdAsync(Guid userId, CancellationToken cancellationToken);
+
     void Add(RefreshToken refreshToken);
+
+    void RemoveRange(IEnumerable<RefreshToken> refreshTokens);
 }

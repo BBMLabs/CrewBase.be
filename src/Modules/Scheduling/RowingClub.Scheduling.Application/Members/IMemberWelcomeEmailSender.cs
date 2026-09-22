@@ -16,4 +16,9 @@ public interface IMemberWelcomeEmailSender
     Task SendPasswordResetAsync(
         string email, string fullName, string companyName, string resetToken,
         string subdomain, CancellationToken cancellationToken);
+
+    /// <summary>Herkese açık siteden kendi kaydını açan bir üyeye ilk şifresini oluşturması için bağlantı gönderir.</summary>
+    Task SendRegistrationSetupAsync(
+        string email, string fullName, string companyName, string setupToken,
+        string subdomain, CancellationToken cancellationToken);
 }

@@ -14,7 +14,7 @@ public sealed class EmailMemberBranchTransferSender(IEmailSender emailSender) : 
         string email, string fullName, string companyName, string oldBranchName, string newBranchName,
         string subdomain, string newBranchCode, CancellationToken cancellationToken)
     {
-        var siteUrl = $"https://{subdomain}.{TenantResolver.BaseDomain}/sube/{Uri.EscapeDataString(newBranchCode)}";
+        var siteUrl = $"https://{subdomain}.{TenantResolver.BaseDomain}/branch/{Uri.EscapeDataString(newBranchCode)}";
         var bodyHtml = $"""
             <p>Sayın {EmailTemplate.Encode(fullName)},</p>
             <p><b>{EmailTemplate.Encode(oldBranchName)}</b> şubesi kapatıldığı için üyeliğiniz <b>{EmailTemplate.Encode(newBranchName)}</b> şubesine

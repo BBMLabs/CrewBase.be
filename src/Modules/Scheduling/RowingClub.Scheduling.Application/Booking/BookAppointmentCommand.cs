@@ -13,6 +13,8 @@ public sealed record BookAppointmentCommand(
     DateOnly Date,
     TimeOnly StartTime,
     string BoatClass,
+    bool ExperienceAcknowledged,
+    string? TeammateName,
     string? Note,
     int? ReminderMinutes,
     bool UsePackage,

@@ -14,7 +14,7 @@ public sealed class EmailMemberWelcomeSender(IEmailSender emailSender) : IMember
         string subdomain, CancellationToken cancellationToken)
     {
         var setupUrl =
-            $"https://{subdomain}.{TenantResolver.BaseDomain}/uye/sifre-olustur" +
+            $"https://{subdomain}.{TenantResolver.BaseDomain}/member/create-password" +
             $"?token={Uri.EscapeDataString(setupToken)}&email={Uri.EscapeDataString(email)}";
         var bodyHtml = $"""
             <p>Sayın {EmailTemplate.Encode(fullName)},</p>
@@ -27,12 +27,30 @@ public sealed class EmailMemberWelcomeSender(IEmailSender emailSender) : IMember
             new EmailMessage(email, $"{companyName} - Üye Paneline Hoş Geldiniz", htmlBody), cancellationToken);
     }
 
+    public Task SendRegistrationSetupAsync(
+        string email, string fullName, string companyName, string setupToken,
+        string subdomain, CancellationToken cancellationToken)
+    {
+        var setupUrl =
+            $"https://{subdomain}.{TenantResolver.BaseDomain}/member/create-password" +
+            $"?token={Uri.EscapeDataString(setupToken)}&email={Uri.EscapeDataString(email)}";
+        var bodyHtml = $"""
+            <p>Sayın {EmailTemplate.Encode(fullName)},</p>
+            <p><b>{EmailTemplate.Encode(companyName)}</b> kulübüne üyeliğiniz oluşturuldu. Üye panelinize giriş yapabilmeniz için önce
+            kendi şifrenizi oluşturmanız gerekiyor. Aşağıdaki bağlantı 7 gün geçerlidir:</p>
+            """;
+        var htmlBody = EmailTemplate.Render("Üyeliğiniz Oluşturuldu", bodyHtml, "Şifremi Oluştur", setupUrl);
+
+        return emailSender.SendAsync(
+            new EmailMessage(email, $"{companyName} - Üyeliğiniz Oluşturuldu", htmlBody), cancellationToken);
+    }
+
     public Task SendPasswordResetAsync(
         string email, string fullName, string companyName, string resetToken,
         string subdomain, CancellationToken cancellationToken)
     {
         var resetUrl =
-            $"https://{subdomain}.{TenantResolver.BaseDomain}/uye/sifre-olustur" +
+            $"https://{subdomain}.{TenantResolver.BaseDomain}/member/create-password" +
             $"?token={Uri.EscapeDataString(resetToken)}&email={Uri.EscapeDataString(email)}";
         var bodyHtml = $"""
             <p>Sayın {EmailTemplate.Encode(fullName)},</p>

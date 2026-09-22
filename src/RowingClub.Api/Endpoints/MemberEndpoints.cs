@@ -12,7 +12,7 @@ using RowingClub.Scheduling.Application.Members;
 namespace RowingClub.Api.Endpoints;
 
 public sealed record MemberRegisterRequest(
-    string FullName, string Phone, string Email, string Password, List<string>? AcceptedConsents,
+    string FullName, string Phone, string Email, List<string>? AcceptedConsents,
     string? BranchCode);
 public sealed record MemberLoginRequest(string Email, string Password);
 public sealed record MemberSetPasswordRequest(string Email, string Token, string NewPassword);
@@ -20,8 +20,8 @@ public sealed record MemberForgotPasswordRequest(string Email);
 public sealed record MemberUpdateRequest(string FullName, string? Email, int? DefaultReminderMinutes);
 public sealed record MemberDeleteRequest(string Password);
 public sealed record MemberBookingRequest(
-    string Date, string Time, string? BoatClass, string? Note, int? ReminderMinutes, bool UsePackage,
-    List<string>? AcceptedConsents);
+    string Date, string Time, string? BoatClass, string? TeammateName, string? Note, int? ReminderMinutes,
+    bool UsePackage, List<string>? AcceptedConsents);
 public sealed record FriendAddRequest(string MemberCode);
 public sealed record MessageSendRequest(string Body);
 public sealed record ConsentSubmitRequest(List<ConsentEntry> Entries);
@@ -59,8 +59,9 @@ public static class MemberEndpoints
                 return CompanyNotFound();
 
             var member = await sender.Send(new RegisterMemberCommand(
-                request.FullName, request.Phone, request.Email, request.Password,
-                request.AcceptedConsents ?? [], ClientIp(http), request.BranchCode), ct);
+                request.FullName, request.Phone, request.Email,
+                request.AcceptedConsents ?? [], ClientIp(http), request.BranchCode,
+                company.Name, company.Subdomain), ct);
 
             var (token, expiresAt) = tokenIssuer.Issue(member, company);
             return Results.Ok(ApiResponse<object>.Ok(
@@ -132,6 +133,12 @@ public static class MemberEndpoints
             return Results.Ok(ApiResponse.Ok("Hesabınız ve tüm verileriniz kalıcı olarak silindi."));
         })).WithName("MemberDeleteAccount");
 
+        group.MapPost("/heartbeat", Guarded(async (ctx, sender, ct) =>
+        {
+            await sender.Send(new RecordMemberActivityCommand(ctx.CustomerId), ct);
+            return Results.Ok(ApiResponse.Ok());
+        })).WithName("MemberHeartbeat");
+
         // -- OTP doğrulama (e-posta / telefon) --
 
         group.MapPost("/otp/request", GuardedBody<OtpRequest>(async (ctx, request, sender, ct) =>
@@ -167,8 +174,8 @@ public static class MemberEndpoints
 
             var response = await sender.Send(new BookAppointmentCommand(
                 profile.FullName, profile.Phone, profile.Email, date, time,
-                request.BoatClass ?? "1x", request.Note, request.ReminderMinutes, request.UsePackage,
-                request.AcceptedConsents ?? [], ctx.Ip), ct);
+                request.BoatClass ?? "1x", ExperienceAcknowledged: true, request.TeammateName, request.Note,
+                request.ReminderMinutes, request.UsePackage, request.AcceptedConsents ?? [], ctx.Ip), ct);
 
             return Results.Created(
                 $"/api/v1/member/appointments/{response.AppointmentId}",
@@ -292,7 +299,7 @@ public static class MemberEndpoints
 
         group.MapGet("/feed", Guarded(async (ctx, sender, ct) =>
         {
-            var posts = await sender.Send(new GetFeedQuery(ctx.CustomerId, 50), ct);
+            var posts = await sender.Send(new GetFeedQuery(ctx.CustomerId, 50, ClubOnly: false), ct);
             return Results.Ok(ApiResponse<List<PostDto>>.Ok(posts));
         })).WithName("MemberFeed");
 
@@ -306,7 +313,7 @@ public static class MemberEndpoints
 
         group.MapGet("/feed/{id:guid}/media", GuardedRoute(async (ctx, postId, sender, ct) =>
         {
-            var media = await sender.Send(new GetPostMediaQuery(postId), ct);
+            var media = await sender.Send(new GetPostMediaQuery(postId, ClubOnly: false), ct);
             return media is null
                 ? Results.NotFound(ApiResponse.Fail("no_media", "Bu paylaşımda medya yok."))
                 : Results.Ok(ApiResponse<PostMediaDto>.Ok(media));
@@ -326,7 +333,7 @@ public static class MemberEndpoints
 
         group.MapGet("/feed/{id:guid}/comments", GuardedRoute(async (ctx, postId, sender, ct) =>
         {
-            var comments = await sender.Send(new GetCommentsQuery(postId), ct);
+            var comments = await sender.Send(new GetCommentsQuery(postId, ClubOnly: false), ct);
             return Results.Ok(ApiResponse<List<CommentDto>>.Ok(comments));
         })).WithName("MemberComments");
 
@@ -345,7 +352,7 @@ public static class MemberEndpoints
 
         group.MapGet("/feed/{id:guid}/participants", GuardedRoute(async (ctx, postId, sender, ct) =>
         {
-            var participants = await sender.Send(new GetParticipantsQuery(postId), ct);
+            var participants = await sender.Send(new GetParticipantsQuery(postId, ClubOnly: false), ct);
             return Results.Ok(ApiResponse<List<ParticipantDto>>.Ok(participants));
         })).WithName("MemberParticipants");
 

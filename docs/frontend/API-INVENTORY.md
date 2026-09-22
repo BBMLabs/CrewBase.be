@@ -98,11 +98,17 @@ Source: `PublicSiteEndpoints.cs`.
 | 4.4 | GET | `/options` | — | `PublicOptionsDto { openingTime, closingTime, slotMinutes, openDays: number[], minNoticeHours, maxAdvanceDays, reminderOptions: number[], defaultReminderMinutes, boatClasses: {value,label,capacity}[], packages: {id,name,description?,sessionCount,price}[], levelLabels: string[11] }` | env 404 `company_not_found` | Public booking form config | VERIFIED |
 | 4.5 | GET | `/consents` | — | `ConsentStateDto[] { key, title, body, scope: "Booking"\|"Member", required, icon, accepted:false, acceptedAtUtc:null, ipAddress:null }` | env 404 `company_not_found` | Guest consent display | VERIFIED |
 | 4.6 | GET | `/availability` | `date?` (default today), `boatClass?` (default "1x"), `phone?` | `SlotDto[] { time: "HH:mm", available, seatsLeft }` | env `invalid_date`, 404 `company_not_found` | Public/member slot picker | VERIFIED |
-| 4.7 | POST | `/appointments` | `PublicBookingRequest { fullName, phone, email?, date, time, boatClass?, note?, reminderMinutes?, acceptedConsents?: string[] }` | `BookAppointmentResponse { appointmentId, sessionId, date, startTime, boatClass, level, boatName?, instructorName?, reminderMinutes?, status }` (201) | env: `invalid_date`, `invalid_time`; domain: `guest_class_restricted`, `consents_required`, `already_booked`, `closed_date`, `too_soon`, `too_far`, `invalid_slot`, `slot_full`, `boat_class_unavailable`, `invalid_reminder`; validation as §5 row 5.3 minus member-only fields | Public guest booking | VERIFIED |
+| 4.7 | POST | `/appointments` | `PublicBookingRequest { fullName, phone, email?, date, time, boatClass?, experienceAcknowledged, teammateName?, note?, reminderMinutes?, acceptedConsents?: string[] }` | `BookAppointmentResponse { appointmentId, sessionId, date, startTime, boatClass, level, boatName?, instructorName?, reminderMinutes?, status }` (201) | env: `invalid_date`, `invalid_time`; domain: `guest_class_restricted`, `no_2x_partner_available`, `consents_required`, `already_booked`, `closed_date`, `too_soon`, `too_far`, `invalid_slot`, `slot_full`, `boat_class_unavailable`, `invalid_reminder`; validation as §5 row 5.3 minus member-only fields | Public guest booking | VERIFIED |
 
 Guest rules verified: identity matched by phone→email (existing member level applies);
-non-members restricted to `4x`; Booking consents re-required every request; package deduction
-hard-disabled (`UsePackage:false`); one appointment per person per slot (`already_booked`).
+non-members selecting `1x`/`2x` must send `experienceAcknowledged: true` (else
+`guest_class_restricted`); for `2x`, a `teammateName` is first checked against existing sessions
+in that slot for a **mutual** name match (the other appointment's own `teammateName` must equal
+this request's `fullName`) — if found, both land in the same session regardless of level/account;
+otherwise non-member `2x` bookings never open a fresh solo session — they join the lowest-level
+joinable existing `2x` session for that slot, or get `no_2x_partner_available`; Booking consents
+re-required every request; package deduction hard-disabled (`UsePackage:false`); one appointment
+per person per slot (`already_booked`).
 
 ## 5. Member Auth — `/api/v1/public/{subdomain}/members` (rate-limited)
 
@@ -193,7 +199,7 @@ All handlers resolve own company from claim; failure → env 404 `company_not_fo
 
 | # | Method | Route | Query/Body | Response | Errors | Status |
 |---|--------|-------|-----------|----------|--------|--------|
-| 7.3 | GET | `/appointments` | `?date=yyyy-MM-dd` (optional; **omit = ALL ever**) | `AppointmentDto[] { id, sessionId, customerName, customerPhone, customerEmail?, customerLevel, date, startTime, boatClass, note?, status, reminderMinutes?, createdAtUtc }` | env `invalid_date` | VERIFIED |
+| 7.3 | GET | `/appointments` | `?date=yyyy-MM-dd` (optional; **omit = ALL ever**) | `AppointmentDto[] { id, sessionId, customerName, customerPhone, customerEmail?, customerLevel, date, startTime, boatClass, teammateName?, note?, status, reminderMinutes?, createdAtUtc }` | env `invalid_date` | VERIFIED |
 | 7.4 | POST | `/appointments/{id}/status` | `{ status: "Pending"\|"Confirmed"\|"Cancelled"\|"Completed" }` | msg; cancel auto-refunds package, un-cancel re-deducts | invalid transitions → domain error | VERIFIED |
 | 7.5 | GET | `/sessions` | `?date=` (**required valid**) | `SessionDto[] { id, date, startTime, boatClass, level, capacity, memberCount, boatName?, instructorName?, members: [{appointmentId, fullName, phone, level, status}] }` | env `invalid_date` | VERIFIED |
 | 7.6 | POST | `/sessions/{id}/assign` | `{ boatId?, instructorId? }` | SessionDto | `boat_taken`, `instructor_busy`, 404 notfound | VERIFIED |
@@ -273,8 +279,8 @@ PACKAGE_REFUNDED, LEVEL_CHANGED (+ CONSENTS_SUBMITTED, FRIEND_REQUEST_SENT, CARD
 `unauthorized`, `forbidden`, `validation_error`, `unexpected_error`, `company_not_found`,
 `company_name_taken`, `email_already_registered`, `invalid_date`, `invalid_time`,
 `invalid_name`, `phone_taken`, `member_exists`, `email_taken`, `consents_required`,
-`consent_required`, `unknown_consent`, `guest_class_restricted`, `already_booked`,
-`closed_date`, `too_soon`, `too_far`, `invalid_slot`, `slot_full`, `session_full`,
+`consent_required`, `unknown_consent`, `guest_class_restricted`, `no_2x_partner_available`,
+`already_booked`, `closed_date`, `too_soon`, `too_far`, `invalid_slot`, `slot_full`, `session_full`,
 `boat_class_unavailable`, `boat_class_restricted` (verify-at-impl), `invalid_reminder`,
 `otp_expired`, `otp_invalid`, `otp_not_found`, `invalid_card_type`, `card_number_required`,
 `code_not_found`, `code_generation_failed`, `cannot_friend_self`, `already_friends`,

@@ -72,7 +72,7 @@ public static class WebhookEndpoints
         group.MapMethods("/iyzico/checkout-callback/plan", new[] { "GET", "POST" }, async (HttpRequest request) =>
         {
             var token = await ExtractCheckoutTokenAsync(request);
-            var target = $"https://{TenantResolver.BaseDomain}/panel/paketim/odeme-sonuc";
+            var target = $"https://{TenantResolver.BaseDomain}/panel/plan/checkout-result";
             return Results.Redirect(AppendToken(target, token));
         }).WithName("IyzicoPlanCheckoutCallback");
 
@@ -81,8 +81,8 @@ public static class WebhookEndpoints
             var token = await ExtractCheckoutTokenAsync(request);
             var tenant = SanitizeSubdomain(request.Query["tenant"]);
             var target = tenant is null
-                ? $"https://{TenantResolver.BaseDomain}/uye/paketler/odeme-sonuc"
-                : $"https://{tenant}.{TenantResolver.BaseDomain}/uye/paketler/odeme-sonuc";
+                ? $"https://{TenantResolver.BaseDomain}/member/packages/checkout-result"
+                : $"https://{tenant}.{TenantResolver.BaseDomain}/member/packages/checkout-result";
             return Results.Redirect(AppendToken(target, token));
         }).WithName("IyzicoPackageCheckoutCallback");
 

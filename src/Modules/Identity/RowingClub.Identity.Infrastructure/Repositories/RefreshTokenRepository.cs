@@ -13,5 +13,10 @@ public sealed class RefreshTokenRepository(RowingClubDbContext context) : IRefre
         Guid familyId, CancellationToken cancellationToken) =>
         await context.Set<RefreshToken>().Where(t => t.FamilyId == familyId).ToListAsync(cancellationToken);
 
+    public Task<List<RefreshToken>> GetByUserIdAsync(Guid userId, CancellationToken cancellationToken) =>
+        context.Set<RefreshToken>().Where(t => t.UserId == userId).ToListAsync(cancellationToken);
+
     public void Add(RefreshToken refreshToken) => context.Set<RefreshToken>().Add(refreshToken);
+
+    public void RemoveRange(IEnumerable<RefreshToken> refreshTokens) => context.Set<RefreshToken>().RemoveRange(refreshTokens);
 }

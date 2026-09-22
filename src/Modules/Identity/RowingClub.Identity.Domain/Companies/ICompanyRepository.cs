@@ -16,7 +16,11 @@ public interface ICompanyRepository
 
     Task<List<Company>> GetByIdsAsync(IReadOnlyCollection<Guid> ids, CancellationToken cancellationToken);
 
+    Task<List<Company>> GetAllAsync(CancellationToken cancellationToken);
+
     void Add(Company company);
 
     void Update(Company company);
+
+    void Remove(Company company);
 }

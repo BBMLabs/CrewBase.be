@@ -48,6 +48,8 @@ public sealed class Customer
     /// <summary>true ise üye paneline giriş yapamaz (firma tarafından engellenmiştir); randevu/telefon kaydı etkilenmez.</summary>
     public bool IsBlocked { get; private set; }
 
+    public DateTimeOffset? LastSeenAtUtc { get; private set; }
+
     private Customer()
     {
     }
@@ -130,5 +132,10 @@ public sealed class Customer
     {
         if (IsBlocked)
             throw new DomainException("member_blocked", "Hesabınız kulübünüz tarafından engellenmiştir.");
+    }
+
+    public void Touch()
+    {
+        LastSeenAtUtc = DateTimeOffset.UtcNow;
     }
 }

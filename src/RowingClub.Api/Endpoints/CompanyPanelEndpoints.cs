@@ -23,6 +23,7 @@ using RowingClub.Scheduling.Application.Panel;
 namespace RowingClub.Api.Endpoints;
 
 public sealed record SetAppointmentStatusRequest(string Status);
+public sealed record MoveAppointmentRequest(Guid SessionId);
 public sealed record SetCustomerLevelRequest(int Level);
 public sealed record InstructorRequest(string FullName, string? Phone, string? Email, bool? IsActive, Guid? BranchId);
 public sealed record BoatRequest(string Name, string BoatClass, bool? IsActive, Guid? BranchId);
@@ -377,6 +378,17 @@ public static class CompanyPanelEndpoints
             await sender.Send(new SetAppointmentStatusCommand(appointmentId, request.Status), ct);
             return Results.Ok(ApiResponse.Ok("Randevu durumu güncellendi."));
         }).WithName("CompanySetAppointmentStatus");
+
+        group.MapPost("/appointments/{appointmentId:guid}/move", async (
+            Guid appointmentId, [FromBody] MoveAppointmentRequest request, ICurrentUser user,
+            TenantResolver resolver, ISender sender, CancellationToken ct) =>
+        {
+            if (await ResolveOwnCompanyAsync(user, resolver, ct) is null)
+                return CompanyNotFound();
+
+            await sender.Send(new MoveAppointmentToSessionCommand(appointmentId, request.SessionId), ct);
+            return Results.Ok(ApiResponse.Ok("Randevu taşındı."));
+        }).WithName("CompanyMoveAppointment");
 
         // ---- Seanslar (tekne/hoca atamalı grup antrenmanları) ----
 
@@ -1008,7 +1020,7 @@ public static class CompanyPanelEndpoints
             if (await ResolveOwnCompanyAsync(user, resolver, ct) is null)
                 return CompanyNotFound();
 
-            var posts = await sender.Send(new GetFeedQuery(null, 50), ct);
+            var posts = await sender.Send(new GetFeedQuery(null, 50, ClubOnly: false), ct);
             return Results.Ok(ApiResponse<List<PostDto>>.Ok(posts));
         }).WithName("CompanyFeed");
 
@@ -1041,7 +1053,7 @@ public static class CompanyPanelEndpoints
             if (await ResolveOwnCompanyAsync(user, resolver, ct) is null)
                 return CompanyNotFound();
 
-            var media = await sender.Send(new GetPostMediaQuery(postId), ct);
+            var media = await sender.Send(new GetPostMediaQuery(postId, ClubOnly: false), ct);
             return media is null
                 ? Results.NotFound(ApiResponse.Fail("no_media", "Bu paylaşımda medya yok."))
                 : Results.Ok(ApiResponse<PostMediaDto>.Ok(media));
@@ -1053,7 +1065,7 @@ public static class CompanyPanelEndpoints
             if (await ResolveOwnCompanyAsync(user, resolver, ct) is null)
                 return CompanyNotFound();
 
-            var comments = await sender.Send(new GetCommentsQuery(postId), ct);
+            var comments = await sender.Send(new GetCommentsQuery(postId, ClubOnly: false), ct);
             return Results.Ok(ApiResponse<List<CommentDto>>.Ok(comments));
         }).WithName("CompanyPostComments");
 
@@ -1063,7 +1075,7 @@ public static class CompanyPanelEndpoints
             if (await ResolveOwnCompanyAsync(user, resolver, ct) is null)
                 return CompanyNotFound();
 
-            var participants = await sender.Send(new GetParticipantsQuery(postId), ct);
+            var participants = await sender.Send(new GetParticipantsQuery(postId, ClubOnly: false), ct);
             return Results.Ok(ApiResponse<List<ParticipantDto>>.Ok(participants));
         }).WithName("CompanyPostParticipants");
 

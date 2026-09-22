@@ -1,11 +1,19 @@
 namespace RowingClub.BuildingBlocks.Application.Abstractions;
 
-/// <summary>
-/// Firma kaydı sırasında firmanın kendi veritabanını oluşturur ve şemasını kurar.
-/// Uygulaması Scheduling.Infrastructure'dadır (tenant şemasını o modül bilir); Identity yalnızca
-/// bu soyutlamaya bağımlıdır.
-/// </summary>
 public interface ITenantDatabaseProvisioner
 {
     Task ProvisionAsync(string databaseName, CancellationToken cancellationToken);
+
+    Task DeprovisionAsync(string databaseName, CancellationToken cancellationToken);
+
+    Task<IReadOnlyList<string>> ListTenantDatabaseNamesAsync(CancellationToken cancellationToken);
+
+    Task<Dictionary<string, long>> GetDatabaseSizesAsync(CancellationToken cancellationToken);
+
+    Task<TenantDatabaseUsageStats> GetUsageStatsAsync(string databaseName, CancellationToken cancellationToken);
+}
+
+public sealed record TenantDatabaseUsageStats(int? MemberCount, int? AppointmentCount, bool Available)
+{
+    public static TenantDatabaseUsageStats Unavailable { get; } = new(null, null, false);
 }

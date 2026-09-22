@@ -23,4 +23,6 @@ public sealed class CompanySubscriptionRepository(RowingClubDbContext context) :
     public void Add(CompanySubscription subscription) => context.Set<CompanySubscription>().Add(subscription);
 
     public void Update(CompanySubscription subscription) => context.Set<CompanySubscription>().Update(subscription);
+
+    public void Remove(CompanySubscription subscription) => context.Set<CompanySubscription>().Remove(subscription);
 }

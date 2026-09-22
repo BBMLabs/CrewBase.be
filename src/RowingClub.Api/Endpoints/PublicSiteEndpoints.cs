@@ -4,6 +4,7 @@ using RowingClub.Api.Tenancy;
 using RowingClub.Identity.Application.Companies.SiteContent;
 using RowingClub.Scheduling.Application.Availability;
 using RowingClub.Scheduling.Application.Booking;
+using RowingClub.Scheduling.Application.Community;
 using RowingClub.Scheduling.Application.Members;
 using RowingClub.Scheduling.Application.Messages;
 using RowingClub.Scheduling.Application.PublicOptions;
@@ -12,7 +13,8 @@ namespace RowingClub.Api.Endpoints;
 
 public sealed record PublicBookingRequest(
     string FullName, string Phone, string? Email, string Date, string Time,
-    string? BoatClass, string? Note, int? ReminderMinutes, List<string>? AcceptedConsents);
+    string? BoatClass, bool ExperienceAcknowledged, string? TeammateName, string? Note, int? ReminderMinutes,
+    List<string>? AcceptedConsents);
 
 public sealed record PublicSiteMessageRequest(string FullName, string Email, string Body);
 
@@ -82,7 +84,7 @@ public static class PublicSiteEndpoints
             return Results.Ok(ApiResponse<List<PublicBranchSummaryDto>>.Ok(branches));
         }).WithName("PublicBranchList");
 
-        // Şubenin kendi tekil sitesi (/sube/{code}): şube adı/adres/telefon burada, randevu
+        // Şubenin kendi tekil sitesi (/branch/{code}): şube adı/adres/telefon burada, randevu
         // akışının geri kalanı (options/availability/appointments) firma genelinde kalır.
         group.MapGet("/branches/{code}", async (
             string subdomain, string code, TenantResolver resolver, ISender sender, CancellationToken cancellationToken) =>
@@ -163,13 +165,59 @@ public static class PublicSiteEndpoints
 
             var response = await sender.Send(new BookAppointmentCommand(
                 request.FullName, request.Phone, request.Email, date, time,
-                request.BoatClass ?? "1x", request.Note, request.ReminderMinutes,
-                UsePackage: false, request.AcceptedConsents ?? [], clientIp), cancellationToken);
+                request.BoatClass ?? "1x", request.ExperienceAcknowledged, request.TeammateName, request.Note,
+                request.ReminderMinutes, UsePackage: false, request.AcceptedConsents ?? [], clientIp), cancellationToken);
 
             return Results.Created(
                 $"/api/v1/public/{subdomain}/appointments/{response.AppointmentId}",
                 ApiResponse<BookAppointmentResponse>.Ok(response, "Randevunuz alındı."));
         }).WithName("PublicBookAppointment");
+
+        group.MapGet("/feed", async (
+            string subdomain, TenantResolver resolver, ISender sender, CancellationToken cancellationToken) =>
+        {
+            var company = await resolver.ResolveBySubdomainAsync(subdomain, cancellationToken);
+            if (company is null)
+                return Results.NotFound(ApiResponse.Fail("company_not_found", "Firma bulunamadı."));
+
+            var posts = await sender.Send(new GetFeedQuery(null, 50, ClubOnly: true), cancellationToken);
+            return Results.Ok(ApiResponse<List<PostDto>>.Ok(posts));
+        }).WithName("PublicFeed");
+
+        group.MapGet("/feed/{postId:guid}/media", async (
+            string subdomain, Guid postId, TenantResolver resolver, ISender sender, CancellationToken cancellationToken) =>
+        {
+            var company = await resolver.ResolveBySubdomainAsync(subdomain, cancellationToken);
+            if (company is null)
+                return Results.NotFound(ApiResponse.Fail("company_not_found", "Firma bulunamadı."));
+
+            var media = await sender.Send(new GetPostMediaQuery(postId, ClubOnly: true), cancellationToken);
+            return media is null
+                ? Results.NotFound(ApiResponse.Fail("no_media", "Bu paylaşımda medya yok."))
+                : Results.Ok(ApiResponse<PostMediaDto>.Ok(media));
+        }).WithName("PublicFeedPostMedia");
+
+        group.MapGet("/feed/{postId:guid}/comments", async (
+            string subdomain, Guid postId, TenantResolver resolver, ISender sender, CancellationToken cancellationToken) =>
+        {
+            var company = await resolver.ResolveBySubdomainAsync(subdomain, cancellationToken);
+            if (company is null)
+                return Results.NotFound(ApiResponse.Fail("company_not_found", "Firma bulunamadı."));
+
+            var comments = await sender.Send(new GetCommentsQuery(postId, ClubOnly: true), cancellationToken);
+            return Results.Ok(ApiResponse<List<CommentDto>>.Ok(comments));
+        }).WithName("PublicFeedPostComments");
+
+        group.MapGet("/feed/{postId:guid}/participants", async (
+            string subdomain, Guid postId, TenantResolver resolver, ISender sender, CancellationToken cancellationToken) =>
+        {
+            var company = await resolver.ResolveBySubdomainAsync(subdomain, cancellationToken);
+            if (company is null)
+                return Results.NotFound(ApiResponse.Fail("company_not_found", "Firma bulunamadı."));
+
+            var participants = await sender.Send(new GetParticipantsQuery(postId, ClubOnly: true), cancellationToken);
+            return Results.Ok(ApiResponse<List<ParticipantDto>>.Ok(participants));
+        }).WithName("PublicFeedPostParticipants");
 
         group.MapPost("/messages", async (
             string subdomain, [FromBody] PublicSiteMessageRequest request, HttpContext httpContext,

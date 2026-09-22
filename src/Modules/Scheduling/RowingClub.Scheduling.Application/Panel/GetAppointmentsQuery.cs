@@ -17,6 +17,7 @@ public sealed record AppointmentDto(
     DateOnly Date,
     string StartTime,
     string BoatClass,
+    string? TeammateName,
     string? Note,
     string Status,
     int? ReminderMinutes,
@@ -37,7 +38,7 @@ public sealed class GetAppointmentsQueryHandler(IAppointmentRepository appointme
             .Select(a => new AppointmentDto(
                 a.Id, a.SessionId, a.Customer.FullName, a.Customer.Phone, a.Customer.Email,
                 a.Customer.Level, a.Date, a.StartTime.ToString("HH:mm"),
-                a.Session.BoatClass.Label(), a.Note, a.Status.ToString(),
+                a.Session.BoatClass.Label(), a.TeammateName, a.Note, a.Status.ToString(),
                 a.ReminderMinutes, a.CreatedAtUtc))
             .ToList();
     }

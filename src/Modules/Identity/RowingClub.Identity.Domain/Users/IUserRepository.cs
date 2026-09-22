@@ -13,4 +13,6 @@ public interface IUserRepository
     Task<List<User>> GetByCompanyIdAsync(Guid companyId, CancellationToken cancellationToken);
 
     void Add(User user);
+
+    void Remove(User user);
 }

@@ -6,8 +6,9 @@ namespace RowingClub.Scheduling.Infrastructure.Repositories;
 
 public sealed class CommunityRepository(TenantDbContext context) : ICommunityRepository
 {
-    public Task<List<Post>> GetFeedAsync(int take, CancellationToken cancellationToken) =>
-        context.Posts.OrderByDescending(p => p.CreatedAtUtc).Take(take).ToListAsync(cancellationToken);
+    public Task<List<Post>> GetFeedAsync(int take, bool clubOnly, CancellationToken cancellationToken) =>
+        (clubOnly ? context.Posts.Where(p => p.AuthorCustomerId == null) : context.Posts)
+            .OrderByDescending(p => p.CreatedAtUtc).Take(take).ToListAsync(cancellationToken);
 
     public Task<Post?> GetPostAsync(Guid postId, CancellationToken cancellationToken) =>
         context.Posts.FirstOrDefaultAsync(p => p.Id == postId, cancellationToken);

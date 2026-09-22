@@ -32,9 +32,9 @@ public sealed record CommentDto(Guid Id, string AuthorName, string Body, DateTim
 public sealed record ParticipantDto(string FullName, int Level, DateTimeOffset JoinedAtUtc);
 
 /// <summary>Kulüp akışı. ViewerCustomerId=null → firma paneli görünümü.</summary>
-public sealed record GetFeedQuery(Guid? ViewerCustomerId, int Take) : IRequest<List<PostDto>>;
+public sealed record GetFeedQuery(Guid? ViewerCustomerId, int Take, bool ClubOnly) : IRequest<List<PostDto>>;
 
-public sealed record GetPostMediaQuery(Guid PostId) : IRequest<PostMediaDto?>;
+public sealed record GetPostMediaQuery(Guid PostId, bool ClubOnly) : IRequest<PostMediaDto?>;
 
 public sealed record PostMediaDto(string Base64, string ContentType);
 
@@ -50,13 +50,13 @@ public sealed record ToggleLikeCommand(Guid PostId, Guid CustomerId) : ICommand<
 
 public sealed record ToggleResult(bool Active, int Count);
 
-public sealed record GetCommentsQuery(Guid PostId) : IRequest<List<CommentDto>>;
+public sealed record GetCommentsQuery(Guid PostId, bool ClubOnly) : IRequest<List<CommentDto>>;
 
 public sealed record AddCommentCommand(Guid PostId, Guid CustomerId, string Body) : ICommand<CommentDto>;
 
 public sealed record ToggleParticipationCommand(Guid PostId, Guid CustomerId) : ICommand<ToggleResult>;
 
-public sealed record GetParticipantsQuery(Guid PostId) : IRequest<List<ParticipantDto>>;
+public sealed record GetParticipantsQuery(Guid PostId, bool ClubOnly) : IRequest<List<ParticipantDto>>;
 
 public sealed record ToggleFollowCommand(Guid FollowerId, Guid TargetCustomerId) : ICommand<ToggleResult>;
 
@@ -67,7 +67,7 @@ public sealed class GetFeedQueryHandler(
 {
     public async Task<List<PostDto>> Handle(GetFeedQuery request, CancellationToken cancellationToken)
     {
-        var posts = await repository.GetFeedAsync(Math.Clamp(request.Take, 1, 100), cancellationToken);
+        var posts = await repository.GetFeedAsync(Math.Clamp(request.Take, 1, 100), request.ClubOnly, cancellationToken);
         var postIds = posts.Select(p => p.Id).ToList();
 
         var likeCounts = await repository.GetLikeCountsAsync(postIds, cancellationToken);
@@ -110,11 +110,24 @@ public sealed class GetFeedQueryHandler(
     }
 }
 
+internal static class CommunityGuards
+{
+    public static async Task<bool> IsClubPostAsync(
+        ICommunityRepository repository, Guid postId, CancellationToken cancellationToken)
+    {
+        var post = await repository.GetPostAsync(postId, cancellationToken);
+        return post is not null && post.AuthorCustomerId is null;
+    }
+}
+
 public sealed class GetPostMediaQueryHandler(ICommunityRepository repository)
     : IRequestHandler<GetPostMediaQuery, PostMediaDto?>
 {
     public async Task<PostMediaDto?> Handle(GetPostMediaQuery request, CancellationToken cancellationToken)
     {
+        if (request.ClubOnly && !await CommunityGuards.IsClubPostAsync(repository, request.PostId, cancellationToken))
+            return null;
+
         var media = await repository.GetMediaAsync(request.PostId, cancellationToken);
         return media is null ? null : new PostMediaDto(media.Base64, media.ContentType);
     }
@@ -198,6 +211,9 @@ public sealed class GetCommentsQueryHandler(
 {
     public async Task<List<CommentDto>> Handle(GetCommentsQuery request, CancellationToken cancellationToken)
     {
+        if (request.ClubOnly && !await CommunityGuards.IsClubPostAsync(repository, request.PostId, cancellationToken))
+            return [];
+
         var comments = await repository.GetCommentsAsync(request.PostId, cancellationToken);
         var commenterIds = comments.Select(c => c.CustomerId).Distinct().ToList();
         var names = (await customerRepository.GetByIdsAsync(commenterIds, cancellationToken))
@@ -261,6 +277,9 @@ public sealed class GetParticipantsQueryHandler(
 {
     public async Task<List<ParticipantDto>> Handle(GetParticipantsQuery request, CancellationToken cancellationToken)
     {
+        if (request.ClubOnly && !await CommunityGuards.IsClubPostAsync(repository, request.PostId, cancellationToken))
+            return [];
+
         var participants = await repository.GetParticipantsAsync(request.PostId, cancellationToken);
         var participantIds = participants.Select(p => p.CustomerId).Distinct().ToList();
         var customers = (await customerRepository.GetByIdsAsync(participantIds, cancellationToken))
