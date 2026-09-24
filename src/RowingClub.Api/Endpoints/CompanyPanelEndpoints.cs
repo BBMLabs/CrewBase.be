@@ -418,8 +418,9 @@ public static class CompanyPanelEndpoints
             if (await ResolveOwnCompanyAsync(user, resolver, ct) is null)
                 return CompanyNotFound();
 
-            var sessions = await sender.Send(new GetSessionsQuery(DateOnly.FromDateTime(DateTime.UtcNow)), ct);
-            var session = sessions.FirstOrDefault(s => s.Id == sessionId);
+            // Seans kimliğiyle bulunur; önceden yalnızca bugünün seansları aranıyordu ve başka günlerin
+            // seansları için her zaman session_not_found dönüyordu.
+            var session = await sender.Send(new GetSessionByIdQuery(sessionId), ct);
             if (session is null)
                 return Results.NotFound(ApiResponse.Fail("session_not_found", "Seans bulunamadı."));
 
