@@ -87,6 +87,10 @@ public sealed class TenantDbContext(
 
     public DbSet<Follow> Follows => Set<Follow>();
 
+    public DbSet<PollOption> PollOptions => Set<PollOption>();
+
+    public DbSet<PollVote> PollVotes => Set<PollVote>();
+
     public DbSet<SiteMessage> SiteMessages => Set<SiteMessage>();
 
     public static string NormalizePhone(string phone) =>
@@ -139,6 +143,7 @@ public sealed class TenantDbContext(
             builder.HasKey(m => m.Id);
             builder.Property(m => m.FullName).HasConversion(encrypted).IsRequired();
             builder.Property(m => m.Email).HasConversion(encrypted).IsRequired();
+            builder.Property(m => m.Phone).HasConversion(encrypted!);
             builder.Property(m => m.Body).HasConversion(encrypted).IsRequired();
             builder.Property(m => m.IpAddress).HasConversion(encrypted!);
             builder.Property(m => m.ReplyText).HasConversion(encrypted!);
@@ -252,6 +257,25 @@ public sealed class TenantDbContext(
             builder.HasKey(p => new { p.PostId, p.CustomerId });
             builder.HasOne<Post>().WithMany().HasForeignKey(p => p.PostId).OnDelete(DeleteBehavior.Cascade);
             builder.HasOne<Customer>().WithMany().HasForeignKey(p => p.CustomerId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<PollOption>(builder =>
+        {
+            builder.ToTable("poll_options");
+            builder.HasKey(o => o.Id);
+            builder.Property(o => o.Text).HasConversion(encrypted).IsRequired();
+            builder.HasIndex(o => new { o.PostId, o.Order });
+            builder.HasOne<Post>().WithMany().HasForeignKey(o => o.PostId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<PollVote>(builder =>
+        {
+            builder.ToTable("poll_votes");
+            builder.HasKey(v => new { v.PostId, v.CustomerId });
+            builder.HasIndex(v => v.OptionId);
+            builder.HasOne<Post>().WithMany().HasForeignKey(v => v.PostId).OnDelete(DeleteBehavior.Cascade);
+            builder.HasOne<PollOption>().WithMany().HasForeignKey(v => v.OptionId).OnDelete(DeleteBehavior.Cascade);
+            builder.HasOne<Customer>().WithMany().HasForeignKey(v => v.CustomerId).OnDelete(DeleteBehavior.Cascade);
         });
 
         modelBuilder.Entity<Follow>(builder =>
@@ -468,6 +492,10 @@ public sealed class TenantDbContext(
             builder.Property(a => a.Note).HasConversion(encrypted!);
             builder.Property(a => a.TeammateName).HasConversion(encrypted!);
             builder.Property(a => a.Status).HasConversion<string>().HasMaxLength(20);
+            builder.Property(a => a.RsvpChoice).HasConversion<string>().HasMaxLength(20);
+            builder.Property(a => a.RsvpTokenHash).HasMaxLength(128);
+            builder.HasIndex(a => a.RsvpTokenHash).IsUnique();
+            builder.HasIndex(a => a.RsvpDeadlineUtc).HasFilter("\"RsvpResolvedAtUtc\" IS NULL");
 
             builder.HasOne(a => a.Session)
                 .WithMany(s => s.Appointments)

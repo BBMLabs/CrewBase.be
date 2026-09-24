@@ -19,7 +19,9 @@ public sealed record BookAppointmentCommand(
     int? ReminderMinutes,
     bool UsePackage,
     List<string> AcceptedConsents,
-    string? IpAddress) : ICommand<BookAppointmentResponse>;
+    string? IpAddress,
+    string? CompanyName = null,
+    string? Subdomain = null) : ICommand<BookAppointmentResponse>;
 
 public sealed record BookAppointmentResponse(
     Guid AppointmentId,
@@ -31,4 +33,5 @@ public sealed record BookAppointmentResponse(
     string? BoatName,
     string? InstructorName,
     int? ReminderMinutes,
-    string Status);
+    string Status,
+    DateTimeOffset? RsvpDeadlineUtc = null);

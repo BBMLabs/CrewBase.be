@@ -10,6 +10,8 @@ public sealed class SiteMessage
 
     public string Email { get; private set; } = null!;
 
+    public string? Phone { get; private set; }
+
     public string Body { get; private set; } = null!;
 
     public DateTimeOffset CreatedAtUtc { get; private set; }
@@ -24,11 +26,12 @@ public sealed class SiteMessage
     {
     }
 
-    public static SiteMessage Create(string fullName, string email, string body, string? ipAddress) => new()
+    public static SiteMessage Create(string fullName, string email, string? phone, string body, string? ipAddress) => new()
     {
         Id = Guid.NewGuid(),
         FullName = fullName.Trim(),
         Email = email.Trim().ToLowerInvariant(),
+        Phone = string.IsNullOrWhiteSpace(phone) ? null : phone.Trim(),
         Body = body.Trim(),
         CreatedAtUtc = DateTimeOffset.UtcNow,
         IpAddress = string.IsNullOrWhiteSpace(ipAddress) ? null : ipAddress.Trim(),

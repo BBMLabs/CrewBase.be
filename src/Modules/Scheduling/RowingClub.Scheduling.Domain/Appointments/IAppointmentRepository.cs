@@ -26,5 +26,9 @@ public interface IAppointmentRepository
     Task<HashSet<Guid>> GetPackageIdsWithActiveFutureAppointmentsAsync(
         IReadOnlyCollection<Guid> customerPackageIds, DateOnly today, TimeOnly nowTime, CancellationToken cancellationToken);
 
+    Task<Appointment?> GetByRsvpTokenHashAsync(string tokenHash, CancellationToken cancellationToken);
+
+    Task<List<Appointment>> GetDueRsvpsAsync(DateTimeOffset nowUtc, int limit, CancellationToken cancellationToken);
+
     void Add(Appointment appointment);
 }

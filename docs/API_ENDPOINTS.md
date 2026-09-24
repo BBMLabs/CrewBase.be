@@ -245,8 +245,13 @@ gösterir. Eski firma-geneli site kaldırılmıştır.
 | GET | `/api/v1/public/{subdomain}/branches/{code}` | Şubenin kendi sitesi için bilgiler (`code, name, address, phone, description`); şube pasif/yok ise `404 branch_not_found` |
 | GET | `/api/v1/public/{subdomain}/options` | Dinamik randevu kuralları: çalışma saatleri, tekne sınıfları+kapasiteleri, hatırlatma seçenekleri, aktif paketler, derece etiketleri |
 | GET | `/api/v1/public/{subdomain}/consents` | Beyan kataloğu (bkz. §7.4) — üye kimliği olmadan, yalnızca metinler |
-| GET | `/api/v1/public/{subdomain}/availability?date=&boatClass=&phone=` | Belirli gün+sınıf için slot listesi (`time, available, seatsLeft`) |
+| GET | `/api/v1/public/{subdomain}/availability?date=&boatClass=&phone=` | Belirli gün+sınıf için slot listesi (`time, available, seatsLeft`). **Günlük tekne modeli**: bir tekne bir günde yalnızca TEK seansa (tek başlangıç saatine) ayrılır; o gün o sınıfta bir seans açıldığı anda (tekne atanmış olsun olmasın) bir tekne tüm gün için kullanılmış sayılır. `boştekne` = max(0, sınıftaki aktif tekne sayısı − o gün o sınıftaki seans sayısı); `seatsLeft(saat)` = o saatte o sınıftaki seansların boş koltukları toplamı + `boştekne` × sınıf kapasitesi. Örnek: tek 4x tekne, 13:00'te 1 kişilik 4x seans → 13:00 = 3, diğer saatler = 0; iki 4x tekne → 13:00 = 3 + 4 = 7, diğer saatler = 4. Sınıfta tekne yoksa kontenjan 0'dır |
 | POST | `/api/v1/public/{subdomain}/appointments` | Kayıtsız (misafir) randevu oluşturma |
+| GET | `/api/v1/public/{subdomain}/rsvp/{token}` | Katılım onayı durumu (bkz. §4.2); bilinmeyen/geçersiz token → `404 rsvp_not_found` |
+| POST | `/api/v1/public/{subdomain}/rsvp/{token}` | `{ "choice": "attending" \| "notAttending" }` — katılım yanıtını kaydeder/değiştirir (bkz. §4.2); süre dolmuş/çözülmüş → `400 rsvp_closed`, geçersiz seçim → `400 rsvp_invalid_choice`, token yok → `404 rsvp_not_found` |
+| GET | `/api/v1/public/{subdomain}/feed` | Yalnızca kulüp paylaşımları (son 50); anketlerde `poll` sonuçları salt okunur döner (`votedByMe: false`, `myOptionId: null`) |
+| GET | `/api/v1/public/{subdomain}/feed/{id}/media` \| `/comments` \| `/participants` | Kulüp paylaşımının medyası/yorumları/katılımcıları (salt okunur) |
+| POST | `/api/v1/public/{subdomain}/messages` | İletişim formu: `{ fullName, email, phone, body }` — `phone` zorunludur (10–15 rakam, `400` doğrulama hatası aksi halde); mesaj panelde **Mesajlar** ekranına düşer, ad/e-posta/telefon/metin şifreli saklanır |
 
 Şube kodu 6 rakam + 2 harf'tir (`BranchCodeGenerator`, I/O harfleri hariç), şube oluşturulduğu anda
 üretilir ve `Branch.Code` üzerinde tekildir — panelde Şubeler tablosunun "Kod" sütununda ve site
@@ -297,7 +302,7 @@ bağlantısında (`lib/tenant.ts#siteUrlForBranch`) kullanılır.
 6. Paket düşümü **kapatılmıştır** (`UsePackage: false` sabit) — yalnızca telefon numarasıyla
    başkasının paketi eritilemesin diye. Paketten düşerek randevu almak için üye girişi gerekir.
 7. Aynı saatte aynı kişi için ikinci randevu: `409 already_booked`.
-8. Slot/kısıt ihlalleri: `closed_date`, `too_soon`, `too_far`, `invalid_slot`, `slot_full`,
+8. Slot/kısıt ihlalleri: `closed_date`, `too_soon` (ders başlangıcına en az **24 saat** kala alınabilir; firmanın `minNoticeHours` ayarı 24'ten büyükse o geçerlidir — `/options` bu etkin değeri döner), `too_far`, `invalid_slot`, `slot_full`,
    `boat_class_unavailable`, `invalid_reminder`, `no_2x_partner_available`.
 
 **Başarılı yanıt `201 Created`:**
@@ -307,9 +312,51 @@ bağlantısında (`lib/tenant.ts#siteUrlForBranch`) kullanılır.
   "date": "2026-08-25", "startTime": "10:00:00",
   "boatClass": "4x", "level": 0,
   "boatName": "Fırtına", "instructorName": "Koç Ahmet",
-  "reminderMinutes": 60, "status": "Pending"
+  "reminderMinutes": 60, "status": "Pending",
+  "rsvpDeadlineUtc": "2026-08-20T13:40:00+00:00"
 }
 ```
+
+Tekne ataması **günlük tekne modeli**yle yapılır (bkz. availability satırı): önce o saat+sınıftaki,
+boş koltuğu olan mevcut seansa (dereceye en yakın olan) eklenir; yoksa yalnızca o gün o sınıfta
+hiçbir seansa ayrılmamış bir tekne varsa yeni seans açılır; aksi halde `409 slot_full`.
+Takım arkadaşı (2x) ve misafir 2x eşleştirme kuralları değişmeden önce uygulanır.
+
+### 4.2 Katılım onayı (RSVP)
+
+Misafir veya üye randevusu alındığında randevu `Pending` ("Beklemede") durumunda oluşturulur ve
+1 saatlik bir yanıt penceresi açılır (`rsvpDeadlineUtc` = alım anı + 1 saat, seçim `none`).
+Müşterinin e-postası varsa hemen bir e-posta gönderilir (kulüp adı, tarih, saat, tekne sınıfı ve
+`https://{subdomain}.faturebase.com/rsvp?token=<ham token>` bağlantısı). Token yalnızca e-postada
+gider; veritabanında yalnızca SHA-256 hash'i (`appointments.RsvpTokenHash`, tekil indeks) tutulur.
+E-posta gönderilemezse randevu yine alınır (hata loglanır).
+
+- Pencere açıkken müşteri `Katılıyorum`/`Katılamıyorum` arasında istediği kadar geçiş yapabilir;
+  bu anda randevu durumu değişmez (`Pending` kalır).
+- Süre dolunca `ReminderWorker` (dakikada bir, firma başına ayrı scope) `ProcessRsvpDeadlinesCommand`
+  ile randevuyu çözer (tur başına en fazla 200 kayıt, tekrar çalıştırmaya dayanıklı):
+  yanıt yok veya `attending` → `Confirmed`; `notAttending` → `Cancelled` (paketten düşülmüşse ders
+  iade edilir, `PACKAGE_REFUNDED` + `APPOINTMENT_CANCELLED` + `APPOINTMENT_CANCELLED_RSVP` üye
+  logları yazılır). Bu sistem iptali üyenin 24 saat iptal kuralına tabi değildir.
+- Personel süre dolmadan panelden durumu değiştirirse RSVP çözülmüş sayılır; personel kararı ezilmez
+  ve müşteri artık yanıt veremez (`rsvp_closed`).
+
+**`GET`/`POST /rsvp/{token}` yanıtı (`data`):**
+```json
+{
+  "date": "2026-08-25", "startTime": "10:00", "boatClass": "4x",
+  "clubName": "Kürek Kulübü", "firstName": "Ayşe",
+  "choice": "none", "deadlineUtc": "2026-08-20T13:40:00+00:00",
+  "open": true, "status": "Pending"
+}
+```
+`choice`: `none` \| `attending` \| `notAttending`; `open`: şu an yanıt verilebilir mi (süre dolmadı,
+randevu hâlâ `Pending`, RSVP çözülmedi); `status`: randevu durumu.
+
+Panel randevu listesi (`GET /company/appointments`), seans üyeleri (`GET /company/sessions` →
+`members[]`) ve üye randevuları (`GET /member/appointments`) her kayıtta `rsvpChoice`
+(`none`/`attending`/`notAttending`, bu özellikten önce alınmış randevularda `null`) ve
+`rsvpDeadlineUtc` alanlarını döner — örn. "Beklemede · Katılamıyor (13:40'ta iptal edilecek)".
 
 ---
 
@@ -387,7 +434,7 @@ Kod 10 dakika geçerlidir, en fazla 5 yanlış deneme hakkı vardır (`otp_expir
 |---|---|---|
 | GET | `/appointments` | Üyenin randevu geçmişi + yaklaşanlar; her kayıtta aynı seanstaki diğer üyeler **maskeli isimle** görünür (`"Veli D."`) |
 | POST | `/appointments` | Üye adına randevu; `usePackage: true` ile paketten düşülebilir |
-| POST | `/appointments/{id}/cancel` | Yalnızca kendi randevusunu iptal edebilir (`403 forbidden` aksi halde); paketten alınmışsa ders otomatik iade edilir |
+| POST | `/appointments/{id}/cancel` | Yalnızca kendi randevusunu iptal edebilir (`403 forbidden` aksi halde); ders başlangıcına **24 saatten az** kaldıysa `400 cancel_too_late` döner (panelden personel iptali bu kurala tabi değildir); paketten alınmışsa ders otomatik iade edilir |
 | GET | `/packages` | Üyeye tanımlı/satın aldığı ders paketleri, kalan ders sayıları, `expiresAtUtc`, `source` (`Assigned`/`Purchased`) |
 | GET | `/packages/catalog` | Şu anda satın alınabilir (aktif + kampanya penceresi içinde/sınırsız) paket kataloğu |
 | POST | `/packages/{packageId}/purchase` | Kendi kartıyla paket satın alma başlatır (iyzico checkout formu döner) |
@@ -464,6 +511,7 @@ query parametresinden de kabul eder.
 | POST | `/feed/{id}/comments` | `{ "body": "..." }` yorum ekler |
 | POST | `/feed/{id}/join` | Etkinliğe katılımı açar/kapatır |
 | GET | `/feed/{id}/participants` | Etkinliğe katılan üyeler (ad + derece) |
+| POST | `/feed/{id}/vote` | `{ "optionId": "guid" }` ankette oy verir/değiştirir; aynı seçeneğe tekrar oy vermek oyu geri alır. Güncel `poll` nesnesini döner |
 | POST | `/follow/{customerId}` | Bir üyeyi takip et/bırak |
 
 **POST /feed request:**
@@ -476,6 +524,29 @@ query parametresinden de kabul eder.
 ```
 Medya: görsel (JPG/PNG/GIF/WebP) ≤5MB veya video (MP4/WebM/QuickTime) ≤25MB (≈15-20 sn); tür/boyut
 sunucuda doğrulanır (`media_invalid_type`, `media_too_large`).
+
+Üye paylaşımı anket olamaz (anket alanlarını kabul etmez); anketi yalnızca kulüp oluşturur (§6.6).
+
+**Anket (`PostDto.isPoll` / `PostDto.poll`):** her paylaşım `isPoll: bool` ve `poll` (anket değilse
+`null`) alanlarını taşır. Anket sorusu paylaşımın `body`'sidir. Üye tek seçenek işaretleyebilir.
+```json
+"poll": {
+  "options": [
+    { "id": "guid", "text": "Cumartesi", "voteCount": 4, "votedByMe": true },
+    { "id": "guid", "text": "Pazar", "voteCount": 2, "votedByMe": false }
+  ],
+  "totalVotes": 6,
+  "closesOn": "2026-10-01",
+  "closed": false,
+  "myOptionId": "guid"
+}
+```
+Seçenekler oluşturulma sırasıyla döner. `closed` = `closesOn` dolu ve kulübün saat dilimine göre
+bugün > `closesOn` (bitiş günü dahil oy verilebilir). `votedByMe`/`myOptionId` yalnızca üye
+görünümünde dolar; firma paneli ve public site görünümünde `false`/`null`.
+
+`POST /feed/{id}/vote` hataları (409): `not_a_poll` (paylaşım anket değil), `poll_closed` (anket
+kapandı), `poll_option_invalid` (seçenek bu ankete ait değil); paylaşım yoksa 404.
 
 ---
 
@@ -532,7 +603,7 @@ Her şubenin kendi tekil kodu (`Code`, 6 rakam + 2 harf) ve kendi public sitesi 
 | Metot | Route | Açıklama |
 |---|---|---|
 | GET | `/appointments?date=` | Randevu listesi (tarih verilmezse tümü) |
-| POST | `/appointments/{id}/status` | `{ "status": "Pending"\|"Confirmed"\|"Cancelled"\|"Completed" }` — iptalde paket otomatik iade edilir, iptalden geri açmada tekrar düşülür |
+| POST | `/appointments/{id}/status` | `{ "status": "Pending"\|"Confirmed"\|"Cancelled"\|"Completed", "refundPackage"?: bool }` — paketle alınmış randevu iptal edilirken `refundPackage` (varsayılan `true`) dersin pakete iade edilip edilmeyeceğini belirler; `false` ise ders düşülmüş kalır ve randevunun paket bağı kaldırılır (geri açmada tekrar düşülmez). İade edilmiş bir iptalden geri açmada ders tekrar düşülür. Listelerde `usedPackage` alanı randevunun paketten düşülüp düşülmediğini gösterir |
 | POST | `/appointments/{id}/move` | `{ sessionId }` — randevuyu aynı tekne sınıfındaki başka bir seansa taşır; sınıf uyuşmazsa `boat_class_mismatch`, hedef doluysa `session_full`, iptal edilmişse `appointment_cancelled` |
 | GET | `/sessions?date=` | O günün seansları: tekne/eğitmen ataması, kapasite, üye listesi |
 | POST | `/sessions/{id}/assign` | `{ boatId?, instructorId? }` — otomatik atamayı elle ezer; çakışma varsa `boat_taken`/`instructor_busy` |
@@ -600,9 +671,28 @@ GET aynı şekli döner.
 | Metot | Route | Açıklama |
 |---|---|---|
 | GET | `/feed` | Tüm akışı (üye görünümüyle aynı veri) görür |
-| POST | `/feed` | **Kulüp adına** paylaşım yapar (`authorCustomerId: null`) |
-| POST | `/feed/{id}/delete` | **Herhangi bir** paylaşımı kaldırabilir (moderasyon yetkisi) |
+| POST | `/feed` | **Kulüp adına** paylaşım yapar (`authorCustomerId: null`); `pollOptions` doluysa paylaşım **anket** olur |
+| POST | `/feed/{id}/delete` | **Herhangi bir** paylaşımı kaldırabilir (moderasyon yetkisi); anket seçenekleri ve oylar da silinir |
 | GET | `/feed/{id}/media` \| `/comments` \| `/participants` | Salt okunur görüntüleme |
+| GET | `/feed/{id}/likes` | Paylaşımı beğenen üyeler, en yeniden eskiye: `[{ fullName, level, likedAtUtc }]` |
+| GET | `/feed/{id}/poll-votes` | Ankete oy veren üyeler, en yeniden eskiye: `[{ optionId, fullName, level, votedAtUtc }]` |
+| POST | `/feed/{id}/poll/close` | Anketi erkenden kapatır (`pollClosesOn` = dün); anket değilse 409 `not_a_poll` |
+
+**POST /feed request (kulüp):** üye isteğindeki alanlara ek olarak:
+```json
+{
+  "body": "Cumartesi antrenmanı hangi saatte olsun?",
+  "mediaBase64": null, "mediaContentType": null,
+  "isEvent": false, "eventTitle": null, "eventDate": null,
+  "pollOptions": ["07:00", "09:00", "11:00"],
+  "pollClosesOn": "2026-10-01"
+}
+```
+`pollOptions` en az 1 eleman içeriyorsa paylaşım ankettir; `pollClosesOn` (`yyyy-MM-dd`, opsiyonel)
+verilmezse anket süresiz açık kalır. Kurallar (409): 2-6 farklı, boş olmayan, en fazla 80 karakterlik
+seçenek (`poll_options_invalid`); aynı paylaşım hem etkinlik hem anket olamaz (`poll_event_conflict`);
+soru (`body`) zorunlu (`poll_question_required`); anketi yalnızca kulüp oluşturur (`poll_club_only`);
+hatalı tarih `invalid_date`. Seçenek metinleri veritabanında şifreli saklanır.
 
 ### 6.7 Panel kullanıcıları (firma içi yetkilendirme)
 
@@ -632,8 +722,9 @@ eşleşmesine göre yapılır.
 ### 7.2 Tekne kapasiteleri
 
 `1x` = 1 kişi, `2x` = 2 kişi, `4x` = 4 kişi (`BoatClassExtensions.Capacity()`). Kapasite dolan bir
-seansa yeni üye eklenemez; aynı slot+sınıf+derece için boş koltuklu seans varsa üye ona
-gruplanır, yoksa boş tekne + müsait eğitmenle yeni seans açılır.
+seansa yeni üye eklenemez; aynı slot+sınıf için boş koltuklu seans varsa üye (dereceye en yakın)
+ona gruplanır, yoksa o gün hiçbir seansa ayrılmamış bir tekne + müsait eğitmenle yeni seans açılır
+(günlük tekne modeli: bir tekne günde tek seansa ayrılır).
 
 ### 7.3 Hatırlatmalar
 

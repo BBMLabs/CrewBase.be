@@ -76,6 +76,8 @@ public sealed class AuthEndpointSecurityTests(RowingClubWebApplicationFactory fa
         { "/api/v1/company/feed/e9a7e1b1-0000-0000-0000-000000000001/media", HttpMethod.Get },
         { "/api/v1/company/feed/e9a7e1b1-0000-0000-0000-000000000001/comments", HttpMethod.Get },
         { "/api/v1/company/feed/e9a7e1b1-0000-0000-0000-000000000001/participants", HttpMethod.Get },
+        { "/api/v1/company/feed/e9a7e1b1-0000-0000-0000-000000000001/poll-votes", HttpMethod.Get },
+        { "/api/v1/company/feed/e9a7e1b1-0000-0000-0000-000000000001/poll/close", HttpMethod.Post },
         { "/api/v1/company/users", HttpMethod.Get },
         { "/api/v1/company/users", HttpMethod.Post },
         { "/api/v1/company/users/e9a7e1b1-0000-0000-0000-000000000001/role", HttpMethod.Post },
@@ -117,6 +119,7 @@ public sealed class AuthEndpointSecurityTests(RowingClubWebApplicationFactory fa
         { "/api/v1/member/feed/e9a7e1b1-0000-0000-0000-000000000001/comments", HttpMethod.Post },
         { "/api/v1/member/feed/e9a7e1b1-0000-0000-0000-000000000001/join", HttpMethod.Post },
         { "/api/v1/member/feed/e9a7e1b1-0000-0000-0000-000000000001/participants", HttpMethod.Get },
+        { "/api/v1/member/feed/e9a7e1b1-0000-0000-0000-000000000001/vote", HttpMethod.Post },
         { "/api/v1/member/follow/e9a7e1b1-0000-0000-0000-000000000001", HttpMethod.Post },
         { "/api/v1/platform/companies/pending", HttpMethod.Get },
         { "/api/v1/platform/companies/e9a7e1b1-0000-0000-0000-000000000001/approve", HttpMethod.Post },
@@ -155,6 +158,8 @@ public sealed class AuthEndpointSecurityTests(RowingClubWebApplicationFactory fa
         { "/api/v1/auth/reset-password", new { email = "", token = "", newPassword = "" } },
         { "/api/v1/auth/verify-email", new { email = "", token = "" } },
         { "/api/v1/auth/send-verification-email", new { email = "" } },
+        { "/api/v1/public/demo/rsvp/some-token", new { choice = "maybe" } },
+        { "/api/v1/public/demo/rsvp/some-token", new { } },
     };
 
     [Theory]

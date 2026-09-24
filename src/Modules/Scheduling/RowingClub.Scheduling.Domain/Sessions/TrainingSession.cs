@@ -42,6 +42,12 @@ public sealed class TrainingSession
 
     public bool HasFreeSeat => ActiveMemberCount < Capacity;
 
+    public bool RequiresInstructor => BoatClass.RequiresInstructor();
+
+    public Instructor? ActiveInstructor => RequiresInstructor ? Instructor : null;
+
+    public Guid? ActiveInstructorId => RequiresInstructor ? InstructorId : null;
+
     private TrainingSession()
     {
     }
@@ -71,6 +77,10 @@ public sealed class TrainingSession
 
     public void AssignInstructor(Instructor instructor)
     {
+        if (!RequiresInstructor)
+            throw new DomainException(
+                "instructor_not_applicable", "1x ve 2x teknelerde eğitmen bulunmaz; eğitmen yalnızca 4x teknelere atanır.");
+
         InstructorId = instructor.Id;
         Instructor = instructor;
     }

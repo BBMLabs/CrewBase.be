@@ -181,21 +181,6 @@ public sealed class SettingsRepository(TenantDbContext context) : ISettingsRepos
 
 public sealed class TrainingSessionRepository(TenantDbContext context) : ITrainingSessionRepository
 {
-    public async Task<TrainingSession?> FindJoinableAsync(
-        DateOnly date, TimeOnly startTime, BoatClass boatClass, int level, CancellationToken cancellationToken)
-    {
-        // Kapasite (iptaller hariç aktif üye sayısı) hesabı domain'de; adaylar çekilip bellekte süzülür.
-        var candidates = await context.TrainingSessions
-            .Include(s => s.Appointments)
-            .Include(s => s.Boat)
-            .Include(s => s.Instructor)
-            .Where(s => s.Date == date && s.StartTime == startTime &&
-                        s.BoatClass == boatClass && s.Level == level)
-            .ToListAsync(cancellationToken);
-
-        return candidates.FirstOrDefault(s => s.HasFreeSeat);
-    }
-
     public async Task<TrainingSession?> FindJoinableLowestLevelAsync(
         DateOnly date, TimeOnly startTime, BoatClass boatClass, CancellationToken cancellationToken)
     {

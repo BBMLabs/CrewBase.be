@@ -22,7 +22,11 @@ using RowingClub.Scheduling.Application.Panel;
 
 namespace RowingClub.Api.Endpoints;
 
-public sealed record SetAppointmentStatusRequest(string Status);
+public sealed record CompanyPostCreateRequest(
+    string Body, string? MediaBase64, string? MediaContentType,
+    bool IsEvent, string? EventTitle, string? EventDate,
+    List<string>? PollOptions, string? PollClosesOn);
+public sealed record SetAppointmentStatusRequest(string Status, bool? RefundPackage);
 public sealed record MoveAppointmentRequest(Guid SessionId);
 public sealed record SetCustomerLevelRequest(int Level);
 public sealed record InstructorRequest(string FullName, string? Phone, string? Email, bool? IsActive, Guid? BranchId);
@@ -380,7 +384,8 @@ public static class CompanyPanelEndpoints
             if (await ResolveOwnCompanyAsync(user, resolver, ct) is null)
                 return CompanyNotFound();
 
-            await sender.Send(new SetAppointmentStatusCommand(appointmentId, request.Status), ct);
+            await sender.Send(
+                new SetAppointmentStatusCommand(appointmentId, request.Status, request.RefundPackage ?? true), ct);
             return Results.Ok(ApiResponse.Ok("Randevu durumu güncellendi."));
         }).WithName("CompanySetAppointmentStatus");
 
@@ -1064,7 +1069,7 @@ public static class CompanyPanelEndpoints
         }).WithName("CompanyFeed");
 
         group.MapPost("/feed", async (
-            [FromBody] PostCreateRequest request, ICurrentUser user, TenantResolver resolver,
+            [FromBody] CompanyPostCreateRequest request, ICurrentUser user, TenantResolver resolver,
             ISender sender, CancellationToken ct) =>
         {
             if (await ResolveOwnCompanyAsync(user, resolver, ct) is null)
@@ -1072,7 +1077,8 @@ public static class CompanyPanelEndpoints
 
             var postId = await sender.Send(new CreatePostCommand(
                 null, request.Body, request.MediaBase64, request.MediaContentType,
-                request.IsEvent, request.EventTitle, request.EventDate), ct);
+                request.IsEvent, request.EventTitle, request.EventDate,
+                request.PollOptions, request.PollClosesOn), ct);
             return Results.Ok(ApiResponse<object>.Ok(new { postId }, "Kulüp adına paylaşıldı."));
         }).WithName("CompanyCreatePost");
 
@@ -1117,6 +1123,36 @@ public static class CompanyPanelEndpoints
             var participants = await sender.Send(new GetParticipantsQuery(postId, ClubOnly: false), ct);
             return Results.Ok(ApiResponse<List<ParticipantDto>>.Ok(participants));
         }).WithName("CompanyPostParticipants");
+
+        group.MapGet("/feed/{postId:guid}/likes", async (
+            Guid postId, ICurrentUser user, TenantResolver resolver, ISender sender, CancellationToken ct) =>
+        {
+            if (await ResolveOwnCompanyAsync(user, resolver, ct) is null)
+                return CompanyNotFound();
+
+            var likers = await sender.Send(new GetLikersQuery(postId), ct);
+            return Results.Ok(ApiResponse<List<LikerDto>>.Ok(likers));
+        }).WithName("CompanyPostLikers");
+
+        group.MapGet("/feed/{postId:guid}/poll-votes", async (
+            Guid postId, ICurrentUser user, TenantResolver resolver, ISender sender, CancellationToken ct) =>
+        {
+            if (await ResolveOwnCompanyAsync(user, resolver, ct) is null)
+                return CompanyNotFound();
+
+            var voters = await sender.Send(new GetPollVotersQuery(postId), ct);
+            return Results.Ok(ApiResponse<List<PollVoterDto>>.Ok(voters));
+        }).WithName("CompanyPollVoters");
+
+        group.MapPost("/feed/{postId:guid}/poll/close", async (
+            Guid postId, ICurrentUser user, TenantResolver resolver, ISender sender, CancellationToken ct) =>
+        {
+            if (await ResolveOwnCompanyAsync(user, resolver, ct) is null)
+                return CompanyNotFound();
+
+            await sender.Send(new ClosePollCommand(postId), ct);
+            return Results.Ok(ApiResponse.Ok("Anket oylamaya kapatıldı."));
+        }).WithName("CompanyClosePoll");
 
         // ---- Firma kullanıcıları (yetkilendirme) ----
         // Handler'lar çağıranın CompanyAdmin olduğunu ve hedefin aynı firmada olduğunu DB'den

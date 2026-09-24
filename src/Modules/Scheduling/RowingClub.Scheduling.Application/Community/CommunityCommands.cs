@@ -4,6 +4,7 @@ using RowingClub.BuildingBlocks.Domain;
 using RowingClub.Scheduling.Domain;
 using RowingClub.Scheduling.Domain.Community;
 using RowingClub.Scheduling.Domain.Customers;
+using RowingClub.Scheduling.Domain.Settings;
 
 namespace RowingClub.Scheduling.Application.Community;
 
@@ -25,11 +26,22 @@ public sealed record PostDto(
     bool JoinedByMe,
     bool FollowingAuthor,
     bool IsMine,
-    DateTimeOffset CreatedAtUtc);
+    DateTimeOffset CreatedAtUtc,
+    bool IsPoll,
+    PollDto? Poll);
+
+public sealed record PollOptionDto(Guid Id, string Text, int VoteCount, bool VotedByMe);
+
+public sealed record PollDto(
+    List<PollOptionDto> Options, int TotalVotes, string? ClosesOn, bool Closed, Guid? MyOptionId);
+
+public sealed record PollVoterDto(Guid OptionId, string FullName, int Level, DateTimeOffset VotedAtUtc);
 
 public sealed record CommentDto(Guid Id, string AuthorName, string Body, DateTimeOffset CreatedAtUtc);
 
 public sealed record ParticipantDto(string FullName, int Level, DateTimeOffset JoinedAtUtc);
+
+public sealed record LikerDto(string FullName, int Level, DateTimeOffset LikedAtUtc);
 
 /// <summary>Kulüp akışı. ViewerCustomerId=null → firma paneli görünümü.</summary>
 public sealed record GetFeedQuery(Guid? ViewerCustomerId, int Take, bool ClubOnly) : IRequest<List<PostDto>>;
@@ -41,7 +53,8 @@ public sealed record PostMediaDto(string Base64, string ContentType);
 /// <summary>AuthorCustomerId=null → kulüp (firma) adına paylaşım.</summary>
 public sealed record CreatePostCommand(
     Guid? AuthorCustomerId, string Body, string? MediaBase64, string? MediaContentType,
-    bool IsEvent, string? EventTitle, string? EventDate) : ICommand<Guid>;
+    bool IsEvent, string? EventTitle, string? EventDate,
+    IReadOnlyList<string>? PollOptions = null, string? PollClosesOn = null) : ICommand<Guid>;
 
 /// <summary>Firma her paylaşımı, üye yalnızca kendi paylaşımını silebilir.</summary>
 public sealed record DeletePostCommand(Guid PostId, Guid? RequesterCustomerId, bool IsCompany) : ICommand<Unit>;
@@ -58,11 +71,20 @@ public sealed record ToggleParticipationCommand(Guid PostId, Guid CustomerId) : 
 
 public sealed record GetParticipantsQuery(Guid PostId, bool ClubOnly) : IRequest<List<ParticipantDto>>;
 
+public sealed record GetLikersQuery(Guid PostId) : IRequest<List<LikerDto>>;
+
+public sealed record CastPollVoteCommand(Guid PostId, Guid CustomerId, Guid OptionId) : ICommand<PollDto>;
+
+public sealed record GetPollVotersQuery(Guid PostId) : IRequest<List<PollVoterDto>>;
+
+public sealed record ClosePollCommand(Guid PostId) : ICommand<Unit>;
+
 public sealed record ToggleFollowCommand(Guid FollowerId, Guid TargetCustomerId) : ICommand<ToggleResult>;
 
 public sealed class GetFeedQueryHandler(
     ICommunityRepository repository,
-    ICustomerRepository customerRepository)
+    ICustomerRepository customerRepository,
+    ISettingsRepository settingsRepository)
     : IRequestHandler<GetFeedQuery, List<PostDto>>
 {
     public async Task<List<PostDto>> Handle(GetFeedQuery request, CancellationToken cancellationToken)
@@ -83,6 +105,9 @@ public sealed class GetFeedQueryHandler(
             joinedByMe = await repository.GetJoinedPostIdsAsync(viewer, postIds, cancellationToken);
             following = await repository.GetFollowedIdsAsync(viewer, cancellationToken);
         }
+
+        var polls = await PollReader.LoadAsync(
+            repository, settingsRepository, posts, request.ViewerCustomerId, cancellationToken);
 
         var authorIds = posts.Where(p => p.AuthorCustomerId is not null).Select(p => p.AuthorCustomerId!.Value).Distinct().ToList();
         var authors = (await customerRepository.GetByIdsAsync(authorIds, cancellationToken))
@@ -106,7 +131,63 @@ public sealed class GetFeedQueryHandler(
             joinedByMe.Contains(p.Id),
             p.AuthorCustomerId is { } author && following.Contains(author),
             p.AuthorCustomerId == request.ViewerCustomerId && p.AuthorCustomerId is not null,
-            p.CreatedAtUtc)).ToList();
+            p.CreatedAtUtc,
+            p.IsPoll,
+            polls.GetValueOrDefault(p.Id))).ToList();
+    }
+}
+
+internal static class PollReader
+{
+    public static async Task<Dictionary<Guid, PollDto>> LoadAsync(
+        ICommunityRepository repository,
+        ISettingsRepository settingsRepository,
+        IReadOnlyCollection<Post> posts,
+        Guid? viewerCustomerId,
+        CancellationToken cancellationToken)
+    {
+        var pollPosts = posts.Where(p => p.IsPoll).ToList();
+        if (pollPosts.Count == 0)
+            return [];
+
+        var pollIds = pollPosts.Select(p => p.Id).ToList();
+        var options = await repository.GetPollOptionsAsync(pollIds, cancellationToken);
+        var voteCounts = await repository.GetPollVoteCountsByOptionAsync(pollIds, cancellationToken);
+        var myVotes = viewerCustomerId is { } viewer
+            ? await repository.GetVotedOptionIdsAsync(viewer, pollIds, cancellationToken)
+            : [];
+        var today = await TodayAsync(settingsRepository, cancellationToken);
+
+        var optionsByPost = options.ToLookup(o => o.PostId);
+        return pollPosts.ToDictionary(
+            p => p.Id,
+            p => Build(
+                p, optionsByPost[p.Id], voteCounts,
+                myVotes.TryGetValue(p.Id, out var mine) ? mine : null, today));
+    }
+
+    public static async Task<DateOnly> TodayAsync(
+        ISettingsRepository settingsRepository, CancellationToken cancellationToken)
+    {
+        var settings = await settingsRepository.GetAsync(cancellationToken) ?? CompanySettings.Default();
+        return DateOnly.FromDateTime(settings.NowLocal());
+    }
+
+    public static PollDto Build(
+        Post post, IEnumerable<PollOption> options, IReadOnlyDictionary<Guid, int> voteCounts,
+        Guid? myOptionId, DateOnly today)
+    {
+        var optionDtos = options
+            .OrderBy(o => o.Order)
+            .Select(o => new PollOptionDto(o.Id, o.Text, voteCounts.GetValueOrDefault(o.Id), myOptionId == o.Id))
+            .ToList();
+
+        return new PollDto(
+            optionDtos,
+            optionDtos.Sum(o => o.VoteCount),
+            post.PollClosesOn?.ToString("yyyy-MM-dd"),
+            post.IsPollClosed(today),
+            myOptionId);
     }
 }
 
@@ -152,12 +233,24 @@ public sealed class CreatePostCommandHandler(
         if (request.MediaBase64 is not null)
             (mediaKind, mediaContentType) = PostMediaValidator.Validate(request.MediaBase64, request.MediaContentType);
 
+        var isPoll = request.PollOptions is { Count: > 0 };
+        DateOnly? pollClosesOn = null;
+        if (isPoll && !string.IsNullOrWhiteSpace(request.PollClosesOn))
+        {
+            if (!DateOnly.TryParseExact(request.PollClosesOn, "yyyy-MM-dd", out var parsedClose))
+                throw new DomainException("invalid_date", "Anket bitiş tarihi YYYY-AA-GG biçiminde olmalıdır.");
+            pollClosesOn = parsedClose;
+        }
+
         var post = Post.Create(
             request.AuthorCustomerId, request.Body, mediaKind, mediaContentType,
-            request.IsEvent, request.EventTitle, eventDate);
+            request.IsEvent, request.EventTitle, eventDate, isPoll, pollClosesOn);
+        var pollOptions = isPoll ? PollOption.CreateSet(post.Id, request.PollOptions!) : [];
 
         repository.AddPost(post,
             request.MediaBase64 is null ? null : PostMedia.Create(post.Id, request.MediaBase64, mediaContentType!));
+        if (pollOptions.Count > 0)
+            repository.AddPollOptions(pollOptions);
 
         await unitOfWork.SaveChangesAsync(cancellationToken);
         return post.Id;
@@ -293,6 +386,105 @@ public sealed class GetParticipantsQueryHandler(
                 return new ParticipantDto(c?.FullName ?? "(silinmiş üye)", c?.Level ?? 0, p.JoinedAtUtc);
             })
             .ToList();
+    }
+}
+
+public sealed class GetLikersQueryHandler(
+    ICommunityRepository repository, ICustomerRepository customerRepository)
+    : IRequestHandler<GetLikersQuery, List<LikerDto>>
+{
+    public async Task<List<LikerDto>> Handle(GetLikersQuery request, CancellationToken cancellationToken)
+    {
+        var likes = await repository.GetLikesAsync(request.PostId, cancellationToken);
+        var customerIds = likes.Select(l => l.CustomerId).Distinct().ToList();
+        var customers = (await customerRepository.GetByIdsAsync(customerIds, cancellationToken))
+            .ToDictionary(c => c.Id);
+
+        return likes
+            .OrderByDescending(l => l.AtUtc)
+            .Select(l =>
+            {
+                customers.TryGetValue(l.CustomerId, out var c);
+                return new LikerDto(c?.FullName ?? "(silinmiş üye)", c?.Level ?? 0, l.AtUtc);
+            })
+            .ToList();
+    }
+}
+
+public sealed class CastPollVoteCommandHandler(
+    ICommunityRepository repository,
+    ISettingsRepository settingsRepository,
+    ISchedulingUnitOfWork unitOfWork)
+    : IRequestHandler<CastPollVoteCommand, PollDto>
+{
+    public async Task<PollDto> Handle(CastPollVoteCommand request, CancellationToken cancellationToken)
+    {
+        var post = await repository.GetPostAsync(request.PostId, cancellationToken)
+            ?? throw new NotFoundException("Post", request.PostId.ToString());
+
+        var today = await PollReader.TodayAsync(settingsRepository, cancellationToken);
+        var options = await repository.GetPollOptionsAsync([post.Id], cancellationToken);
+        post.EnsureAcceptsVote(request.OptionId, options, today);
+
+        var existing = await repository.GetPollVoteAsync(post.Id, request.CustomerId, cancellationToken);
+        Guid? myOptionId = request.OptionId;
+        if (existing is null)
+        {
+            repository.AddPollVote(PollVote.Create(post.Id, request.OptionId, request.CustomerId));
+        }
+        else if (existing.OptionId == request.OptionId)
+        {
+            repository.RemovePollVote(existing);
+            myOptionId = null;
+        }
+        else
+        {
+            existing.ChangeOption(request.OptionId);
+        }
+
+        await unitOfWork.SaveChangesAsync(cancellationToken);
+
+        var voteCounts = await repository.GetPollVoteCountsByOptionAsync([post.Id], cancellationToken);
+        return PollReader.Build(post, options, voteCounts, myOptionId, today);
+    }
+}
+
+public sealed class GetPollVotersQueryHandler(
+    ICommunityRepository repository, ICustomerRepository customerRepository)
+    : IRequestHandler<GetPollVotersQuery, List<PollVoterDto>>
+{
+    public async Task<List<PollVoterDto>> Handle(GetPollVotersQuery request, CancellationToken cancellationToken)
+    {
+        var votes = await repository.GetPollVotesAsync(request.PostId, cancellationToken);
+        var customerIds = votes.Select(v => v.CustomerId).Distinct().ToList();
+        var customers = (await customerRepository.GetByIdsAsync(customerIds, cancellationToken))
+            .ToDictionary(c => c.Id);
+
+        return votes
+            .OrderByDescending(v => v.AtUtc)
+            .Select(v =>
+            {
+                customers.TryGetValue(v.CustomerId, out var c);
+                return new PollVoterDto(v.OptionId, c?.FullName ?? "(silinmiş üye)", c?.Level ?? 0, v.AtUtc);
+            })
+            .ToList();
+    }
+}
+
+public sealed class ClosePollCommandHandler(
+    ICommunityRepository repository,
+    ISettingsRepository settingsRepository,
+    ISchedulingUnitOfWork unitOfWork)
+    : IRequestHandler<ClosePollCommand, Unit>
+{
+    public async Task<Unit> Handle(ClosePollCommand request, CancellationToken cancellationToken)
+    {
+        var post = await repository.GetPostAsync(request.PostId, cancellationToken)
+            ?? throw new NotFoundException("Post", request.PostId.ToString());
+
+        post.ClosePoll(await PollReader.TodayAsync(settingsRepository, cancellationToken));
+        await unitOfWork.SaveChangesAsync(cancellationToken);
+        return Unit.Value;
     }
 }
 

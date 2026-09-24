@@ -31,6 +31,8 @@ builder.Services
 builder.Services.AddScoped<TenantResolver>();
 builder.Services.AddScoped<RowingClub.Scheduling.Application.Reminders.IAppointmentReminderSender,
     EmailAppointmentReminderSender>();
+builder.Services.AddScoped<RowingClub.Scheduling.Application.Rsvp.IAppointmentRsvpEmailSender,
+    EmailAppointmentRsvpSender>();
 builder.Services.AddScoped<RowingClub.Scheduling.Application.Reminders.IPackageExpiryReminderSender,
     EmailPackageExpiryReminderSender>();
 builder.Services.AddScoped<RowingClub.Scheduling.Application.Members.IMemberWelcomeEmailSender,

@@ -4,10 +4,6 @@ namespace RowingClub.Scheduling.Domain.Sessions;
 
 public interface ITrainingSessionRepository
 {
-    /// <summary>Aynı slot + sınıf + derecede boş koltuğu olan seansı bulur (üyeleri gruplamak için).</summary>
-    Task<TrainingSession?> FindJoinableAsync(
-        DateOnly date, TimeOnly startTime, BoatClass boatClass, int level, CancellationToken cancellationToken);
-
     Task<TrainingSession?> FindJoinableLowestLevelAsync(
         DateOnly date, TimeOnly startTime, BoatClass boatClass, CancellationToken cancellationToken);
 

@@ -1,4 +1,5 @@
 using MediatR;
+using RowingClub.Scheduling.Application.Rsvp;
 using RowingClub.Scheduling.Domain.Appointments;
 using RowingClub.Scheduling.Domain.Boats;
 
@@ -21,7 +22,10 @@ public sealed record AppointmentDto(
     string? Note,
     string Status,
     int? ReminderMinutes,
-    DateTimeOffset CreatedAtUtc);
+    DateTimeOffset CreatedAtUtc,
+    bool UsedPackage,
+    string? RsvpChoice,
+    DateTimeOffset? RsvpDeadlineUtc);
 
 public sealed class GetAppointmentsQueryHandler(IAppointmentRepository appointmentRepository)
     : IRequestHandler<GetAppointmentsQuery, List<AppointmentDto>>
@@ -39,7 +43,8 @@ public sealed class GetAppointmentsQueryHandler(IAppointmentRepository appointme
                 a.Id, a.SessionId, a.Customer.FullName, a.Customer.Phone, a.Customer.Email,
                 a.Customer.Level, a.Date, a.StartTime.ToString("HH:mm"),
                 a.Session.BoatClass.Label(), a.TeammateName, a.Note, a.Status.ToString(),
-                a.ReminderMinutes, a.CreatedAtUtc))
+                a.ReminderMinutes, a.CreatedAtUtc, a.UsedPackage,
+                RsvpMapper.ToApiChoice(a), a.RsvpDeadlineUtc))
             .ToList();
     }
 }

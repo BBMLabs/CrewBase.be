@@ -2,6 +2,7 @@ using MediatR;
 using RowingClub.BuildingBlocks.Application.Abstractions;
 using RowingClub.Identity.Application.Companies.GetCompanySite;
 using RowingClub.Scheduling.Application.Reminders;
+using RowingClub.Scheduling.Application.Rsvp;
 
 namespace RowingClub.Api.Tenancy;
 
@@ -54,13 +55,9 @@ public sealed class ReminderWorker(
         {
             // Scope başına tek tenant: TenantDbContext scoped olduğundan firma değiştirmek için
             // her firmaya yeni scope açılır.
-            await using var scope = scopeFactory.CreateAsyncScope();
-            scope.ServiceProvider.GetRequiredService<ITenantDatabase>()
-                .Set(
-                    company.CompanyId, company.DatabaseName, company.Subdomain, company.Plan,
-                    company.MaxBranches, company.MaxMembers, company.MaxBoats, company.MaxInstructors,
-                    company.MaxManagers, company.MaxEmployees, company.CanExportData,
-                    company.HasAdvancedReports, company.HasAutomaticDuesReminders);
+            await ResolveRsvpsAsync(company, cancellationToken);
+
+            await using var scope = CreateTenantScope(company);
 
             try
             {
@@ -81,6 +78,43 @@ public sealed class ReminderWorker(
             {
                 logger.LogError(ex, "{Company} için hatırlatmalar gönderilemedi.", company.Name);
             }
+        }
+    }
+
+    private AsyncServiceScope CreateTenantScope(CompanySiteDto company)
+    {
+        var scope = scopeFactory.CreateAsyncScope();
+        scope.ServiceProvider.GetRequiredService<ITenantDatabase>()
+            .Set(
+                company.CompanyId, company.DatabaseName, company.Subdomain, company.Plan,
+                company.MaxBranches, company.MaxMembers, company.MaxBoats, company.MaxInstructors,
+                company.MaxManagers, company.MaxEmployees, company.CanExportData,
+                company.HasAdvancedReports, company.HasAutomaticDuesReminders);
+        return scope;
+    }
+
+    private async Task ResolveRsvpsAsync(CompanySiteDto company, CancellationToken cancellationToken)
+    {
+        var companyName = company.Name;
+        try
+        {
+            await using var scope = CreateTenantScope(company);
+            var sender = scope.ServiceProvider.GetRequiredService<ISender>();
+            var result = await sender.Send(new ProcessRsvpDeadlinesCommand(), cancellationToken);
+            if (result.Confirmed > 0 || result.Cancelled > 0)
+            {
+                logger.LogInformation(
+                    "{Company} için katılım onayı süresi dolan {Confirmed} randevu onaylandı, {Cancelled} randevu iptal edildi.",
+                    companyName, result.Confirmed, result.Cancelled);
+            }
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "{Company} için katılım onayları işlenemedi.", companyName);
         }
     }
 }

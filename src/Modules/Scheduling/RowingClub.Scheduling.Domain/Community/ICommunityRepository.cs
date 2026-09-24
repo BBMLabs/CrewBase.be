@@ -17,6 +17,8 @@ public interface ICommunityRepository
 
     Task<HashSet<Guid>> GetLikedPostIdsAsync(Guid customerId, IReadOnlyCollection<Guid> postIds, CancellationToken cancellationToken);
 
+    Task<List<PostLike>> GetLikesAsync(Guid postId, CancellationToken cancellationToken);
+
     Task<PostLike?> GetLikeAsync(Guid postId, Guid customerId, CancellationToken cancellationToken);
 
     void AddLike(PostLike like);
@@ -40,6 +42,22 @@ public interface ICommunityRepository
     void AddParticipation(EventParticipation participation);
 
     void RemoveParticipation(EventParticipation participation);
+
+    void AddPollOptions(IEnumerable<PollOption> options);
+
+    Task<List<PollOption>> GetPollOptionsAsync(IReadOnlyCollection<Guid> postIds, CancellationToken cancellationToken);
+
+    Task<Dictionary<Guid, int>> GetPollVoteCountsByOptionAsync(IReadOnlyCollection<Guid> postIds, CancellationToken cancellationToken);
+
+    Task<Dictionary<Guid, Guid>> GetVotedOptionIdsAsync(Guid customerId, IReadOnlyCollection<Guid> postIds, CancellationToken cancellationToken);
+
+    Task<List<PollVote>> GetPollVotesAsync(Guid postId, CancellationToken cancellationToken);
+
+    Task<PollVote?> GetPollVoteAsync(Guid postId, Guid customerId, CancellationToken cancellationToken);
+
+    void AddPollVote(PollVote vote);
+
+    void RemovePollVote(PollVote vote);
 
     Task<Follow?> GetFollowAsync(Guid followerId, Guid followedId, CancellationToken cancellationToken);
 

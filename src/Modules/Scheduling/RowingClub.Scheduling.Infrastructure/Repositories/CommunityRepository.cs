@@ -37,6 +37,9 @@ public sealed class CommunityRepository(TenantDbContext context) : ICommunityRep
             .Where(l => l.CustomerId == customerId && postIds.Contains(l.PostId))
             .Select(l => l.PostId).ToListAsync(cancellationToken)).ToHashSet();
 
+    public Task<List<PostLike>> GetLikesAsync(Guid postId, CancellationToken cancellationToken) =>
+        context.PostLikes.Where(l => l.PostId == postId).ToListAsync(cancellationToken);
+
     public Task<PostLike?> GetLikeAsync(Guid postId, Guid customerId, CancellationToken cancellationToken) =>
         context.PostLikes.FirstOrDefaultAsync(
             l => l.PostId == postId && l.CustomerId == customerId, cancellationToken);
@@ -81,6 +84,37 @@ public sealed class CommunityRepository(TenantDbContext context) : ICommunityRep
 
     public void RemoveParticipation(EventParticipation participation) =>
         context.EventParticipations.Remove(participation);
+
+    public void AddPollOptions(IEnumerable<PollOption> options) => context.PollOptions.AddRange(options);
+
+    public Task<List<PollOption>> GetPollOptionsAsync(
+        IReadOnlyCollection<Guid> postIds, CancellationToken cancellationToken) =>
+        context.PollOptions.Where(o => postIds.Contains(o.PostId))
+            .OrderBy(o => o.PostId).ThenBy(o => o.Order).ToListAsync(cancellationToken);
+
+    public async Task<Dictionary<Guid, int>> GetPollVoteCountsByOptionAsync(
+        IReadOnlyCollection<Guid> postIds, CancellationToken cancellationToken) =>
+        (await context.PollVotes.Where(v => postIds.Contains(v.PostId))
+            .GroupBy(v => v.OptionId).Select(g => new { g.Key, Count = g.Count() })
+            .ToListAsync(cancellationToken)).ToDictionary(x => x.Key, x => x.Count);
+
+    public async Task<Dictionary<Guid, Guid>> GetVotedOptionIdsAsync(
+        Guid customerId, IReadOnlyCollection<Guid> postIds, CancellationToken cancellationToken) =>
+        (await context.PollVotes
+            .Where(v => v.CustomerId == customerId && postIds.Contains(v.PostId))
+            .Select(v => new { v.PostId, v.OptionId }).ToListAsync(cancellationToken))
+            .ToDictionary(x => x.PostId, x => x.OptionId);
+
+    public Task<List<PollVote>> GetPollVotesAsync(Guid postId, CancellationToken cancellationToken) =>
+        context.PollVotes.Where(v => v.PostId == postId).ToListAsync(cancellationToken);
+
+    public Task<PollVote?> GetPollVoteAsync(Guid postId, Guid customerId, CancellationToken cancellationToken) =>
+        context.PollVotes.FirstOrDefaultAsync(
+            v => v.PostId == postId && v.CustomerId == customerId, cancellationToken);
+
+    public void AddPollVote(PollVote vote) => context.PollVotes.Add(vote);
+
+    public void RemovePollVote(PollVote vote) => context.PollVotes.Remove(vote);
 
     public Task<Follow?> GetFollowAsync(Guid followerId, Guid followedId, CancellationToken cancellationToken) =>
         context.Follows.FirstOrDefaultAsync(

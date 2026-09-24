@@ -1,4 +1,5 @@
 using MediatR;
+using RowingClub.Scheduling.Application.Rsvp;
 using RowingClub.Scheduling.Domain.Appointments;
 using RowingClub.Scheduling.Domain.Boats;
 using RowingClub.Scheduling.Domain.Sessions;
@@ -22,7 +23,9 @@ public sealed record MemberAppointmentDto(
     string? Note,
     int? ReminderMinutes,
     bool UsedPackage,
-    List<string> Crewmates);
+    List<string> Crewmates,
+    string? RsvpChoice,
+    DateTimeOffset? RsvpDeadlineUtc);
 
 public sealed class GetMemberAppointmentsQueryHandler(
     IAppointmentRepository appointmentRepository,
@@ -57,12 +60,14 @@ public sealed class GetMemberAppointmentsQueryHandler(
                 appointment.StartTime.ToString("HH:mm"),
                 session?.BoatClass.Label() ?? "-",
                 session?.Boat?.Name,
-                session?.Instructor?.FullName,
+                session?.ActiveInstructor?.FullName,
                 appointment.Status.ToString(),
                 appointment.Note,
                 appointment.ReminderMinutes,
                 appointment.CustomerPackageId is not null,
-                crewmates));
+                crewmates,
+                RsvpMapper.ToApiChoice(appointment),
+                appointment.RsvpDeadlineUtc));
         }
 
         return result;

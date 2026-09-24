@@ -20,6 +20,8 @@ public static class BoatClassExtensions
         _ => 1,
     };
 
+    public static bool RequiresInstructor(this BoatClass boatClass) => boatClass == BoatClass.Quad4x;
+
     public static string Label(this BoatClass boatClass) => boatClass switch
     {
         BoatClass.Single1x => "1x",

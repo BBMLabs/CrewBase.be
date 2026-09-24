@@ -9,7 +9,7 @@ using RowingClub.Scheduling.Domain.Packages;
 
 namespace RowingClub.Scheduling.Application.Panel;
 
-public sealed record SetAppointmentStatusCommand(Guid AppointmentId, string Status) : ICommand<Unit>;
+public sealed record SetAppointmentStatusCommand(Guid AppointmentId, string Status, bool RefundPackage = true) : ICommand<Unit>;
 
 public sealed class SetAppointmentStatusCommandHandler(
     IAppointmentRepository appointmentRepository,
@@ -37,11 +37,18 @@ public sealed class SetAppointmentStatusCommandHandler(
             var package = await customerPackageRepository.GetByIdAsync(packageId, cancellationToken);
             if (package is not null)
             {
-                if (status == AppointmentStatus.Cancelled)
+                if (status == AppointmentStatus.Cancelled && request.RefundPackage)
                 {
                     package.Refund();
                     memberLogRepository.Add(MemberLog.Record(
                         appointment.CustomerId, MemberEvents.PackageRefunded, package.PackageName));
+                }
+                else if (status == AppointmentStatus.Cancelled)
+                {
+                    appointment.ConsumePackageCredit();
+                    memberLogRepository.Add(MemberLog.Record(
+                        appointment.CustomerId, MemberEvents.PackageCreditKept,
+                        $"{package.PackageName}: kalan {package.RemainingSessions} ders"));
                 }
                 else if (wasCancelled)
                 {

@@ -70,7 +70,7 @@ public sealed class GetPublicOptionsQueryHandler(
                     (int)d.Day, d.IsOpen, d.OpeningTime.ToString("HH:mm"), d.ClosingTime.ToString("HH:mm")))
                 .ToList(),
             settings.SlotMinutes,
-            settings.MinNoticeHours,
+            settings.EffectiveNoticeHours,
             settings.MaxAdvanceDays,
             settings.ReminderOptions().ToList(),
             settings.DefaultReminderMinutes,

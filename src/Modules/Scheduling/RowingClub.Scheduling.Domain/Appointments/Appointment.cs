@@ -48,6 +48,18 @@ public sealed class Appointment
 
     public DateTimeOffset CreatedAtUtc { get; private set; }
 
+    public static readonly TimeSpan RsvpWindow = TimeSpan.FromHours(1);
+
+    public RsvpChoice? RsvpChoice { get; private set; }
+
+    public DateTimeOffset? RsvpDeadlineUtc { get; private set; }
+
+    public DateTimeOffset? RsvpResolvedAtUtc { get; private set; }
+
+    public string? RsvpTokenHash { get; private set; }
+
+    public bool HasRsvp => RsvpDeadlineUtc is not null;
+
     private Appointment()
     {
     }
@@ -87,10 +99,60 @@ public sealed class Appointment
             return false;
 
         Status = status;
+        if (HasRsvp && RsvpResolvedAtUtc is null)
+            RsvpResolvedAtUtc = DateTimeOffset.UtcNow;
+
         return true;
     }
 
+    public void OpenRsvp(string tokenHash, DateTimeOffset nowUtc)
+    {
+        if (string.IsNullOrWhiteSpace(tokenHash))
+            throw new DomainException("rsvp_token_required", "Katılım onayı bağlantısı oluşturulamadı.");
+
+        RsvpTokenHash = tokenHash;
+        RsvpChoice = Appointments.RsvpChoice.None;
+        RsvpDeadlineUtc = nowUtc.Add(RsvpWindow);
+        RsvpResolvedAtUtc = null;
+    }
+
+    public bool IsRsvpOpen(DateTimeOffset nowUtc) =>
+        HasRsvp && RsvpResolvedAtUtc is null && Status == AppointmentStatus.Pending && nowUtc < RsvpDeadlineUtc;
+
+    public bool IsRsvpDue(DateTimeOffset nowUtc) =>
+        HasRsvp && RsvpResolvedAtUtc is null && RsvpDeadlineUtc <= nowUtc;
+
+    public void ChooseRsvp(RsvpChoice choice, DateTimeOffset nowUtc)
+    {
+        if (choice == Appointments.RsvpChoice.None)
+            throw new DomainException("rsvp_invalid_choice", "Geçersiz yanıt. \"Katılıyorum\" veya \"Katılamıyorum\" seçilmelidir.");
+
+        if (!IsRsvpOpen(nowUtc))
+            throw new DomainException("rsvp_closed", "Yanıt süresi doldu.");
+
+        RsvpChoice = choice;
+    }
+
+    public AppointmentStatus? ResolveRsvp(DateTimeOffset nowUtc)
+    {
+        if (!IsRsvpDue(nowUtc))
+            return null;
+
+        RsvpResolvedAtUtc = nowUtc;
+        if (Status != AppointmentStatus.Pending)
+            return null;
+
+        Status = RsvpChoice == Appointments.RsvpChoice.NotAttending
+            ? AppointmentStatus.Cancelled
+            : AppointmentStatus.Confirmed;
+        return Status;
+    }
+
     public void MarkReminderSent() => ReminderSentAtUtc = DateTimeOffset.UtcNow;
+
+    public bool UsedPackage => CustomerPackageId is not null;
+
+    public void ConsumePackageCredit() => CustomerPackageId = null;
 
     public void MoveToSession(TrainingSession targetSession)
     {

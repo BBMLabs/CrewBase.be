@@ -38,6 +38,10 @@ public sealed class Post
 
     public DateOnly? EventDate { get; private set; }
 
+    public bool IsPoll { get; private set; }
+
+    public DateOnly? PollClosesOn { get; private set; }
+
     public DateTimeOffset CreatedAtUtc { get; private set; }
 
     private Post()
@@ -47,9 +51,12 @@ public sealed class Post
     public static Post Create(
         Guid? authorCustomerId, string body,
         PostMediaKind mediaKind, string? mediaContentType,
-        bool isEvent, string? eventTitle, DateOnly? eventDate)
+        bool isEvent, string? eventTitle, DateOnly? eventDate,
+        bool isPoll = false, DateOnly? pollClosesOn = null)
     {
         body = body?.Trim() ?? "";
+        if (isPoll)
+            EnsurePollAllowed(authorCustomerId, body, isEvent);
         if (body.Length == 0 && mediaKind == PostMediaKind.None)
             throw new DomainException("empty_post", "Paylaşım boş olamaz; yazı veya medya ekleyin.");
         if (body.Length > MaxBodyLength)
@@ -70,8 +77,102 @@ public sealed class Post
             IsEvent = isEvent,
             EventTitle = isEvent ? eventTitle!.Trim() : null,
             EventDate = isEvent ? eventDate : null,
+            IsPoll = isPoll,
+            PollClosesOn = isPoll ? pollClosesOn : null,
             CreatedAtUtc = DateTimeOffset.UtcNow,
         };
+    }
+
+    public bool IsPollClosed(DateOnly today) => PollClosesOn is { } closesOn && today > closesOn;
+
+    public void EnsureAcceptsVote(Guid optionId, IEnumerable<PollOption> options, DateOnly today)
+    {
+        if (!IsPoll)
+            throw new DomainException("not_a_poll", "Bu paylaşım bir anket değil.");
+        if (IsPollClosed(today))
+            throw new DomainException("poll_closed", "Bu anket oylamaya kapandı.");
+        if (!options.Any(o => o.Id == optionId && o.PostId == Id))
+            throw new DomainException("poll_option_invalid", "Seçilen seçenek bu ankete ait değil.");
+    }
+
+    public void ClosePoll(DateOnly today)
+    {
+        if (!IsPoll)
+            throw new DomainException("not_a_poll", "Bu paylaşım bir anket değil.");
+
+        var yesterday = today.AddDays(-1);
+        if (PollClosesOn is null || PollClosesOn > yesterday)
+            PollClosesOn = yesterday;
+    }
+
+    private static void EnsurePollAllowed(Guid? authorCustomerId, string body, bool isEvent)
+    {
+        if (authorCustomerId is not null)
+            throw new DomainException("poll_club_only", "Anket yalnızca kulüp tarafından oluşturulabilir.");
+        if (isEvent)
+            throw new DomainException("poll_event_conflict", "Bir paylaşım aynı anda hem etkinlik hem anket olamaz.");
+        if (body.Length == 0)
+            throw new DomainException("poll_question_required", "Anket sorusu zorunludur.");
+    }
+}
+
+public sealed class PollOption
+{
+    public const int MaxTextLength = 80;
+    public const int MinOptions = 2;
+    public const int MaxOptions = 6;
+
+    public Guid Id { get; private set; }
+
+    public Guid PostId { get; private set; }
+
+    public string Text { get; private set; } = null!;
+
+    public int Order { get; private set; }
+
+    private PollOption()
+    {
+    }
+
+    public static List<PollOption> CreateSet(Guid postId, IEnumerable<string?> texts)
+    {
+        var normalized = (texts ?? []).Select(t => t?.Trim() ?? "").ToList();
+
+        var valid = normalized.Count is >= MinOptions and <= MaxOptions
+            && normalized.All(t => t.Length is > 0 and <= MaxTextLength)
+            && normalized.Distinct(StringComparer.OrdinalIgnoreCase).Count() == normalized.Count;
+        if (!valid)
+            throw new DomainException(
+                "poll_options_invalid",
+                $"Anket {MinOptions}-{MaxOptions} farklı seçenek içermeli; her seçenek 1-{MaxTextLength} karakter olmalıdır.");
+
+        return normalized
+            .Select((text, index) => new PollOption { Id = Guid.NewGuid(), PostId = postId, Text = text, Order = index })
+            .ToList();
+    }
+}
+
+public sealed class PollVote
+{
+    public Guid PostId { get; private set; }
+
+    public Guid OptionId { get; private set; }
+
+    public Guid CustomerId { get; private set; }
+
+    public DateTimeOffset AtUtc { get; private set; }
+
+    private PollVote()
+    {
+    }
+
+    public static PollVote Create(Guid postId, Guid optionId, Guid customerId) =>
+        new() { PostId = postId, OptionId = optionId, CustomerId = customerId, AtUtc = DateTimeOffset.UtcNow };
+
+    public void ChangeOption(Guid optionId)
+    {
+        OptionId = optionId;
+        AtUtc = DateTimeOffset.UtcNow;
     }
 }
 

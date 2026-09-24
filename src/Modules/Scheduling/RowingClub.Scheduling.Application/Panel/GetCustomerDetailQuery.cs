@@ -68,7 +68,7 @@ public sealed class GetCustomerDetailQueryHandler(
                 a.Id, a.CustomerId, a.Customer.FullName, a.Customer.Phone, a.SessionId,
                 a.Date.ToString("yyyy-MM-dd"), a.StartTime.ToString("HH:mm"),
                 a.Session.BoatClass.Label(), a.Session.Boat?.Name,
-                a.Session.Instructor?.FullName, a.Status.ToString(),
+                a.Session.ActiveInstructor?.FullName, a.Status.ToString(),
                 false, a.CreatedAtUtc))
             .ToList();
 

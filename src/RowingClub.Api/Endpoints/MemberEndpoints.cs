@@ -34,6 +34,7 @@ public sealed record PostCreateRequest(
     string Body, string? MediaBase64, string? MediaContentType,
     bool IsEvent, string? EventTitle, string? EventDate);
 public sealed record CommentCreateRequest(string Body);
+public sealed record PollVoteRequest(Guid OptionId);
 public sealed record ConfirmPackagePurchaseRequest(Guid PackageId, string Token);
 
 /// <summary>
@@ -175,7 +176,8 @@ public static class MemberEndpoints
             var response = await sender.Send(new BookAppointmentCommand(
                 profile.FullName, profile.Phone, profile.Email, date, time,
                 request.BoatClass ?? "1x", ExperienceAcknowledged: true, request.TeammateName, request.Note,
-                request.ReminderMinutes, request.UsePackage, request.AcceptedConsents ?? [], ctx.Ip), ct);
+                request.ReminderMinutes, request.UsePackage, request.AcceptedConsents ?? [], ctx.Ip,
+                ctx.CompanyName, ctx.Subdomain), ct);
 
             return Results.Created(
                 $"/api/v1/member/appointments/{response.AppointmentId}",
@@ -355,6 +357,13 @@ public static class MemberEndpoints
             var participants = await sender.Send(new GetParticipantsQuery(postId, ClubOnly: false), ct);
             return Results.Ok(ApiResponse<List<ParticipantDto>>.Ok(participants));
         })).WithName("MemberParticipants");
+
+        group.MapPost("/feed/{id:guid}/vote", GuardedRouteBody<PollVoteRequest>(
+            async (ctx, postId, request, sender, ct) =>
+        {
+            var poll = await sender.Send(new CastPollVoteCommand(postId, ctx.CustomerId, request.OptionId), ct);
+            return Results.Ok(ApiResponse<PollDto>.Ok(poll));
+        })).WithName("MemberPollVote");
 
         group.MapPost("/follow/{id:guid}", GuardedRoute(async (ctx, customerId, sender, ct) =>
         {

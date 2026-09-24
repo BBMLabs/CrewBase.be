@@ -71,6 +71,34 @@ public sealed class AuthEndpointFunctionalTests(RowingClubWebApplicationFactory 
     }
 
     [Fact]
+    public async Task OpenApi_document_lists_the_public_rsvp_endpoints()
+    {
+        using var client = factory.CreateClient();
+
+        var response = await client.GetAsync("/openapi/v1.json");
+        response.EnsureSuccessStatusCode();
+
+        var document = await response.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>();
+        var paths = document.GetProperty("paths");
+
+        paths.TryGetProperty("/api/v1/public/{subdomain}/rsvp/{token}", out var rsvp).Should().BeTrue();
+        rsvp.TryGetProperty("get", out _).Should().BeTrue();
+        rsvp.TryGetProperty("post", out _).Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task Rsvp_with_an_invalid_choice_returns_400_before_touching_the_tenant()
+    {
+        using var client = factory.CreateClient();
+
+        var response = await client.PostAsJsonAsync("/api/v1/public/demo/rsvp/some-token", new { choice = "maybe" });
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        var body = await response.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>();
+        body.GetProperty("code").GetString().Should().Be("rsvp_invalid_choice");
+    }
+
+    [Fact]
     public async Task RegisterCompany_validation_failure_returns_problem_details()
     {
         using var client = factory.CreateClient();

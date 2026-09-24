@@ -63,5 +63,20 @@ public sealed class AppointmentRepository(TenantDbContext context) : IAppointmen
         return ids.ToHashSet();
     }
 
+    public Task<Appointment?> GetByRsvpTokenHashAsync(string tokenHash, CancellationToken cancellationToken) =>
+        context.Appointments
+            .Include(a => a.Customer)
+            .Include(a => a.Session)
+            .FirstOrDefaultAsync(a => a.RsvpTokenHash == tokenHash, cancellationToken);
+
+    public Task<List<Appointment>> GetDueRsvpsAsync(DateTimeOffset nowUtc, int limit, CancellationToken cancellationToken) =>
+        context.Appointments
+            .Include(a => a.Customer)
+            .Include(a => a.Session)
+            .Where(a => a.RsvpDeadlineUtc != null && a.RsvpResolvedAtUtc == null && a.RsvpDeadlineUtc <= nowUtc)
+            .OrderBy(a => a.RsvpDeadlineUtc)
+            .Take(limit)
+            .ToListAsync(cancellationToken);
+
     public void Add(Appointment appointment) => context.Appointments.Add(appointment);
 }

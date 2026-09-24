@@ -48,7 +48,7 @@ public sealed class GetAvailabilityQueryHandler(
         var slots = new List<SlotDto>();
         foreach (var slot in settings.Slots(request.Date.DayOfWeek))
         {
-            var seatsLeft = SeatsLeftAt(daySessions, boatsOfClass, boatClass, level, slot);
+            var seatsLeft = DailyBoatCapacity.SeatsLeftAt(daySessions, boatClass, boatsOfClass.Count, slot);
             var bookable = seatsLeft > 0 && IsBookable(settings, request.Date, slot);
             slots.Add(new SlotDto(slot.ToString("HH:mm"), bookable, seatsLeft));
         }
@@ -67,32 +67,5 @@ public sealed class GetAvailabilityQueryHandler(
         {
             return false;
         }
-    }
-
-    private static int SeatsLeftAt(
-        List<TrainingSession> daySessions, List<Boat> boatsOfClass,
-        BoatClass boatClass, int level, TimeOnly slot)
-    {
-        var slotSessions = daySessions.Where(s => s.StartTime == slot).ToList();
-
-        // 1) Katılınabilir mevcut seans: aynı sınıf + aynı derece + boş koltuk.
-        var joinableSeats = slotSessions
-            .Where(s => s.BoatClass == boatClass && s.Level == level && s.HasFreeSeat)
-            .Sum(s => s.Capacity - s.ActiveMemberCount);
-
-        // 2) Yeni seans açma imkânı: sınıfta boş tekne (ya da hiç tekne tanımlı değilse 1x serbest).
-        int newSessionSeats;
-        if (boatsOfClass.Count > 0)
-        {
-            var usedBoatIds = slotSessions.Where(s => s.BoatId is not null).Select(s => s.BoatId!.Value).ToHashSet();
-            var freeBoats = boatsOfClass.Count(b => !usedBoatIds.Contains(b.Id));
-            newSessionSeats = freeBoats * boatClass.Capacity();
-        }
-        else
-        {
-            newSessionSeats = boatClass == BoatClass.Single1x ? 1 : 0;
-        }
-
-        return joinableSeats + newSessionSeats;
     }
 }

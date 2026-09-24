@@ -1,6 +1,7 @@
 using MediatR;
 using RowingClub.BuildingBlocks.Application.Messaging;
 using RowingClub.BuildingBlocks.Domain;
+using RowingClub.Scheduling.Application.Rsvp;
 using RowingClub.Scheduling.Domain;
 using RowingClub.Scheduling.Domain.Appointments;
 using RowingClub.Scheduling.Domain.Boats;
@@ -9,7 +10,9 @@ using RowingClub.Scheduling.Domain.Sessions;
 
 namespace RowingClub.Scheduling.Application.Panel;
 
-public sealed record SessionMemberDto(Guid AppointmentId, string FullName, string Phone, int Level, string Status);
+public sealed record SessionMemberDto(
+    Guid AppointmentId, string FullName, string Phone, int Level, string Status, bool UsedPackage,
+    string? RsvpChoice, DateTimeOffset? RsvpDeadlineUtc);
 
 public sealed record SessionDto(
     Guid Id,
@@ -76,7 +79,7 @@ public sealed class AssignSessionResourcesCommandHandler(
             var instructor = await instructorRepository.GetByIdAsync(instructorId, cancellationToken)
                 ?? throw new NotFoundException("Instructor", instructorId.ToString());
 
-            var busyElsewhere = slotSessions.Any(s => s.Id != session.Id && s.InstructorId == instructor.Id);
+            var busyElsewhere = slotSessions.Any(s => s.Id != session.Id && s.ActiveInstructorId == instructor.Id);
             if (busyElsewhere)
                 throw new DomainException("instructor_busy", "Bu eğitmen aynı saatte başka bir seansta.");
 
@@ -120,10 +123,11 @@ internal static class SessionMapper
         session.Capacity,
         session.ActiveMemberCount,
         session.Boat?.Name,
-        session.Instructor?.FullName,
+        session.ActiveInstructor?.FullName,
         session.Appointments
             .Where(a => a.Status != AppointmentStatus.Cancelled)
             .Select(a => new SessionMemberDto(
-                a.Id, a.Customer.FullName, a.Customer.Phone, a.Customer.Level, a.Status.ToString()))
+                a.Id, a.Customer.FullName, a.Customer.Phone, a.Customer.Level, a.Status.ToString(), a.UsedPackage,
+                RsvpMapper.ToApiChoice(a), a.RsvpDeadlineUtc))
             .ToList());
 }

@@ -8,6 +8,7 @@ using RowingClub.Scheduling.Application.Community;
 using RowingClub.Scheduling.Application.Members;
 using RowingClub.Scheduling.Application.Messages;
 using RowingClub.Scheduling.Application.PublicOptions;
+using RowingClub.Scheduling.Application.Rsvp;
 
 namespace RowingClub.Api.Endpoints;
 
@@ -16,7 +17,9 @@ public sealed record PublicBookingRequest(
     string? BoatClass, bool ExperienceAcknowledged, string? TeammateName, string? Note, int? ReminderMinutes,
     List<string>? AcceptedConsents);
 
-public sealed record PublicSiteMessageRequest(string FullName, string Email, string Body);
+public sealed record PublicRsvpRequest(string? Choice);
+
+public sealed record PublicSiteMessageRequest(string FullName, string Email, string Body, string? Phone = null);
 
 /// <summary>
 /// Her firmanın müşterilere açık randevu akışı. Gerçekte {subdomain}.faturebase.com'dan servis
@@ -166,12 +169,51 @@ public static class PublicSiteEndpoints
             var response = await sender.Send(new BookAppointmentCommand(
                 request.FullName, request.Phone, request.Email, date, time,
                 request.BoatClass ?? "1x", request.ExperienceAcknowledged, request.TeammateName, request.Note,
-                request.ReminderMinutes, UsePackage: false, request.AcceptedConsents ?? [], clientIp), cancellationToken);
+                request.ReminderMinutes, UsePackage: false, request.AcceptedConsents ?? [], clientIp,
+                company.Name, company.Subdomain), cancellationToken);
 
             return Results.Created(
                 $"/api/v1/public/{subdomain}/appointments/{response.AppointmentId}",
                 ApiResponse<BookAppointmentResponse>.Ok(response, "Randevunuz alındı."));
         }).WithName("PublicBookAppointment");
+
+        group.MapGet("/rsvp/{token}", async (
+            string subdomain, string token, TenantResolver resolver, ISender sender, CancellationToken cancellationToken) =>
+        {
+            if (!IsPlausibleRsvpToken(token))
+                return RsvpNotFound();
+
+            var company = await resolver.ResolveBySubdomainAsync(subdomain, cancellationToken);
+            if (company is null)
+                return Results.NotFound(ApiResponse.Fail("company_not_found", "Firma bulunamadı."));
+
+            var rsvp = await sender.Send(new GetRsvpQuery(token, company.Name), cancellationToken);
+            return rsvp is null ? RsvpNotFound() : Results.Ok(ApiResponse<RsvpDto>.Ok(rsvp));
+        }).WithName("PublicGetRsvp");
+
+        group.MapPost("/rsvp/{token}", async (
+            string subdomain, string token, [FromBody] PublicRsvpRequest request,
+            TenantResolver resolver, ISender sender, CancellationToken cancellationToken) =>
+        {
+            if (!RsvpMapper.IsValidChoice(request.Choice))
+                return RsvpInvalidChoice();
+
+            if (!IsPlausibleRsvpToken(token))
+                return RsvpNotFound();
+
+            var company = await resolver.ResolveBySubdomainAsync(subdomain, cancellationToken);
+            if (company is null)
+                return Results.NotFound(ApiResponse.Fail("company_not_found", "Firma bulunamadı."));
+
+            var result = await sender.Send(new SubmitRsvpCommand(token, request.Choice!, company.Name), cancellationToken);
+            return result.Outcome switch
+            {
+                RsvpSubmitOutcome.Saved => Results.Ok(ApiResponse<RsvpDto>.Ok(result.Rsvp!, "Yanıtınız kaydedildi.")),
+                RsvpSubmitOutcome.Closed => Results.BadRequest(ApiResponse.Fail("rsvp_closed", "Yanıt süresi doldu.")),
+                RsvpSubmitOutcome.InvalidChoice => RsvpInvalidChoice(),
+                _ => RsvpNotFound(),
+            };
+        }).WithName("PublicSubmitRsvp");
 
         group.MapGet("/feed", async (
             string subdomain, TenantResolver resolver, ISender sender, CancellationToken cancellationToken) =>
@@ -233,7 +275,7 @@ public static class PublicSiteEndpoints
                 : httpContext.Connection.RemoteIpAddress?.ToString();
 
             await sender.Send(
-                new SubmitSiteMessageCommand(request.FullName, request.Email, request.Body, clientIp),
+                new SubmitSiteMessageCommand(request.FullName, request.Email, request.Phone ?? string.Empty, request.Body, clientIp),
                 cancellationToken);
 
             return Results.Ok(ApiResponse.Ok("Mesajınız iletildi."));
@@ -241,6 +283,16 @@ public static class PublicSiteEndpoints
 
         return app;
     }
+
+    private static bool IsPlausibleRsvpToken(string? token) =>
+        !string.IsNullOrWhiteSpace(token) && token.Length <= 256;
+
+    private static IResult RsvpNotFound() =>
+        Results.NotFound(ApiResponse.Fail("rsvp_not_found", "Katılım onayı bağlantısı bulunamadı."));
+
+    private static IResult RsvpInvalidChoice() =>
+        Results.BadRequest(ApiResponse.Fail(
+            "rsvp_invalid_choice", "Geçersiz yanıt. \"Katılıyorum\" veya \"Katılamıyorum\" seçilmelidir."));
 
     private static bool TryParseDate(string? raw, out DateOnly date)
     {

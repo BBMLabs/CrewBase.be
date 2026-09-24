@@ -183,7 +183,21 @@ public sealed class CompanySettings
         return TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, timeZone);
     }
 
-    /// <summary>Slot geçerliliği + min/max rezervasyon penceresi; ihlalde DomainException fırlatır.</summary>
+    public const int BookingLeadHours = 24;
+
+    public const int CancellationDeadlineHours = 24;
+
+    public int EffectiveNoticeHours => Math.Max(MinNoticeHours, BookingLeadHours);
+
+    public void EnsureCancellable(DateOnly date, TimeOnly time)
+    {
+        var startsAt = date.ToDateTime(time);
+        if (startsAt < NowLocal().AddHours(CancellationDeadlineHours))
+            throw new DomainException(
+                "cancel_too_late",
+                $"Randevular ders başlangıcından en az {CancellationDeadlineHours} saat önce iptal edilebilir. Son {CancellationDeadlineHours} saatte iptal için kulüple iletişime geçin.");
+    }
+
     public void EnsureBookable(DateOnly date, TimeOnly time)
     {
         var schedule = ScheduleFor(date.DayOfWeek);
@@ -198,9 +212,9 @@ public sealed class CompanySettings
         var nowLocal = NowLocal();
         var startsAt = date.ToDateTime(time);
 
-        if (startsAt < nowLocal.AddHours(MinNoticeHours))
+        if (startsAt < nowLocal.AddHours(EffectiveNoticeHours))
             throw new DomainException(
-                "too_soon", $"Randevular ders başlangıcından en az {MinNoticeHours} saat önce alınabilir.");
+                "too_soon", $"Randevular ders başlangıcından en az {EffectiveNoticeHours} saat önce alınabilir.");
 
         if (date > DateOnly.FromDateTime(nowLocal).AddDays(MaxAdvanceDays))
             throw new DomainException(

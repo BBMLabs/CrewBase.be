@@ -8,10 +8,10 @@ using RowingClub.Scheduling.Domain.Messages;
 namespace RowingClub.Scheduling.Application.Messages;
 
 public sealed record SiteMessageDto(
-    Guid Id, string FullName, string Email, string Body, DateTimeOffset CreatedAtUtc,
+    Guid Id, string FullName, string Email, string? Phone, string Body, DateTimeOffset CreatedAtUtc,
     string? ReplyText, DateTimeOffset? RepliedAtUtc);
 
-public sealed record SubmitSiteMessageCommand(string FullName, string Email, string Body, string? IpAddress)
+public sealed record SubmitSiteMessageCommand(string FullName, string Email, string Phone, string Body, string? IpAddress)
     : ICommand<Unit>;
 
 public sealed record GetSiteMessagesQuery(string? Cursor = null, int Limit = 25) : IRequest<KeysetResult<SiteMessageDto>>;
@@ -25,6 +25,9 @@ public sealed class SubmitSiteMessageCommandValidator : AbstractValidator<Submit
     {
         RuleFor(c => c.FullName).NotEmpty().MaximumLength(200);
         RuleFor(c => c.Email).NotEmpty().EmailAddress().MaximumLength(254);
+        RuleFor(c => c.Phone)
+            .NotEmpty().WithMessage("Telefon numarası zorunludur.")
+            .Must(p => p.Count(char.IsDigit) is >= 10 and <= 15).WithMessage("Geçerli bir telefon numarası girin.");
         RuleFor(c => c.Body).NotEmpty().MaximumLength(4000);
     }
 }
@@ -35,7 +38,7 @@ public sealed class SubmitSiteMessageCommandHandler(
 {
     public async Task<Unit> Handle(SubmitSiteMessageCommand request, CancellationToken cancellationToken)
     {
-        repository.Add(SiteMessage.Create(request.FullName, request.Email, request.Body, request.IpAddress));
+        repository.Add(SiteMessage.Create(request.FullName, request.Email, request.Phone, request.Body, request.IpAddress));
         await unitOfWork.SaveChangesAsync(cancellationToken);
         return Unit.Value;
     }
@@ -63,7 +66,7 @@ public sealed class GetSiteMessagesQueryHandler(ISiteMessageRepository repositor
     }
 
     internal static SiteMessageDto ToDto(SiteMessage m) =>
-        new(m.Id, m.FullName, m.Email, m.Body, m.CreatedAtUtc, m.ReplyText, m.RepliedAtUtc);
+        new(m.Id, m.FullName, m.Email, m.Phone, m.Body, m.CreatedAtUtc, m.ReplyText, m.RepliedAtUtc);
 }
 
 public interface ISiteMessageReplySender
