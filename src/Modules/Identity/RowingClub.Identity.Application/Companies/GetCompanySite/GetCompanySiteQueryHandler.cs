@@ -29,6 +29,8 @@ public sealed class GetCompanySiteQueryHandler(ICompanyRepository companyReposit
             company.Phone, company.ContactEmail, company.Address, company.TaxNumber, company.Status.ToString(),
             company.Plan.ToString(), limits.MaxBranches, limits.MaxMembers, limits.MaxBoats, limits.MaxInstructors,
             features.MaxManagers, features.MaxEmployees, features.CanExportData,
-            features.HasAdvancedReports, features.HasAutomaticDuesReminders);
+            features.HasAdvancedReports, features.HasAutomaticDuesReminders,
+            company.SeoTitle, company.SeoDescription, company.SeoKeywords,
+            company.GoogleSiteVerification, company.GoogleAnalyticsId, company.AllowIndexing);
     }
 }

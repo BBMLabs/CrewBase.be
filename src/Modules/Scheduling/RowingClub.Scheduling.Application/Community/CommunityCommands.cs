@@ -28,7 +28,18 @@ public sealed record PostDto(
     bool IsMine,
     DateTimeOffset CreatedAtUtc,
     bool IsPoll,
-    PollDto? Poll);
+    PollDto? Poll,
+    List<ReactionCountDto> Reactions,
+    string? MyReaction,
+    int MediaCount);
+
+public sealed record ReactionCountDto(string Emoji, int Count);
+
+public sealed record ReactionSummaryDto(List<ReactionCountDto> Reactions, string? MyReaction);
+
+public sealed record ReactorDto(string Emoji, string FullName, bool IsClub, int Level, DateTimeOffset AtUtc);
+
+public sealed record PostMediaInput(string Base64, string? ContentType);
 
 public sealed record PollOptionDto(Guid Id, string Text, int VoteCount, bool VotedByMe);
 
@@ -37,16 +48,27 @@ public sealed record PollDto(
 
 public sealed record PollVoterDto(Guid OptionId, string FullName, int Level, DateTimeOffset VotedAtUtc);
 
-public sealed record CommentDto(Guid Id, string AuthorName, string Body, DateTimeOffset CreatedAtUtc);
+public sealed record CommentDto(
+    Guid Id,
+    Guid? ParentId,
+    string AuthorName,
+    bool IsClub,
+    Guid? AuthorCustomerId,
+    string Body,
+    DateTimeOffset CreatedAtUtc,
+    int LikeCount,
+    bool LikedByMe,
+    bool IsMine);
 
 public sealed record ParticipantDto(string FullName, int Level, DateTimeOffset JoinedAtUtc);
 
 public sealed record LikerDto(string FullName, int Level, DateTimeOffset LikedAtUtc);
 
 /// <summary>Kulüp akışı. ViewerCustomerId=null → firma paneli görünümü.</summary>
-public sealed record GetFeedQuery(Guid? ViewerCustomerId, int Take, bool ClubOnly) : IRequest<List<PostDto>>;
+public sealed record GetFeedQuery(Guid? ViewerCustomerId, int Take, bool ClubOnly, bool ViewerIsClub = false)
+    : IRequest<List<PostDto>>;
 
-public sealed record GetPostMediaQuery(Guid PostId, bool ClubOnly) : IRequest<PostMediaDto?>;
+public sealed record GetPostMediaQuery(Guid PostId, bool ClubOnly, int Index = 0) : IRequest<PostMediaDto?>;
 
 public sealed record PostMediaDto(string Base64, string ContentType);
 
@@ -54,7 +76,8 @@ public sealed record PostMediaDto(string Base64, string ContentType);
 public sealed record CreatePostCommand(
     Guid? AuthorCustomerId, string Body, string? MediaBase64, string? MediaContentType,
     bool IsEvent, string? EventTitle, string? EventDate,
-    IReadOnlyList<string>? PollOptions = null, string? PollClosesOn = null) : ICommand<Guid>;
+    IReadOnlyList<string>? PollOptions = null, string? PollClosesOn = null,
+    IReadOnlyList<PostMediaInput>? Media = null) : ICommand<Guid>;
 
 /// <summary>Firma her paylaşımı, üye yalnızca kendi paylaşımını silebilir.</summary>
 public sealed record DeletePostCommand(Guid PostId, Guid? RequesterCustomerId, bool IsCompany) : ICommand<Unit>;
@@ -63,15 +86,28 @@ public sealed record ToggleLikeCommand(Guid PostId, Guid CustomerId) : ICommand<
 
 public sealed record ToggleResult(bool Active, int Count);
 
-public sealed record GetCommentsQuery(Guid PostId, bool ClubOnly) : IRequest<List<CommentDto>>;
+public sealed record ReactToPostCommand(Guid PostId, Guid? ActorCustomerId, string? Emoji)
+    : ICommand<ReactionSummaryDto>;
 
-public sealed record AddCommentCommand(Guid PostId, Guid CustomerId, string Body) : ICommand<CommentDto>;
+public sealed record GetReactorsQuery(Guid PostId, string? ClubName = null) : IRequest<List<ReactorDto>>;
+
+public sealed record GetCommentsQuery(
+    Guid PostId, bool ClubOnly, Guid? ViewerCustomerId = null, bool ViewerIsClub = false, string? ClubName = null)
+    : IRequest<List<CommentDto>>;
+
+public sealed record AddCommentCommand(
+    Guid PostId, Guid? ActorCustomerId, string Body, Guid? ParentId = null, string? ClubName = null)
+    : ICommand<CommentDto>;
+
+public sealed record ToggleCommentLikeCommand(Guid CommentId, Guid? ActorCustomerId) : ICommand<ToggleResult>;
+
+public sealed record DeleteCommentCommand(Guid CommentId, Guid? ActorCustomerId) : ICommand<Unit>;
 
 public sealed record ToggleParticipationCommand(Guid PostId, Guid CustomerId) : ICommand<ToggleResult>;
 
 public sealed record GetParticipantsQuery(Guid PostId, bool ClubOnly) : IRequest<List<ParticipantDto>>;
 
-public sealed record GetLikersQuery(Guid PostId) : IRequest<List<LikerDto>>;
+public sealed record GetLikersQuery(Guid PostId, string? ClubName = null) : IRequest<List<LikerDto>>;
 
 public sealed record CastPollVoteCommand(Guid PostId, Guid CustomerId, Guid OptionId) : ICommand<PollDto>;
 
@@ -92,16 +128,19 @@ public sealed class GetFeedQueryHandler(
         var posts = await repository.GetFeedAsync(Math.Clamp(request.Take, 1, 100), request.ClubOnly, cancellationToken);
         var postIds = posts.Select(p => p.Id).ToList();
 
-        var likeCounts = await repository.GetLikeCountsAsync(postIds, cancellationToken);
+        var reactionCounts = (await repository.GetReactionCountsAsync(postIds, cancellationToken)).ToLookup(r => r.PostId);
         var commentCounts = await repository.GetCommentCountsAsync(postIds, cancellationToken);
         var participantCounts = await repository.GetParticipantCountsAsync(postIds, cancellationToken);
+        var mediaCounts = await repository.GetMediaCountsAsync(postIds, cancellationToken);
 
-        var likedByMe = new HashSet<Guid>();
+        var myReactions = new Dictionary<Guid, string>();
+        if (FeedActor.TryResolve(request.ViewerCustomerId, request.ViewerIsClub, out var actor))
+            myReactions = await repository.GetMyReactionsAsync(actor, postIds, cancellationToken);
+
         var joinedByMe = new HashSet<Guid>();
         var following = new HashSet<Guid>();
         if (request.ViewerCustomerId is { } viewer)
         {
-            likedByMe = await repository.GetLikedPostIdsAsync(viewer, postIds, cancellationToken);
             joinedByMe = await repository.GetJoinedPostIdsAsync(viewer, postIds, cancellationToken);
             following = await repository.GetFollowedIdsAsync(viewer, cancellationToken);
         }
@@ -113,27 +152,74 @@ public sealed class GetFeedQueryHandler(
         var authors = (await customerRepository.GetByIdsAsync(authorIds, cancellationToken))
             .ToDictionary(c => c.Id, c => c.FullName);
 
-        return posts.Select(p => new PostDto(
-            p.Id,
-            p.AuthorCustomerId is { } a ? authors.GetValueOrDefault(a, "(silinmiş üye)") : "Kulüp",
-            p.AuthorCustomerId,
-            p.AuthorCustomerId is null,
-            p.Body,
-            p.MediaKind.ToString(),
-            p.MediaContentType,
-            p.IsEvent,
-            p.EventTitle,
-            p.EventDate?.ToString("yyyy-MM-dd"),
-            likeCounts.GetValueOrDefault(p.Id),
-            likedByMe.Contains(p.Id),
-            commentCounts.GetValueOrDefault(p.Id),
-            participantCounts.GetValueOrDefault(p.Id),
-            joinedByMe.Contains(p.Id),
-            p.AuthorCustomerId is { } author && following.Contains(author),
-            p.AuthorCustomerId == request.ViewerCustomerId && p.AuthorCustomerId is not null,
-            p.CreatedAtUtc,
-            p.IsPoll,
-            polls.GetValueOrDefault(p.Id))).ToList();
+        return posts.Select(p =>
+        {
+            var reactions = ReactionReader.Build(reactionCounts[p.Id]);
+            var myReaction = myReactions.GetValueOrDefault(p.Id);
+            return new PostDto(
+                p.Id,
+                p.AuthorCustomerId is { } a ? authors.GetValueOrDefault(a, "(silinmiş üye)") : "Kulüp",
+                p.AuthorCustomerId,
+                p.AuthorCustomerId is null,
+                p.Body,
+                p.MediaKind.ToString(),
+                p.MediaContentType,
+                p.IsEvent,
+                p.EventTitle,
+                p.EventDate?.ToString("yyyy-MM-dd"),
+                ReactionReader.ThumbsUpCount(reactions),
+                myReaction == PostReaction.ThumbsUp,
+                commentCounts.GetValueOrDefault(p.Id),
+                participantCounts.GetValueOrDefault(p.Id),
+                joinedByMe.Contains(p.Id),
+                p.AuthorCustomerId is { } author && following.Contains(author),
+                p.AuthorCustomerId == request.ViewerCustomerId && p.AuthorCustomerId is not null,
+                p.CreatedAtUtc,
+                p.IsPoll,
+                polls.GetValueOrDefault(p.Id),
+                reactions,
+                myReaction,
+                mediaCounts.GetValueOrDefault(p.Id));
+        }).ToList();
+    }
+}
+
+internal static class FeedActor
+{
+    public const string DefaultClubName = "Kulüp";
+
+    public static bool TryResolve(Guid? viewerCustomerId, bool viewerIsClub, out Guid? actor)
+    {
+        actor = viewerIsClub ? null : viewerCustomerId;
+        return viewerIsClub || viewerCustomerId is not null;
+    }
+
+    public static string ClubName(string? clubName) =>
+        string.IsNullOrWhiteSpace(clubName) ? DefaultClubName : clubName;
+}
+
+internal static class ReactionReader
+{
+    public static List<ReactionCountDto> Build(IEnumerable<ReactionCount> counts) =>
+        counts
+            .Where(c => c.Count > 0)
+            .OrderByDescending(c => c.Count)
+            .ThenBy(c => Rank(c.Emoji))
+            .Select(c => new ReactionCountDto(c.Emoji, c.Count))
+            .ToList();
+
+    public static int ThumbsUpCount(IEnumerable<ReactionCountDto> reactions) =>
+        reactions.FirstOrDefault(r => r.Emoji == PostReaction.ThumbsUp)?.Count ?? 0;
+
+    private static int Rank(string emoji)
+    {
+        for (var i = 0; i < PostReaction.AllowedEmojis.Count; i++)
+        {
+            if (PostReaction.AllowedEmojis[i] == emoji)
+                return i;
+        }
+
+        return int.MaxValue;
     }
 }
 
@@ -206,10 +292,12 @@ public sealed class GetPostMediaQueryHandler(ICommunityRepository repository)
 {
     public async Task<PostMediaDto?> Handle(GetPostMediaQuery request, CancellationToken cancellationToken)
     {
+        if (request.Index is < 0 or >= Post.MaxMediaItems)
+            return null;
         if (request.ClubOnly && !await CommunityGuards.IsClubPostAsync(repository, request.PostId, cancellationToken))
             return null;
 
-        var media = await repository.GetMediaAsync(request.PostId, cancellationToken);
+        var media = await repository.GetMediaAsync(request.PostId, request.Index, cancellationToken);
         return media is null ? null : new PostMediaDto(media.Base64, media.ContentType);
     }
 }
@@ -228,10 +316,14 @@ public sealed class CreatePostCommandHandler(
             eventDate = parsed;
         }
 
-        var mediaKind = PostMediaKind.None;
-        string? mediaContentType = null;
-        if (request.MediaBase64 is not null)
-            (mediaKind, mediaContentType) = PostMediaValidator.Validate(request.MediaBase64, request.MediaContentType);
+        var mediaInputs = new List<(string Base64, string? ContentType)>();
+        if (request.Media is { Count: > 0 })
+            mediaInputs.AddRange(request.Media.Select(m => (m.Base64 ?? "", m.ContentType)));
+        else if (request.MediaBase64 is not null)
+            mediaInputs.Add((request.MediaBase64, request.MediaContentType));
+        var validatedMedia = PostMediaValidator.ValidateSet(mediaInputs);
+        var mediaKind = validatedMedia.Count > 0 ? validatedMedia[0].Kind : PostMediaKind.None;
+        var mediaContentType = validatedMedia.Count > 0 ? validatedMedia[0].ContentType : null;
 
         var isPoll = request.PollOptions is { Count: > 0 };
         DateOnly? pollClosesOn = null;
@@ -247,8 +339,10 @@ public sealed class CreatePostCommandHandler(
             request.IsEvent, request.EventTitle, eventDate, isPoll, pollClosesOn);
         var pollOptions = isPoll ? PollOption.CreateSet(post.Id, request.PollOptions!) : [];
 
-        repository.AddPost(post,
-            request.MediaBase64 is null ? null : PostMedia.Create(post.Id, request.MediaBase64, mediaContentType!));
+        var media = mediaInputs
+            .Select((m, index) => PostMedia.Create(post.Id, m.Base64, validatedMedia[index].ContentType, index))
+            .ToList();
+        repository.AddPost(post, media);
         if (pollOptions.Count > 0)
             repository.AddPollOptions(pollOptions);
 
@@ -282,19 +376,123 @@ public sealed class ToggleLikeCommandHandler(
 {
     public async Task<ToggleResult> Handle(ToggleLikeCommand request, CancellationToken cancellationToken)
     {
-        _ = await repository.GetPostAsync(request.PostId, cancellationToken)
-            ?? throw new NotFoundException("Post", request.PostId.ToString());
+        var change = await ReactionWriter.ApplyAsync(
+            repository, unitOfWork, request.PostId, request.CustomerId, PostReaction.ThumbsUp, cancellationToken);
 
-        var existing = await repository.GetLikeAsync(request.PostId, request.CustomerId, cancellationToken);
-        var active = existing is null;
-        if (existing is null)
-            repository.AddLike(PostLike.Create(request.PostId, request.CustomerId));
-        else
-            repository.RemoveLike(existing);
+        var reactions = ReactionReader.Build(await repository.GetReactionCountsAsync([request.PostId], cancellationToken));
+        return new ToggleResult(change.CurrentEmoji == PostReaction.ThumbsUp, ReactionReader.ThumbsUpCount(reactions));
+    }
+}
+
+public sealed class ReactToPostCommandHandler(
+    ICommunityRepository repository, ISchedulingUnitOfWork unitOfWork)
+    : IRequestHandler<ReactToPostCommand, ReactionSummaryDto>
+{
+    public async Task<ReactionSummaryDto> Handle(ReactToPostCommand request, CancellationToken cancellationToken)
+    {
+        var change = await ReactionWriter.ApplyAsync(
+            repository, unitOfWork, request.PostId, request.ActorCustomerId, request.Emoji, cancellationToken);
+
+        var reactions = ReactionReader.Build(await repository.GetReactionCountsAsync([request.PostId], cancellationToken));
+        return new ReactionSummaryDto(reactions, change.CurrentEmoji);
+    }
+}
+
+internal static class ReactionWriter
+{
+    public static async Task<ReactionChange> ApplyAsync(
+        ICommunityRepository repository, ISchedulingUnitOfWork unitOfWork,
+        Guid postId, Guid? actorCustomerId, string? emoji, CancellationToken cancellationToken)
+    {
+        if (emoji is not null)
+            PostReaction.NormalizeEmoji(emoji);
+
+        _ = await repository.GetPostAsync(postId, cancellationToken)
+            ?? throw new NotFoundException("Post", postId.ToString());
+
+        var existing = await repository.GetReactionAsync(postId, actorCustomerId, cancellationToken);
+        var change = PostReaction.Apply(existing, postId, actorCustomerId, emoji);
+        switch (change.Kind)
+        {
+            case ReactionChangeKind.Added:
+                repository.AddReaction(change.Reaction!);
+                break;
+            case ReactionChangeKind.Removed:
+                repository.RemoveReaction(change.Reaction!);
+                break;
+        }
 
         await unitOfWork.SaveChangesAsync(cancellationToken);
-        var counts = await repository.GetLikeCountsAsync([request.PostId], cancellationToken);
-        return new ToggleResult(active, counts.GetValueOrDefault(request.PostId));
+        return change;
+    }
+}
+
+public sealed class GetReactorsQueryHandler(
+    ICommunityRepository repository, ICustomerRepository customerRepository)
+    : IRequestHandler<GetReactorsQuery, List<ReactorDto>>
+{
+    public async Task<List<ReactorDto>> Handle(GetReactorsQuery request, CancellationToken cancellationToken)
+    {
+        var reactions = await repository.GetReactionsAsync(request.PostId, cancellationToken);
+        var customerIds = reactions.Where(r => r.CustomerId is not null).Select(r => r.CustomerId!.Value).Distinct().ToList();
+        var customers = (await customerRepository.GetByIdsAsync(customerIds, cancellationToken))
+            .ToDictionary(c => c.Id);
+        var clubName = FeedActor.ClubName(request.ClubName);
+
+        return reactions
+            .OrderByDescending(r => r.AtUtc)
+            .Select(r =>
+            {
+                if (r.CustomerId is null)
+                    return new ReactorDto(r.Emoji, clubName, true, 0, r.AtUtc);
+
+                customers.TryGetValue(r.CustomerId.Value, out var c);
+                return new ReactorDto(r.Emoji, c?.FullName ?? "(silinmiş üye)", false, c?.Level ?? 0, r.AtUtc);
+            })
+            .ToList();
+    }
+}
+
+internal static class CommentReader
+{
+    public static async Task<List<CommentDto>> BuildAsync(
+        ICommunityRepository repository,
+        ICustomerRepository customerRepository,
+        IReadOnlyCollection<PostComment> comments,
+        Guid? viewerCustomerId,
+        bool viewerIsClub,
+        string? clubName,
+        CancellationToken cancellationToken)
+    {
+        if (comments.Count == 0)
+            return [];
+
+        var commentIds = comments.Select(c => c.Id).ToList();
+        var commenterIds = comments.Where(c => c.CustomerId is not null).Select(c => c.CustomerId!.Value).Distinct().ToList();
+        var names = (await customerRepository.GetByIdsAsync(commenterIds, cancellationToken))
+            .ToDictionary(c => c.Id, c => c.FullName);
+        var likeCounts = await repository.GetCommentLikeCountsAsync(commentIds, cancellationToken);
+
+        var hasActor = FeedActor.TryResolve(viewerCustomerId, viewerIsClub, out var actor);
+        var likedByMe = hasActor
+            ? await repository.GetLikedCommentIdsAsync(actor, commentIds, cancellationToken)
+            : [];
+        var club = FeedActor.ClubName(clubName);
+
+        return comments
+            .OrderBy(c => c.CreatedAtUtc)
+            .Select(c => new CommentDto(
+                c.Id,
+                c.ParentCommentId,
+                c.CustomerId is { } author ? names.GetValueOrDefault(author, "(silinmiş üye)") : club,
+                c.IsClub,
+                c.CustomerId,
+                c.Body,
+                c.CreatedAtUtc,
+                likeCounts.GetValueOrDefault(c.Id),
+                likedByMe.Contains(c.Id),
+                hasActor && c.CustomerId == actor))
+            .ToList();
     }
 }
 
@@ -308,14 +506,9 @@ public sealed class GetCommentsQueryHandler(
             return [];
 
         var comments = await repository.GetCommentsAsync(request.PostId, cancellationToken);
-        var commenterIds = comments.Select(c => c.CustomerId).Distinct().ToList();
-        var names = (await customerRepository.GetByIdsAsync(commenterIds, cancellationToken))
-            .ToDictionary(c => c.Id, c => c.FullName);
-
-        return comments
-            .OrderBy(c => c.CreatedAtUtc)
-            .Select(c => new CommentDto(c.Id, names.GetValueOrDefault(c.CustomerId, "(silinmiş üye)"), c.Body, c.CreatedAtUtc))
-            .ToList();
+        return await CommentReader.BuildAsync(
+            repository, customerRepository, comments,
+            request.ViewerCustomerId, request.ViewerIsClub, request.ClubName, cancellationToken);
     }
 }
 
@@ -330,12 +523,67 @@ public sealed class AddCommentCommandHandler(
         _ = await repository.GetPostAsync(request.PostId, cancellationToken)
             ?? throw new NotFoundException("Post", request.PostId.ToString());
 
-        var comment = PostComment.Create(request.PostId, request.CustomerId, request.Body);
+        PostComment? parent = null;
+        if (request.ParentId is { } parentId)
+            parent = await repository.GetCommentAsync(parentId, cancellationToken)
+                ?? throw new DomainValidationException("invalid_parent", "Yanıtlanan yorum bulunamadı.");
+
+        var comment = PostComment.Create(request.PostId, request.ActorCustomerId, request.Body, parent);
         repository.AddComment(comment);
         await unitOfWork.SaveChangesAsync(cancellationToken);
 
-        var author = await customerRepository.GetByIdAsync(request.CustomerId, cancellationToken);
-        return new CommentDto(comment.Id, author?.FullName ?? "-", comment.Body, comment.CreatedAtUtc);
+        var authorName = FeedActor.ClubName(request.ClubName);
+        if (request.ActorCustomerId is { } customerId)
+            authorName = (await customerRepository.GetByIdAsync(customerId, cancellationToken))?.FullName ?? "-";
+
+        return new CommentDto(
+            comment.Id, comment.ParentCommentId, authorName, comment.IsClub, comment.CustomerId,
+            comment.Body, comment.CreatedAtUtc, 0, false, true);
+    }
+}
+
+public sealed class ToggleCommentLikeCommandHandler(
+    ICommunityRepository repository, ISchedulingUnitOfWork unitOfWork)
+    : IRequestHandler<ToggleCommentLikeCommand, ToggleResult>
+{
+    public async Task<ToggleResult> Handle(ToggleCommentLikeCommand request, CancellationToken cancellationToken)
+    {
+        _ = await repository.GetCommentAsync(request.CommentId, cancellationToken)
+            ?? throw new NotFoundException("comment_not_found", "Yorum bulunamadı.");
+
+        var existing = await repository.GetCommentLikeAsync(request.CommentId, request.ActorCustomerId, cancellationToken);
+        var active = existing is null;
+        if (existing is null)
+            repository.AddCommentLike(CommentLike.Create(request.CommentId, request.ActorCustomerId));
+        else
+            repository.RemoveCommentLike(existing);
+
+        await unitOfWork.SaveChangesAsync(cancellationToken);
+        var counts = await repository.GetCommentLikeCountsAsync([request.CommentId], cancellationToken);
+        return new ToggleResult(active, counts.GetValueOrDefault(request.CommentId));
+    }
+}
+
+public sealed class DeleteCommentCommandHandler(
+    ICommunityRepository repository, ISchedulingUnitOfWork unitOfWork)
+    : IRequestHandler<DeleteCommentCommand, Unit>
+{
+    public async Task<Unit> Handle(DeleteCommentCommand request, CancellationToken cancellationToken)
+    {
+        var comment = await repository.GetCommentAsync(request.CommentId, cancellationToken)
+            ?? throw new NotFoundException("comment_not_found", "Yorum bulunamadı.");
+
+        comment.EnsureCanBeDeletedBy(request.ActorCustomerId);
+
+        if (comment.ParentCommentId is null)
+        {
+            foreach (var reply in await repository.GetRepliesAsync(comment.Id, cancellationToken))
+                repository.RemoveComment(reply);
+        }
+
+        repository.RemoveComment(comment);
+        await unitOfWork.SaveChangesAsync(cancellationToken);
+        return Unit.Value;
     }
 }
 
@@ -395,16 +643,22 @@ public sealed class GetLikersQueryHandler(
 {
     public async Task<List<LikerDto>> Handle(GetLikersQuery request, CancellationToken cancellationToken)
     {
-        var likes = await repository.GetLikesAsync(request.PostId, cancellationToken);
-        var customerIds = likes.Select(l => l.CustomerId).Distinct().ToList();
+        var likes = (await repository.GetReactionsAsync(request.PostId, cancellationToken))
+            .Where(r => r.Emoji == PostReaction.ThumbsUp)
+            .ToList();
+        var customerIds = likes.Where(l => l.CustomerId is not null).Select(l => l.CustomerId!.Value).Distinct().ToList();
         var customers = (await customerRepository.GetByIdsAsync(customerIds, cancellationToken))
             .ToDictionary(c => c.Id);
+        var clubName = FeedActor.ClubName(request.ClubName);
 
         return likes
             .OrderByDescending(l => l.AtUtc)
             .Select(l =>
             {
-                customers.TryGetValue(l.CustomerId, out var c);
+                if (l.CustomerId is null)
+                    return new LikerDto(clubName, 0, l.AtUtc);
+
+                customers.TryGetValue(l.CustomerId.Value, out var c);
                 return new LikerDto(c?.FullName ?? "(silinmiş üye)", c?.Level ?? 0, l.AtUtc);
             })
             .ToList();

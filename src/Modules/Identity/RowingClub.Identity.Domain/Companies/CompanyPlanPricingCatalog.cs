@@ -11,9 +11,9 @@ public static class CompanyPlanPricingCatalog
     private static readonly Dictionary<CompanyPlan, decimal> MonthlyTry = new()
     {
         [CompanyPlan.Mico] = 0m,
-        [CompanyPlan.Tayfa] = 490m,
-        [CompanyPlan.Kaptan] = 890m,
-        [CompanyPlan.Amiral] = 1490m,
+        [CompanyPlan.Tayfa] = 1490m,
+        [CompanyPlan.Kaptan] = 2690m,
+        [CompanyPlan.Amiral] = 4490m,
     };
 
     public static decimal MonthlyPriceFor(CompanyPlan plan) =>

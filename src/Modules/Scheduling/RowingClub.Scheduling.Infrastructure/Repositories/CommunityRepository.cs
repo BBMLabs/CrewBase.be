@@ -13,40 +13,48 @@ public sealed class CommunityRepository(TenantDbContext context) : ICommunityRep
     public Task<Post?> GetPostAsync(Guid postId, CancellationToken cancellationToken) =>
         context.Posts.FirstOrDefaultAsync(p => p.Id == postId, cancellationToken);
 
-    public Task<PostMedia?> GetMediaAsync(Guid postId, CancellationToken cancellationToken) =>
-        context.Set<PostMedia>().FirstOrDefaultAsync(m => m.PostId == postId, cancellationToken);
+    public Task<PostMedia?> GetMediaAsync(Guid postId, int order, CancellationToken cancellationToken) =>
+        context.Set<PostMedia>().FirstOrDefaultAsync(m => m.PostId == postId && m.Order == order, cancellationToken);
 
-    public void AddPost(Post post, PostMedia? media)
+    public async Task<Dictionary<Guid, int>> GetMediaCountsAsync(
+        IReadOnlyCollection<Guid> postIds, CancellationToken cancellationToken) =>
+        (await context.Set<PostMedia>().Where(m => postIds.Contains(m.PostId))
+            .GroupBy(m => m.PostId).Select(g => new { g.Key, Count = g.Count() })
+            .ToListAsync(cancellationToken)).ToDictionary(x => x.Key, x => x.Count);
+
+    public void AddPost(Post post, IReadOnlyCollection<PostMedia> media)
     {
         context.Posts.Add(post);
-        if (media is not null)
-            context.Set<PostMedia>().Add(media);
+        context.Set<PostMedia>().AddRange(media);
     }
 
     public void RemovePost(Post post) => context.Posts.Remove(post);
 
-    public async Task<Dictionary<Guid, int>> GetLikeCountsAsync(
+    public async Task<List<ReactionCount>> GetReactionCountsAsync(
         IReadOnlyCollection<Guid> postIds, CancellationToken cancellationToken) =>
-        (await context.PostLikes.Where(l => postIds.Contains(l.PostId))
-            .GroupBy(l => l.PostId).Select(g => new { g.Key, Count = g.Count() })
-            .ToListAsync(cancellationToken)).ToDictionary(x => x.Key, x => x.Count);
+        (await context.PostReactions.Where(r => postIds.Contains(r.PostId))
+            .GroupBy(r => new { r.PostId, r.Emoji })
+            .Select(g => new { g.Key.PostId, g.Key.Emoji, Count = g.Count() })
+            .ToListAsync(cancellationToken))
+            .Select(x => new ReactionCount(x.PostId, x.Emoji, x.Count)).ToList();
 
-    public async Task<HashSet<Guid>> GetLikedPostIdsAsync(
-        Guid customerId, IReadOnlyCollection<Guid> postIds, CancellationToken cancellationToken) =>
-        (await context.PostLikes
-            .Where(l => l.CustomerId == customerId && postIds.Contains(l.PostId))
-            .Select(l => l.PostId).ToListAsync(cancellationToken)).ToHashSet();
+    public async Task<Dictionary<Guid, string>> GetMyReactionsAsync(
+        Guid? customerId, IReadOnlyCollection<Guid> postIds, CancellationToken cancellationToken) =>
+        (await context.PostReactions
+            .Where(r => r.CustomerId == customerId && postIds.Contains(r.PostId))
+            .Select(r => new { r.PostId, r.Emoji }).ToListAsync(cancellationToken))
+            .ToDictionary(x => x.PostId, x => x.Emoji);
 
-    public Task<List<PostLike>> GetLikesAsync(Guid postId, CancellationToken cancellationToken) =>
-        context.PostLikes.Where(l => l.PostId == postId).ToListAsync(cancellationToken);
+    public Task<List<PostReaction>> GetReactionsAsync(Guid postId, CancellationToken cancellationToken) =>
+        context.PostReactions.Where(r => r.PostId == postId).ToListAsync(cancellationToken);
 
-    public Task<PostLike?> GetLikeAsync(Guid postId, Guid customerId, CancellationToken cancellationToken) =>
-        context.PostLikes.FirstOrDefaultAsync(
-            l => l.PostId == postId && l.CustomerId == customerId, cancellationToken);
+    public Task<PostReaction?> GetReactionAsync(Guid postId, Guid? customerId, CancellationToken cancellationToken) =>
+        context.PostReactions.FirstOrDefaultAsync(
+            r => r.PostId == postId && r.CustomerId == customerId, cancellationToken);
 
-    public void AddLike(PostLike like) => context.PostLikes.Add(like);
+    public void AddReaction(PostReaction reaction) => context.PostReactions.Add(reaction);
 
-    public void RemoveLike(PostLike like) => context.PostLikes.Remove(like);
+    public void RemoveReaction(PostReaction reaction) => context.PostReactions.Remove(reaction);
 
     public async Task<Dictionary<Guid, int>> GetCommentCountsAsync(
         IReadOnlyCollection<Guid> postIds, CancellationToken cancellationToken) =>
@@ -57,7 +65,35 @@ public sealed class CommunityRepository(TenantDbContext context) : ICommunityRep
     public Task<List<PostComment>> GetCommentsAsync(Guid postId, CancellationToken cancellationToken) =>
         context.PostComments.Where(c => c.PostId == postId).ToListAsync(cancellationToken);
 
+    public Task<PostComment?> GetCommentAsync(Guid commentId, CancellationToken cancellationToken) =>
+        context.PostComments.FirstOrDefaultAsync(c => c.Id == commentId, cancellationToken);
+
+    public Task<List<PostComment>> GetRepliesAsync(Guid parentCommentId, CancellationToken cancellationToken) =>
+        context.PostComments.Where(c => c.ParentCommentId == parentCommentId).ToListAsync(cancellationToken);
+
     public void AddComment(PostComment comment) => context.PostComments.Add(comment);
+
+    public void RemoveComment(PostComment comment) => context.PostComments.Remove(comment);
+
+    public async Task<Dictionary<Guid, int>> GetCommentLikeCountsAsync(
+        IReadOnlyCollection<Guid> commentIds, CancellationToken cancellationToken) =>
+        (await context.CommentLikes.Where(l => commentIds.Contains(l.CommentId))
+            .GroupBy(l => l.CommentId).Select(g => new { g.Key, Count = g.Count() })
+            .ToListAsync(cancellationToken)).ToDictionary(x => x.Key, x => x.Count);
+
+    public async Task<HashSet<Guid>> GetLikedCommentIdsAsync(
+        Guid? customerId, IReadOnlyCollection<Guid> commentIds, CancellationToken cancellationToken) =>
+        (await context.CommentLikes
+            .Where(l => l.CustomerId == customerId && commentIds.Contains(l.CommentId))
+            .Select(l => l.CommentId).ToListAsync(cancellationToken)).ToHashSet();
+
+    public Task<CommentLike?> GetCommentLikeAsync(Guid commentId, Guid? customerId, CancellationToken cancellationToken) =>
+        context.CommentLikes.FirstOrDefaultAsync(
+            l => l.CommentId == commentId && l.CustomerId == customerId, cancellationToken);
+
+    public void AddCommentLike(CommentLike like) => context.CommentLikes.Add(like);
+
+    public void RemoveCommentLike(CommentLike like) => context.CommentLikes.Remove(like);
 
     public async Task<Dictionary<Guid, int>> GetParticipantCountsAsync(
         IReadOnlyCollection<Guid> postIds, CancellationToken cancellationToken) =>

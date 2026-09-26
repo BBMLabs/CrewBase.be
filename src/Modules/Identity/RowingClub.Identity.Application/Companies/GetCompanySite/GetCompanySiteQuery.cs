@@ -36,4 +36,10 @@ public sealed record CompanySiteDto(
     int MaxEmployees,
     bool CanExportData,
     bool HasAdvancedReports,
-    bool HasAutomaticDuesReminders);
+    bool HasAutomaticDuesReminders,
+    string? SeoTitle,
+    string? SeoDescription,
+    string? SeoKeywords,
+    string? GoogleSiteVerification,
+    string? GoogleAnalyticsId,
+    bool AllowIndexing);

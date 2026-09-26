@@ -1,3 +1,4 @@
+using System.Text;
 using MediatR;
 using Microsoft.AspNetCore.Mvc;
 using RowingClub.Api.Tenancy;
@@ -61,8 +62,47 @@ public static class PublicSiteEndpoints
                     company.Phone,
                     company.ContactEmail,
                     company.Address,
+                    company.SeoTitle,
+                    company.SeoDescription,
+                    company.SeoKeywords,
+                    company.GoogleSiteVerification,
+                    company.GoogleAnalyticsId,
+                    company.AllowIndexing,
                 }));
         }).WithName("PublicCompanyInfo");
+
+        group.MapGet("/sitemap.xml", async (
+            string subdomain, TenantResolver resolver, ISender sender, HttpContext httpContext,
+            CancellationToken cancellationToken) =>
+        {
+            var company = await resolver.ResolveBySubdomainAsync(subdomain, cancellationToken);
+            if (company is null)
+                return Results.NotFound(ApiResponse.Fail("company_not_found", "Firma bulunamadı."));
+
+            var branches = await sender.Send(new GetPublicBranchListQuery(), cancellationToken);
+            var siteOrigin = ClubSiteSeo.SiteOrigin(company.Subdomain);
+            var lastModified = DateOnly.FromDateTime(DateTime.UtcNow);
+
+            ClubSiteSeo.ApplyCacheHeaders(httpContext);
+            return Results.Text(
+                ClubSiteSeo.BuildSitemap(siteOrigin, branches.Select(b => b.Code), lastModified),
+                "application/xml", Encoding.UTF8);
+        }).WithName("PublicSitemap")
+          .Produces<string>(StatusCodes.Status200OK, "application/xml");
+
+        group.MapGet("/robots.txt", async (
+            string subdomain, TenantResolver resolver, HttpContext httpContext, CancellationToken cancellationToken) =>
+        {
+            var company = await resolver.ResolveBySubdomainAsync(subdomain, cancellationToken);
+            if (company is null)
+                return Results.NotFound(ApiResponse.Fail("company_not_found", "Firma bulunamadı."));
+
+            ClubSiteSeo.ApplyCacheHeaders(httpContext);
+            return Results.Text(
+                ClubSiteSeo.BuildRobots(ClubSiteSeo.SiteOrigin(company.Subdomain), company.AllowIndexing),
+                "text/plain", Encoding.UTF8);
+        }).WithName("PublicRobots")
+          .Produces<string>(StatusCodes.Status200OK, "text/plain");
 
         group.MapGet("/gallery", async (
             string subdomain, TenantResolver resolver, ISender sender, CancellationToken cancellationToken) =>
@@ -239,6 +279,20 @@ public static class PublicSiteEndpoints
                 : Results.Ok(ApiResponse<PostMediaDto>.Ok(media));
         }).WithName("PublicFeedPostMedia");
 
+        group.MapGet("/feed/{postId:guid}/media/{index:int}", async (
+            string subdomain, Guid postId, int index, TenantResolver resolver, ISender sender,
+            CancellationToken cancellationToken) =>
+        {
+            var company = await resolver.ResolveBySubdomainAsync(subdomain, cancellationToken);
+            if (company is null)
+                return Results.NotFound(ApiResponse.Fail("company_not_found", "Firma bulunamadı."));
+
+            var media = await sender.Send(new GetPostMediaQuery(postId, ClubOnly: true, index), cancellationToken);
+            return media is null
+                ? Results.NotFound(ApiResponse.Fail("media_not_found", "Bu sırada medya bulunamadı."))
+                : Results.Ok(ApiResponse<PostMediaDto>.Ok(media));
+        }).WithName("PublicFeedPostMediaItem");
+
         group.MapGet("/feed/{postId:guid}/comments", async (
             string subdomain, Guid postId, TenantResolver resolver, ISender sender, CancellationToken cancellationToken) =>
         {
@@ -246,7 +300,8 @@ public static class PublicSiteEndpoints
             if (company is null)
                 return Results.NotFound(ApiResponse.Fail("company_not_found", "Firma bulunamadı."));
 
-            var comments = await sender.Send(new GetCommentsQuery(postId, ClubOnly: true), cancellationToken);
+            var comments = await sender.Send(
+                new GetCommentsQuery(postId, ClubOnly: true, ClubName: company.Name), cancellationToken);
             return Results.Ok(ApiResponse<List<CommentDto>>.Ok(comments));
         }).WithName("PublicFeedPostComments");
 

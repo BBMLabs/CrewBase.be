@@ -32,8 +32,8 @@ public sealed record OtpRequest(string Purpose);
 public sealed record OtpVerifyRequest(string Purpose, string Code);
 public sealed record PostCreateRequest(
     string Body, string? MediaBase64, string? MediaContentType,
-    bool IsEvent, string? EventTitle, string? EventDate);
-public sealed record CommentCreateRequest(string Body);
+    bool IsEvent, string? EventTitle, string? EventDate, List<PostMediaInput>? Media = null);
+public sealed record CommentCreateRequest(string Body, Guid? ParentId = null);
 public sealed record PollVoteRequest(Guid OptionId);
 public sealed record ConfirmPackagePurchaseRequest(Guid PackageId, string Token);
 
@@ -309,9 +309,9 @@ public static class MemberEndpoints
         {
             var postId = await sender.Send(new CreatePostCommand(
                 ctx.CustomerId, request.Body, request.MediaBase64, request.MediaContentType,
-                request.IsEvent, request.EventTitle, request.EventDate), ct);
+                request.IsEvent, request.EventTitle, request.EventDate, Media: request.Media), ct);
             return Results.Ok(ApiResponse<object>.Ok(new { postId }, "Paylaşımınız yayınlandı."));
-        })).WithName("MemberCreatePost");
+        })).WithName("MemberCreatePost").WithMetadata(new RequestSizeLimitAttribute(FeedUploadLimitBytes));
 
         group.MapGet("/feed/{id:guid}/media", GuardedRoute(async (ctx, postId, sender, ct) =>
         {
@@ -320,6 +320,20 @@ public static class MemberEndpoints
                 ? Results.NotFound(ApiResponse.Fail("no_media", "Bu paylaşımda medya yok."))
                 : Results.Ok(ApiResponse<PostMediaDto>.Ok(media));
         })).WithName("MemberPostMedia");
+
+        group.MapGet("/feed/{id:guid}/media/{index:int}", async (
+            HttpContext http, Guid id, int index, ICurrentUser user, TenantResolver resolver,
+            ISender sender, CancellationToken ct) =>
+        {
+            var (_, error) = await ResolveAsync(http, user, resolver, ct);
+            if (error is not null)
+                return error;
+
+            var media = await sender.Send(new GetPostMediaQuery(id, ClubOnly: false, index), ct);
+            return media is null
+                ? Results.NotFound(ApiResponse.Fail("media_not_found", "Bu sırada medya bulunamadı."))
+                : Results.Ok(ApiResponse<PostMediaDto>.Ok(media));
+        }).WithName("MemberPostMediaItem");
 
         group.MapPost("/feed/{id:guid}/delete", GuardedRoute(async (ctx, postId, sender, ct) =>
         {
@@ -335,16 +349,37 @@ public static class MemberEndpoints
 
         group.MapGet("/feed/{id:guid}/comments", GuardedRoute(async (ctx, postId, sender, ct) =>
         {
-            var comments = await sender.Send(new GetCommentsQuery(postId, ClubOnly: false), ct);
+            var comments = await sender.Send(
+                new GetCommentsQuery(postId, ClubOnly: false, ctx.CustomerId, ViewerIsClub: false, ctx.CompanyName), ct);
             return Results.Ok(ApiResponse<List<CommentDto>>.Ok(comments));
         })).WithName("MemberComments");
 
         group.MapPost("/feed/{id:guid}/comments", GuardedRouteBody<CommentCreateRequest>(
             async (ctx, postId, request, sender, ct) =>
         {
-            var comment = await sender.Send(new AddCommentCommand(postId, ctx.CustomerId, request.Body), ct);
+            var comment = await sender.Send(
+                new AddCommentCommand(postId, ctx.CustomerId, request.Body, request.ParentId, ctx.CompanyName), ct);
             return Results.Ok(ApiResponse<CommentDto>.Ok(comment));
         })).WithName("MemberAddComment");
+
+        group.MapPost("/feed/{id:guid}/react", GuardedRouteBody<FeedReactRequest>(
+            async (ctx, postId, request, sender, ct) =>
+        {
+            var summary = await sender.Send(new ReactToPostCommand(postId, ctx.CustomerId, request.Emoji), ct);
+            return Results.Ok(ApiResponse<ReactionSummaryDto>.Ok(summary));
+        })).WithName("MemberReactToPost");
+
+        group.MapPost("/feed/comments/{id:guid}/like", GuardedRoute(async (ctx, commentId, sender, ct) =>
+        {
+            var result = await sender.Send(new ToggleCommentLikeCommand(commentId, ctx.CustomerId), ct);
+            return Results.Ok(ApiResponse<ToggleResult>.Ok(result));
+        })).WithName("MemberToggleCommentLike");
+
+        group.MapPost("/feed/comments/{id:guid}/delete", GuardedRoute(async (ctx, commentId, sender, ct) =>
+        {
+            await sender.Send(new DeleteCommentCommand(commentId, ctx.CustomerId), ct);
+            return Results.Ok(ApiResponse.Ok("Yorum silindi."));
+        })).WithName("MemberDeleteComment");
 
         group.MapPost("/feed/{id:guid}/join", GuardedRoute(async (ctx, postId, sender, ct) =>
         {
@@ -431,6 +466,8 @@ public static class MemberEndpoints
             var (ctx, error) = await ResolveAsync(http, user, resolver, ct);
             return error ?? await handler(ctx!, id, body, sender, ct);
         };
+
+    private const long FeedUploadLimitBytes = 80L * 1024 * 1024;
 
     private static IResult CompanyNotFound() =>
         Results.NotFound(ApiResponse.Fail("company_not_found", "Firma bulunamadı."));

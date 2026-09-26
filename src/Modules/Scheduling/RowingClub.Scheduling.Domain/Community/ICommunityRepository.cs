@@ -1,5 +1,7 @@
 namespace RowingClub.Scheduling.Domain.Community;
 
+public sealed record ReactionCount(Guid PostId, string Emoji, int Count);
+
 /// <summary>Akış modülünün tek deposu - post, beğeni, yorum, katılım ve takip birlikte yaşar.</summary>
 public interface ICommunityRepository
 {
@@ -7,29 +9,50 @@ public interface ICommunityRepository
 
     Task<Post?> GetPostAsync(Guid postId, CancellationToken cancellationToken);
 
-    Task<PostMedia?> GetMediaAsync(Guid postId, CancellationToken cancellationToken);
+    Task<PostMedia?> GetMediaAsync(Guid postId, int order, CancellationToken cancellationToken);
 
-    void AddPost(Post post, PostMedia? media);
+    Task<Dictionary<Guid, int>> GetMediaCountsAsync(IReadOnlyCollection<Guid> postIds, CancellationToken cancellationToken);
+
+    void AddPost(Post post, IReadOnlyCollection<PostMedia> media);
 
     void RemovePost(Post post);
 
-    Task<Dictionary<Guid, int>> GetLikeCountsAsync(IReadOnlyCollection<Guid> postIds, CancellationToken cancellationToken);
+    Task<List<ReactionCount>> GetReactionCountsAsync(IReadOnlyCollection<Guid> postIds, CancellationToken cancellationToken);
 
-    Task<HashSet<Guid>> GetLikedPostIdsAsync(Guid customerId, IReadOnlyCollection<Guid> postIds, CancellationToken cancellationToken);
+    Task<Dictionary<Guid, string>> GetMyReactionsAsync(
+        Guid? customerId, IReadOnlyCollection<Guid> postIds, CancellationToken cancellationToken);
 
-    Task<List<PostLike>> GetLikesAsync(Guid postId, CancellationToken cancellationToken);
+    Task<List<PostReaction>> GetReactionsAsync(Guid postId, CancellationToken cancellationToken);
 
-    Task<PostLike?> GetLikeAsync(Guid postId, Guid customerId, CancellationToken cancellationToken);
+    Task<PostReaction?> GetReactionAsync(Guid postId, Guid? customerId, CancellationToken cancellationToken);
 
-    void AddLike(PostLike like);
+    void AddReaction(PostReaction reaction);
 
-    void RemoveLike(PostLike like);
+    void RemoveReaction(PostReaction reaction);
 
     Task<Dictionary<Guid, int>> GetCommentCountsAsync(IReadOnlyCollection<Guid> postIds, CancellationToken cancellationToken);
 
     Task<List<PostComment>> GetCommentsAsync(Guid postId, CancellationToken cancellationToken);
 
+    Task<PostComment?> GetCommentAsync(Guid commentId, CancellationToken cancellationToken);
+
+    Task<List<PostComment>> GetRepliesAsync(Guid parentCommentId, CancellationToken cancellationToken);
+
     void AddComment(PostComment comment);
+
+    void RemoveComment(PostComment comment);
+
+    Task<Dictionary<Guid, int>> GetCommentLikeCountsAsync(
+        IReadOnlyCollection<Guid> commentIds, CancellationToken cancellationToken);
+
+    Task<HashSet<Guid>> GetLikedCommentIdsAsync(
+        Guid? customerId, IReadOnlyCollection<Guid> commentIds, CancellationToken cancellationToken);
+
+    Task<CommentLike?> GetCommentLikeAsync(Guid commentId, Guid? customerId, CancellationToken cancellationToken);
+
+    void AddCommentLike(CommentLike like);
+
+    void RemoveCommentLike(CommentLike like);
 
     Task<Dictionary<Guid, int>> GetParticipantCountsAsync(IReadOnlyCollection<Guid> postIds, CancellationToken cancellationToken);
 

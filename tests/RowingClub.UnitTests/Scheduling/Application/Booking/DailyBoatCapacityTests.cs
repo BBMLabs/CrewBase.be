@@ -178,4 +178,49 @@ public sealed class DailyBoatCapacityTests
         response.BoatName.Should().Be(boats[1].Name);
         _sessionRepository.Received(1).Add(Arg.Is<TrainingSession>(s => s!.BoatId == boats[1].Id && s.StartTime == TwoOClock));
     }
+
+    private TrainingSession GivenFullyCancelledSession(Boat boat, TimeOnly slot)
+    {
+        var session = TrainingSession.Create(_date, slot, BoatClass.Quad4x, 0, boat.Id, null);
+        session.AssignBoat(boat);
+        var appointment = Appointment.Book(Customer.Create("Veli Demir", "+905550000001", null), session, null, null, null);
+        appointment.SetStatus(AppointmentStatus.Cancelled);
+        _sessionRepository.GetByDateAsync(_date, Arg.Any<CancellationToken>()).Returns([session]);
+        return session;
+    }
+
+    [Fact]
+    public async Task Fully_cancelled_session_releases_its_boat_for_every_hour()
+    {
+        var boats = GivenQuadBoats(1);
+        GivenFullyCancelledSession(boats[0], OneOClock);
+
+        var seats = await SeatsByTimeAsync();
+
+        seats.Should().OnlyContain(s => s.Value == 4);
+    }
+
+    [Fact]
+    public async Task Booking_another_hour_reuses_the_boat_of_a_fully_cancelled_session()
+    {
+        var boats = GivenQuadBoats(1);
+        GivenFullyCancelledSession(boats[0], OneOClock);
+
+        var response = await CreateBookingHandler().Handle(GuestBooking(TwoOClock), CancellationToken.None);
+
+        response.BoatName.Should().Be(boats[0].Name);
+        _sessionRepository.Received(1).Add(Arg.Is<TrainingSession>(s => s!.BoatId == boats[0].Id && s.StartTime == TwoOClock));
+    }
+
+    [Fact]
+    public async Task Booking_the_same_hour_rejoins_a_fully_cancelled_session_instead_of_opening_a_new_one()
+    {
+        var boats = GivenQuadBoats(1);
+        var session = GivenFullyCancelledSession(boats[0], OneOClock);
+
+        var response = await CreateBookingHandler().Handle(GuestBooking(OneOClock), CancellationToken.None);
+
+        response.SessionId.Should().Be(session.Id);
+        _sessionRepository.DidNotReceive().Add(Arg.Any<TrainingSession>());
+    }
 }

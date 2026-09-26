@@ -10,14 +10,23 @@ public sealed record GalleryImageDto(Guid Id, string ImagePath);
 public sealed record CompanySiteContentDto(
     string? LogoPath, string Tagline, string AboutText, string? InstagramUrl, string? FacebookUrl,
     string? YoutubeUrl, string? LinkedinUrl, string? XUrl, string? WhatsappUrl, string? TelegramUrl,
-    string? PinterestUrl, string? GoogleMapsUrl, List<GalleryImageDto> GalleryImages);
+    string? PinterestUrl, string? GoogleMapsUrl, List<GalleryImageDto> GalleryImages,
+    string? SeoTitle, string? SeoDescription, string? SeoKeywords, string? GoogleSiteVerification,
+    string? GoogleAnalyticsId, bool AllowIndexing);
 
 public sealed record GetCompanySiteContentQuery(Guid CompanyId) : IQuery<CompanySiteContentDto>;
 
 public sealed record UpdateCompanySiteContentCommand(
     Guid CompanyId, string Tagline, string AboutText, string? InstagramUrl, string? FacebookUrl,
     string? YoutubeUrl, string? LinkedinUrl, string? XUrl, string? WhatsappUrl, string? TelegramUrl,
-    string? PinterestUrl, string? GoogleMapsUrl) : ICommand<CompanySiteContentDto>;
+    string? PinterestUrl, string? GoogleMapsUrl, string? SeoTitle = null, string? SeoDescription = null,
+    string? SeoKeywords = null, string? GoogleSiteVerification = null, string? GoogleAnalyticsId = null,
+    bool? AllowIndexing = null) : ICommand<CompanySiteContentDto>
+{
+    public bool HasSeoSettings =>
+        AllowIndexing is not null || SeoTitle is not null || SeoDescription is not null || SeoKeywords is not null ||
+        GoogleSiteVerification is not null || GoogleAnalyticsId is not null;
+}
 
 public sealed record SetCompanyLogoCommand(Guid CompanyId, string LogoPath) : ICommand<CompanySiteContentDto>;
 
@@ -42,7 +51,9 @@ public sealed class GetCompanySiteContentQueryHandler(
     internal static CompanySiteContentDto ToDto(Company company, List<CompanyGalleryImage> images) => new(
         company.LogoPath, company.Tagline, company.AboutText, company.InstagramUrl, company.FacebookUrl,
         company.YoutubeUrl, company.LinkedinUrl, company.XUrl, company.WhatsappUrl, company.TelegramUrl,
-        company.PinterestUrl, company.GoogleMapsUrl, images.Select(i => new GalleryImageDto(i.Id, i.ImagePath)).ToList());
+        company.PinterestUrl, company.GoogleMapsUrl, images.Select(i => new GalleryImageDto(i.Id, i.ImagePath)).ToList(),
+        company.SeoTitle, company.SeoDescription, company.SeoKeywords, company.GoogleSiteVerification,
+        company.GoogleAnalyticsId, company.AllowIndexing);
 }
 
 public sealed class UpdateCompanySiteContentCommandHandler(
@@ -59,6 +70,10 @@ public sealed class UpdateCompanySiteContentCommandHandler(
             request.InstagramUrl, request.FacebookUrl, request.YoutubeUrl, request.LinkedinUrl,
             request.XUrl, request.WhatsappUrl, request.TelegramUrl, request.PinterestUrl);
         company.UpdateGoogleMapsUrl(request.GoogleMapsUrl);
+        if (request.HasSeoSettings)
+            company.UpdateSeoSettings(
+                request.SeoTitle, request.SeoDescription, request.SeoKeywords,
+                request.GoogleSiteVerification, request.GoogleAnalyticsId, request.AllowIndexing ?? company.AllowIndexing);
         companyRepository.Update(company);
 
         var images = await galleryRepository.GetByCompanyIdAsync(request.CompanyId, cancellationToken);

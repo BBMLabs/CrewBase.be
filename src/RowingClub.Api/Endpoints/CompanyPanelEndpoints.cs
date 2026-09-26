@@ -25,7 +25,8 @@ namespace RowingClub.Api.Endpoints;
 public sealed record CompanyPostCreateRequest(
     string Body, string? MediaBase64, string? MediaContentType,
     bool IsEvent, string? EventTitle, string? EventDate,
-    List<string>? PollOptions, string? PollClosesOn);
+    List<string>? PollOptions, string? PollClosesOn, List<PostMediaInput>? Media = null);
+public sealed record FeedReactRequest(string? Emoji);
 public sealed record SetAppointmentStatusRequest(string Status, bool? RefundPackage);
 public sealed record MoveAppointmentRequest(Guid SessionId);
 public sealed record SetCustomerLevelRequest(int Level);
@@ -73,7 +74,8 @@ public sealed record ReplySiteMessageRequest(string ReplyText);
 public sealed record UpdateSiteContentRequest(
     string Tagline, string AboutText, string? InstagramUrl, string? FacebookUrl, string? YoutubeUrl,
     string? LinkedinUrl, string? XUrl, string? WhatsappUrl, string? TelegramUrl, string? PinterestUrl,
-    string? GoogleMapsUrl);
+    string? GoogleMapsUrl, string? SeoTitle = null, string? SeoDescription = null, string? SeoKeywords = null,
+    string? GoogleSiteVerification = null, string? GoogleAnalyticsId = null, bool? AllowIndexing = null);
 
 public sealed record SessionAppointmentDto(
     Guid Id, string MemberName, string MemberPhone, Guid SessionId,
@@ -139,7 +141,9 @@ public static class CompanyPanelEndpoints
                 new UpdateCompanySiteContentCommand(
                     site.CompanyId, request.Tagline, request.AboutText, request.InstagramUrl,
                     request.FacebookUrl, request.YoutubeUrl, request.LinkedinUrl, request.XUrl, request.WhatsappUrl,
-                    request.TelegramUrl, request.PinterestUrl, request.GoogleMapsUrl), ct);
+                    request.TelegramUrl, request.PinterestUrl, request.GoogleMapsUrl, request.SeoTitle,
+                    request.SeoDescription, request.SeoKeywords, request.GoogleSiteVerification,
+                    request.GoogleAnalyticsId, request.AllowIndexing), ct);
             return Results.Ok(ApiResponse<CompanySiteContentDto>.Ok(content, "Site içeriği güncellendi."));
         }).WithName("CompanyUpdateSiteContent");
 
@@ -1064,7 +1068,7 @@ public static class CompanyPanelEndpoints
             if (await ResolveOwnCompanyAsync(user, resolver, ct) is null)
                 return CompanyNotFound();
 
-            var posts = await sender.Send(new GetFeedQuery(null, 50, ClubOnly: false), ct);
+            var posts = await sender.Send(new GetFeedQuery(null, 50, ClubOnly: false, ViewerIsClub: true), ct);
             return Results.Ok(ApiResponse<List<PostDto>>.Ok(posts));
         }).WithName("CompanyFeed");
 
@@ -1078,9 +1082,9 @@ public static class CompanyPanelEndpoints
             var postId = await sender.Send(new CreatePostCommand(
                 null, request.Body, request.MediaBase64, request.MediaContentType,
                 request.IsEvent, request.EventTitle, request.EventDate,
-                request.PollOptions, request.PollClosesOn), ct);
+                request.PollOptions, request.PollClosesOn, request.Media), ct);
             return Results.Ok(ApiResponse<object>.Ok(new { postId }, "Kulüp adına paylaşıldı."));
-        }).WithName("CompanyCreatePost");
+        }).WithName("CompanyCreatePost").WithMetadata(new RequestSizeLimitAttribute(FeedUploadLimitBytes));
 
         group.MapPost("/feed/{postId:guid}/delete", async (
             Guid postId, ICurrentUser user, TenantResolver resolver, ISender sender, CancellationToken ct) =>
@@ -1104,15 +1108,81 @@ public static class CompanyPanelEndpoints
                 : Results.Ok(ApiResponse<PostMediaDto>.Ok(media));
         }).WithName("CompanyPostMedia");
 
-        group.MapGet("/feed/{postId:guid}/comments", async (
-            Guid postId, ICurrentUser user, TenantResolver resolver, ISender sender, CancellationToken ct) =>
+        group.MapGet("/feed/{postId:guid}/media/{index:int}", async (
+            Guid postId, int index, ICurrentUser user, TenantResolver resolver, ISender sender, CancellationToken ct) =>
         {
             if (await ResolveOwnCompanyAsync(user, resolver, ct) is null)
                 return CompanyNotFound();
 
-            var comments = await sender.Send(new GetCommentsQuery(postId, ClubOnly: false), ct);
+            var media = await sender.Send(new GetPostMediaQuery(postId, ClubOnly: false, index), ct);
+            return media is null
+                ? Results.NotFound(ApiResponse.Fail("media_not_found", "Bu sırada medya bulunamadı."))
+                : Results.Ok(ApiResponse<PostMediaDto>.Ok(media));
+        }).WithName("CompanyPostMediaItem");
+
+        group.MapGet("/feed/{postId:guid}/comments", async (
+            Guid postId, ICurrentUser user, TenantResolver resolver, ISender sender, CancellationToken ct) =>
+        {
+            if (await ResolveOwnCompanyAsync(user, resolver, ct) is not { } company)
+                return CompanyNotFound();
+
+            var comments = await sender.Send(
+                new GetCommentsQuery(postId, ClubOnly: false, ViewerCustomerId: null, ViewerIsClub: true, company.Name), ct);
             return Results.Ok(ApiResponse<List<CommentDto>>.Ok(comments));
         }).WithName("CompanyPostComments");
+
+        group.MapPost("/feed/{postId:guid}/comments", async (
+            Guid postId, [FromBody] CommentCreateRequest request, ICurrentUser user, TenantResolver resolver,
+            ISender sender, CancellationToken ct) =>
+        {
+            if (await ResolveOwnCompanyAsync(user, resolver, ct) is not { } company)
+                return CompanyNotFound();
+
+            var comment = await sender.Send(
+                new AddCommentCommand(postId, null, request.Body, request.ParentId, company.Name), ct);
+            return Results.Ok(ApiResponse<CommentDto>.Ok(comment));
+        }).WithName("CompanyAddComment");
+
+        group.MapPost("/feed/comments/{commentId:guid}/like", async (
+            Guid commentId, ICurrentUser user, TenantResolver resolver, ISender sender, CancellationToken ct) =>
+        {
+            if (await ResolveOwnCompanyAsync(user, resolver, ct) is null)
+                return CompanyNotFound();
+
+            var result = await sender.Send(new ToggleCommentLikeCommand(commentId, null), ct);
+            return Results.Ok(ApiResponse<ToggleResult>.Ok(result));
+        }).WithName("CompanyToggleCommentLike");
+
+        group.MapPost("/feed/comments/{commentId:guid}/delete", async (
+            Guid commentId, ICurrentUser user, TenantResolver resolver, ISender sender, CancellationToken ct) =>
+        {
+            if (await ResolveOwnCompanyAsync(user, resolver, ct) is null)
+                return CompanyNotFound();
+
+            await sender.Send(new DeleteCommentCommand(commentId, null), ct);
+            return Results.Ok(ApiResponse.Ok("Yorum kaldırıldı."));
+        }).WithName("CompanyDeleteComment");
+
+        group.MapPost("/feed/{postId:guid}/react", async (
+            Guid postId, [FromBody] FeedReactRequest request, ICurrentUser user, TenantResolver resolver,
+            ISender sender, CancellationToken ct) =>
+        {
+            if (await ResolveOwnCompanyAsync(user, resolver, ct) is null)
+                return CompanyNotFound();
+
+            var summary = await sender.Send(new ReactToPostCommand(postId, null, request.Emoji), ct);
+            return Results.Ok(ApiResponse<ReactionSummaryDto>.Ok(summary));
+        }).WithName("CompanyReactToPost");
+
+        group.MapGet("/feed/{postId:guid}/reactions", async (
+            Guid postId, ICurrentUser user, TenantResolver resolver, ISender sender, CancellationToken ct) =>
+        {
+            if (await ResolveOwnCompanyAsync(user, resolver, ct) is not { } company)
+                return CompanyNotFound();
+
+            var reactors = await sender.Send(new GetReactorsQuery(postId, company.Name), ct);
+            return Results.Ok(ApiResponse<List<ReactorDto>>.Ok(reactors));
+        }).WithName("CompanyPostReactors");
 
         group.MapGet("/feed/{postId:guid}/participants", async (
             Guid postId, ICurrentUser user, TenantResolver resolver, ISender sender, CancellationToken ct) =>
@@ -1127,10 +1197,10 @@ public static class CompanyPanelEndpoints
         group.MapGet("/feed/{postId:guid}/likes", async (
             Guid postId, ICurrentUser user, TenantResolver resolver, ISender sender, CancellationToken ct) =>
         {
-            if (await ResolveOwnCompanyAsync(user, resolver, ct) is null)
+            if (await ResolveOwnCompanyAsync(user, resolver, ct) is not { } company)
                 return CompanyNotFound();
 
-            var likers = await sender.Send(new GetLikersQuery(postId), ct);
+            var likers = await sender.Send(new GetLikersQuery(postId, company.Name), ct);
             return Results.Ok(ApiResponse<List<LikerDto>>.Ok(likers));
         }).WithName("CompanyPostLikers");
 
@@ -1233,6 +1303,8 @@ public static class CompanyPanelEndpoints
 
         return app;
     }
+
+    private const long FeedUploadLimitBytes = 80L * 1024 * 1024;
 
     private static Task<CompanySiteDto?> ResolveOwnCompanyAsync(
         ICurrentUser user, TenantResolver resolver, CancellationToken cancellationToken)

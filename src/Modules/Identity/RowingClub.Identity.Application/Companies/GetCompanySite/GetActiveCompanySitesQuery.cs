@@ -27,7 +27,9 @@ public sealed class GetActiveCompanySitesQueryHandler(ICompanyRepository company
                     c.Phone, c.ContactEmail, c.Address, c.TaxNumber, c.Status.ToString(),
                     c.Plan.ToString(), limits.MaxBranches, limits.MaxMembers, limits.MaxBoats, limits.MaxInstructors,
                     features.MaxManagers, features.MaxEmployees, features.CanExportData,
-                    features.HasAdvancedReports, features.HasAutomaticDuesReminders);
+                    features.HasAdvancedReports, features.HasAutomaticDuesReminders,
+                    c.SeoTitle, c.SeoDescription, c.SeoKeywords,
+                    c.GoogleSiteVerification, c.GoogleAnalyticsId, c.AllowIndexing);
             })
             .ToList();
     }

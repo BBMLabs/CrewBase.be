@@ -120,10 +120,14 @@ public sealed class BookAppointmentCommandHandler(
         else if (session is null)
         {
             var daySessions = await sessionRepository.GetByDateAsync(request.Date, cancellationToken);
+            var activeBoatCount = (await boatRepository.GetAllAsync(cancellationToken))
+                .Count(b => b.IsActive && b.Class == boatClass);
 
             session = daySessions
                 .Where(s => s.StartTime == request.StartTime && s.BoatClass == boatClass && s.HasFreeSeat)
-                .OrderBy(s => Math.Abs(s.Level - customer.Level))
+                .Where(s => DailyBoatCapacity.HoldsBoat(s) || DailyBoatCapacity.CanReuseEmptySession(daySessions, s, activeBoatCount))
+                .OrderByDescending(DailyBoatCapacity.HoldsBoat)
+                .ThenBy(s => Math.Abs(s.Level - customer.Level))
                 .FirstOrDefault()
                 ?? await OpenSessionAsync(request.Date, request.StartTime, boatClass, customer.Level, daySessions, cancellationToken);
         }

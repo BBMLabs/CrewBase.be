@@ -102,6 +102,8 @@ app.MapAuthEndpoints();
 app.MapAdminEndpoints();
 app.MapPublicSiteEndpoints();
 app.MapCompanyPanelEndpoints();
+if (app.Environment.IsDevelopment())
+    app.MapDevPlanEndpoints();
 app.MapMemberEndpoints();
 app.MapWebhookEndpoints();
 app.MapHub<ChatHub>("/hubs/chat").RequireCors("frontend");

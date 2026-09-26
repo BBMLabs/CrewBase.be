@@ -72,6 +72,9 @@ public sealed class GlobalExceptionHandler(
         ConcurrencyException => (
             StatusCodes.Status409Conflict, "concurrency_conflict", "Concurrency conflict", null),
 
+        DomainValidationException validationFailure => (
+            StatusCodes.Status400BadRequest, validationFailure.ErrorCode, "Bad request", null),
+
         DomainException domainException => (
             StatusCodes.Status409Conflict, domainException.ErrorCode, "Conflict", null),
 

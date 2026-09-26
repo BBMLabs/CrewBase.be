@@ -83,6 +83,10 @@ public sealed class TenantDbContext(
 
     public DbSet<PostComment> PostComments => Set<PostComment>();
 
+    public DbSet<PostReaction> PostReactions => Set<PostReaction>();
+
+    public DbSet<CommentLike> CommentLikes => Set<CommentLike>();
+
     public DbSet<EventParticipation> EventParticipations => Set<EventParticipation>();
 
     public DbSet<Follow> Follows => Set<Follow>();
@@ -226,10 +230,10 @@ public sealed class TenantDbContext(
         modelBuilder.Entity<PostMedia>(builder =>
         {
             builder.ToTable("post_media");
-            builder.HasKey(m => m.PostId);
+            builder.HasKey(m => new { m.PostId, m.Order });
             builder.Property(m => m.Base64).HasConversion(encrypted).IsRequired();
             builder.Property(m => m.ContentType).HasMaxLength(40).IsRequired();
-            builder.HasOne<Post>().WithOne().HasForeignKey<PostMedia>(m => m.PostId)
+            builder.HasOne<Post>().WithMany().HasForeignKey(m => m.PostId)
                 .OnDelete(DeleteBehavior.Cascade);
         });
 
@@ -247,8 +251,40 @@ public sealed class TenantDbContext(
             builder.HasKey(c => c.Id);
             builder.Property(c => c.Body).HasConversion(encrypted).IsRequired();
             builder.HasIndex(c => new { c.PostId, c.CreatedAtUtc });
+            builder.Ignore(c => c.IsClub);
             builder.HasOne<Post>().WithMany().HasForeignKey(c => c.PostId).OnDelete(DeleteBehavior.Cascade);
             builder.HasOne<Customer>().WithMany().HasForeignKey(c => c.CustomerId).OnDelete(DeleteBehavior.Cascade);
+            builder.HasOne<PostComment>().WithMany().HasForeignKey(c => c.ParentCommentId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<PostReaction>(builder =>
+        {
+            builder.ToTable("post_reactions");
+            builder.HasKey(r => r.Id);
+            builder.Property(r => r.Emoji).HasMaxLength(PostReaction.MaxEmojiLength).IsRequired();
+            builder.Ignore(r => r.IsClub);
+            builder.HasIndex(r => new { r.PostId, r.CustomerId }).IsUnique()
+                .HasFilter("\"CustomerId\" IS NOT NULL");
+            builder.HasIndex(r => r.PostId).IsUnique()
+                .HasFilter("\"CustomerId\" IS NULL")
+                .HasDatabaseName("IX_post_reactions_PostId_Club");
+            builder.HasOne<Post>().WithMany().HasForeignKey(r => r.PostId).OnDelete(DeleteBehavior.Cascade);
+            builder.HasOne<Customer>().WithMany().HasForeignKey(r => r.CustomerId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<CommentLike>(builder =>
+        {
+            builder.ToTable("comment_likes");
+            builder.HasKey(l => l.Id);
+            builder.HasIndex(l => new { l.CommentId, l.CustomerId }).IsUnique()
+                .HasFilter("\"CustomerId\" IS NOT NULL");
+            builder.HasIndex(l => l.CommentId).IsUnique()
+                .HasFilter("\"CustomerId\" IS NULL")
+                .HasDatabaseName("IX_comment_likes_CommentId_Club");
+            builder.HasOne<PostComment>().WithMany().HasForeignKey(l => l.CommentId)
+                .OnDelete(DeleteBehavior.Cascade);
+            builder.HasOne<Customer>().WithMany().HasForeignKey(l => l.CustomerId).OnDelete(DeleteBehavior.Cascade);
         });
 
         modelBuilder.Entity<EventParticipation>(builder =>

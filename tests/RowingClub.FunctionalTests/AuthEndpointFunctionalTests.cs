@@ -87,6 +87,62 @@ public sealed class AuthEndpointFunctionalTests(RowingClubWebApplicationFactory 
     }
 
     [Fact]
+    public async Task OpenApi_document_lists_the_public_seo_endpoints()
+    {
+        using var client = factory.CreateClient();
+
+        var response = await client.GetAsync("/openapi/v1.json");
+        response.EnsureSuccessStatusCode();
+
+        var document = await response.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>();
+        var paths = document.GetProperty("paths");
+
+        foreach (var path in new[]
+                 {
+                     "/api/v1/public/{subdomain}/sitemap.xml",
+                     "/api/v1/public/{subdomain}/robots.txt",
+                 })
+        {
+            paths.TryGetProperty(path, out var item).Should().BeTrue($"{path} OpenAPI'de eksik");
+            item.TryGetProperty("get", out var operation).Should().BeTrue($"GET {path} OpenAPI'de eksik");
+            operation.TryGetProperty("security", out _).Should().BeFalse($"{path} anonim olmalı");
+        }
+    }
+
+    [Fact]
+    public async Task OpenApi_document_lists_the_feed_interaction_endpoints()
+    {
+        using var client = factory.CreateClient();
+
+        var response = await client.GetAsync("/openapi/v1.json");
+        response.EnsureSuccessStatusCode();
+
+        var document = await response.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>();
+        var paths = document.GetProperty("paths");
+
+        foreach (var (path, method) in new[]
+                 {
+                     ("/api/v1/company/feed/{postId}/react", "post"),
+                     ("/api/v1/company/feed/{postId}/reactions", "get"),
+                     ("/api/v1/company/feed/{postId}/likes", "get"),
+                     ("/api/v1/company/feed/{postId}/comments", "post"),
+                     ("/api/v1/company/feed/{postId}/media/{index}", "get"),
+                     ("/api/v1/company/feed/comments/{commentId}/like", "post"),
+                     ("/api/v1/company/feed/comments/{commentId}/delete", "post"),
+                     ("/api/v1/member/feed/{id}/react", "post"),
+                     ("/api/v1/member/feed/{id}/like", "post"),
+                     ("/api/v1/member/feed/{id}/media/{index}", "get"),
+                     ("/api/v1/member/feed/comments/{id}/like", "post"),
+                     ("/api/v1/member/feed/comments/{id}/delete", "post"),
+                     ("/api/v1/public/{subdomain}/feed/{postId}/media/{index}", "get"),
+                 })
+        {
+            paths.TryGetProperty(path, out var item).Should().BeTrue($"{path} OpenAPI'de eksik");
+            item.TryGetProperty(method, out _).Should().BeTrue($"{method.ToUpperInvariant()} {path} OpenAPI'de eksik");
+        }
+    }
+
+    [Fact]
     public async Task Rsvp_with_an_invalid_choice_returns_400_before_touching_the_tenant()
     {
         using var client = factory.CreateClient();

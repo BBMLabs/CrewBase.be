@@ -35,6 +35,11 @@ public sealed class CompanyConfiguration : IEntityTypeConfiguration<Company>
         builder.Property(c => c.Phone).HasMaxLength(20);
         builder.Property(c => c.ContactEmail).HasMaxLength(254);
         builder.Property(c => c.Address).HasMaxLength(500);
+        builder.Property(c => c.SeoTitle).HasMaxLength(Company.SeoTitleMaxLength);
+        builder.Property(c => c.SeoDescription).HasMaxLength(Company.SeoDescriptionMaxLength);
+        builder.Property(c => c.SeoKeywords).HasMaxLength(Company.SeoKeywordsMaxLength);
+        builder.Property(c => c.GoogleSiteVerification).HasMaxLength(Company.GoogleSiteVerificationMaxLength);
+        builder.Property(c => c.GoogleAnalyticsId).HasMaxLength(Company.GoogleAnalyticsIdMaxLength);
         builder.Property(c => c.TaxNumber).HasMaxLength(11);
         builder.Property(c => c.Status).HasConversion<string>().HasMaxLength(50);
         builder.Property(c => c.Plan).HasConversion<string>().HasMaxLength(50);

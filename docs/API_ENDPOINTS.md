@@ -240,7 +240,9 @@ gösterir. Eski firma-geneli site kaldırılmıştır.
 | Metot | Route | Açıklama |
 |---|---|---|
 | GET | `/` (kök) | API karşılama mesajı |
-| GET | `/api/v1/public/{subdomain}/info` | Firma adı/telefon/e-posta/adres/site URL'i |
+| GET | `/api/v1/public/{subdomain}/info` | Firma adı/telefon/e-posta/adres/site URL'i, site içeriği ve SEO alanları (`seoTitle, seoDescription, seoKeywords, googleSiteVerification, googleAnalyticsId, allowIndexing`, bkz. §6.1c) |
+| GET | `/api/v1/public/{subdomain}/sitemap.xml` | Kulüp sitesinin XML site haritası (`application/xml`, `Cache-Control: public, max-age=3600`): `https://{subdomain}.faturebase.com` kökünde `/`, `/about`, `/packages`, `/gallery`, `/contact`, `/book`, `/privacy` ve her aktif şube için `/branch/{code}`; `lastmod` = bugün (UTC). Bilinmeyen subdomain → `404 company_not_found` |
+| GET | `/api/v1/public/{subdomain}/robots.txt` | `text/plain`, `Cache-Control: public, max-age=3600`: `User-agent: *`, `Disallow: /member/`, `Disallow: /rsvp`, `Sitemap: https://{subdomain}.faturebase.com/sitemap.xml`; firma `allowIndexing: false` yaptıysa kurallar yerine `Disallow: /`. Bilinmeyen subdomain → `404 company_not_found` |
 | GET | `/api/v1/public/{subdomain}/branches` | Aktif şubelerin kısa listesi (`code, name, address`) — kök sitede şube seçim listesi için |
 | GET | `/api/v1/public/{subdomain}/branches/{code}` | Şubenin kendi sitesi için bilgiler (`code, name, address, phone, description`); şube pasif/yok ise `404 branch_not_found` |
 | GET | `/api/v1/public/{subdomain}/options` | Dinamik randevu kuralları: çalışma saatleri, tekne sınıfları+kapasiteleri, hatırlatma seçenekleri, aktif paketler, derece etiketleri |
@@ -250,7 +252,8 @@ gösterir. Eski firma-geneli site kaldırılmıştır.
 | GET | `/api/v1/public/{subdomain}/rsvp/{token}` | Katılım onayı durumu (bkz. §4.2); bilinmeyen/geçersiz token → `404 rsvp_not_found` |
 | POST | `/api/v1/public/{subdomain}/rsvp/{token}` | `{ "choice": "attending" \| "notAttending" }` — katılım yanıtını kaydeder/değiştirir (bkz. §4.2); süre dolmuş/çözülmüş → `400 rsvp_closed`, geçersiz seçim → `400 rsvp_invalid_choice`, token yok → `404 rsvp_not_found` |
 | GET | `/api/v1/public/{subdomain}/feed` | Yalnızca kulüp paylaşımları (son 50); anketlerde `poll` sonuçları salt okunur döner (`votedByMe: false`, `myOptionId: null`) |
-| GET | `/api/v1/public/{subdomain}/feed/{id}/media` \| `/comments` \| `/participants` | Kulüp paylaşımının medyası/yorumları/katılımcıları (salt okunur) |
+| GET | `/api/v1/public/{subdomain}/feed/{id}/media` \| `/comments` \| `/participants` | Kulüp paylaşımının medyası (ilk öğe)/yorumları/katılımcıları (salt okunur); yorumlar düz liste, `likedByMe`/`isMine` her zaman `false` |
+| GET | `/api/v1/public/{subdomain}/feed/{id}/media/{index}` | Kulüp paylaşımının `index`. (0 tabanlı) medyası; yoksa/aralık dışıysa `404 media_not_found` |
 | POST | `/api/v1/public/{subdomain}/messages` | İletişim formu: `{ fullName, email, phone, body }` — `phone` zorunludur (10–15 rakam, `400` doğrulama hatası aksi halde); mesaj panelde **Mesajlar** ekranına düşer, ad/e-posta/telefon/metin şifreli saklanır |
 
 Şube kodu 6 rakam + 2 harf'tir (`BranchCodeGenerator`, I/O harfleri hariç), şube oluşturulduğu anda
@@ -502,13 +505,17 @@ query parametresinden de kabul eder.
 
 | Metot | Route | Açıklama |
 |---|---|---|
-| GET | `/feed` | Son 50 paylaşım (kulüp + üyeler), beğeni/yorum/katılımcı sayıları ve "benim" durumlarımla |
-| POST | `/feed` | Yazı/görsel/video paylaşır, isteğe bağlı etkinlik olarak işaretler |
-| GET | `/feed/{id}/media` | Paylaşımın medyasını ayrı getirir (liste sorgusu medya taşımaz) |
+| GET | `/feed` | Son 50 paylaşım (kulüp + üyeler), tepki/yorum/katılımcı sayıları ve "benim" durumlarımla |
+| POST | `/feed` | Yazı/görsel(ler)/video paylaşır, isteğe bağlı etkinlik olarak işaretler |
+| GET | `/feed/{id}/media` | Paylaşımın **ilk** medyasını ayrı getirir (liste sorgusu medya taşımaz) |
+| GET | `/feed/{id}/media/{index}` | Paylaşımın `index`. (0 tabanlı) medyası; yoksa/aralık dışıysa `404 media_not_found` |
 | POST | `/feed/{id}/delete` | Yalnızca kendi paylaşımını silebilir |
-| POST | `/feed/{id}/like` | Beğeniyi açar/kapatır, `{ active, count }` döner |
-| GET | `/feed/{id}/comments` | Yorumları listeler |
-| POST | `/feed/{id}/comments` | `{ "body": "..." }` yorum ekler |
+| POST | `/feed/{id}/react` | `{ "emoji": "❤️" \| null }` tepki verir/değiştirir/kaldırır; `{ reactions, myReaction }` döner |
+| POST | `/feed/{id}/like` | (Geriye dönük) 👍 tepkisini açar/kapatır, `{ active, count }` döner (`count` = 👍 sayısı) |
+| GET | `/feed/{id}/comments` | Yorumları ve yanıtları düz liste olarak döner (`createdAtUtc` artan) |
+| POST | `/feed/{id}/comments` | `{ "body": "...", "parentId": "guid?" }` yorum veya yanıt ekler |
+| POST | `/feed/comments/{commentId}/like` | Yorum beğenisini açar/kapatır, `{ active, count }` döner |
+| POST | `/feed/comments/{commentId}/delete` | Yalnızca kendi yorumunu silebilir (aksi halde 409 `forbidden`); ana yorum silinirse yanıtları da silinir |
 | POST | `/feed/{id}/join` | Etkinliğe katılımı açar/kapatır |
 | GET | `/feed/{id}/participants` | Etkinliğe katılan üyeler (ad + derece) |
 | POST | `/feed/{id}/vote` | `{ "optionId": "guid" }` ankette oy verir/değiştirir; aynı seçeneğe tekrar oy vermek oyu geri alır. Güncel `poll` nesnesini döner |
@@ -524,6 +531,39 @@ query parametresinden de kabul eder.
 ```
 Medya: görsel (JPG/PNG/GIF/WebP) ≤5MB veya video (MP4/WebM/QuickTime) ≤25MB (≈15-20 sn); tür/boyut
 sunucuda doğrulanır (`media_invalid_type`, `media_too_large`).
+
+**Çoklu görsel (galeri):** `media: [{ "base64": "...", "contentType": "image/jpeg" }, ...]` alanı ile
+en fazla **10** görsel gönderilebilir (sıra korunur). `media` dolu gelirse eski `mediaBase64`/
+`mediaContentType` alanları yok sayılır; boş/eksikse eski alanlar tek medya olarak işlenir. Video
+yalnızca tek başına paylaşılabilir. Hatalar (400): `media_too_many` (>10), `media_invalid_combination`
+(video + başka medya). İstek gövdesi sınırı bu uçta 80MB'tır. `PostDto.mediaCount` medya sayısını
+(yoksa `0`) verir; `mediaKind`/`mediaContentType` ilk öğeyi tanımlar.
+
+**Tepkiler (`PostDto.reactions` / `PostDto.myReaction`):** izinli emojiler yalnızca
+`👍 ❤️ 😂 🎉 😮 👏`. Her üyenin (ve kulübün) paylaşım başına tek tepkisi olur; farklı emoji göndermek
+tepkiyi değiştirir, aynı emojiyi tekrar göndermek veya `null` göndermek kaldırır. Geçersiz emoji
+→ `400 invalid_reaction`.
+```json
+"reactions": [ { "emoji": "❤️", "count": 5 }, { "emoji": "👍", "count": 2 } ],
+"myReaction": "❤️"
+```
+Yalnızca sayısı > 0 olan emojiler, sayıya göre azalan sırada döner. `myReaction` üye görünümünde
+üyenin, firma panelinde kulübün tepkisidir; public sitede `null`. Eski istemciler için
+`likeCount`/`likedByMe` 👍 tepkilerinden hesaplanmaya devam eder. `POST /feed/{id}/react` yanıtı:
+`{ "reactions": [...], "myReaction": "❤️" | null }`.
+
+**Yorumlar (`CommentDto`):**
+```json
+{
+  "id": "guid", "parentId": null, "authorName": "Ayşe Yılmaz", "isClub": false,
+  "authorCustomerId": "guid", "body": "Harika!", "createdAtUtc": "2026-09-24T10:00:00Z",
+  "likeCount": 3, "likedByMe": true, "isMine": false
+}
+```
+Yanıtlar tek seviyelidir: `parentId` aynı paylaşımdaki bir **ana** yorum olmalıdır; aksi halde (veya
+yorum bulunamazsa) `400 invalid_parent`. Kulüp yorumlarında `isClub: true`, `authorCustomerId: null`
+ve `authorName` firmanın adıdır. `PostDto.commentCount` yanıtlar dahil tüm yorumları sayar. Yorum
+metni veritabanında şifreli saklanır.
 
 Üye paylaşımı anket olamaz (anket alanlarını kabul etmez); anketi yalnızca kulüp oluşturur (§6.6).
 
@@ -562,6 +602,48 @@ veriler yalnızca o firmanın **kendi tenant veritabanından** okunur/yazılır.
 | GET | `/site` | Firmanın site adresi ve mock yolu |
 | GET | `/stats` | Panel ana sayfası istatistikleri (bugünkü randevu/seans, üye sayısı, bu ay randevu, önümüzdeki 7 gün, ay içi durum dağılımı, paket bakiyeleri) |
 | GET | `/insights` | Panel ana sayfası grafikleri: `topBoats` (en çok kullanılan 5 tekne), `topMembers` (en çok randevusu olan 5 üye), `busiestWeekdays` (haftanın 7 günü, Pazartesi'den başlayarak randevu sayısı) — iptal edilen randevular hariç |
+
+### 6.1c Site içeriği ve SEO ayarları
+
+| Metot | Route | Açıklama |
+|---|---|---|
+| GET | `/site/content` | Logo, tanıtım cümlesi, hakkımızda metni, sosyal bağlantılar, harita, galeri ve SEO alanları |
+| PUT | `/site/content` | Aynı metin alanlarını günceller; SEO alanları isteğe bağlıdır |
+
+**PUT /site/content request:**
+```json
+{
+  "tagline": "...", "aboutText": "...",
+  "instagramUrl": null, "facebookUrl": null, "youtubeUrl": null, "linkedinUrl": null,
+  "xUrl": null, "whatsappUrl": null, "telegramUrl": null, "pinterestUrl": null, "googleMapsUrl": null,
+  "seoTitle": "Deniz Kürek Kulübü", "seoDescription": "İstanbul'da kürek dersleri",
+  "seoKeywords": "kürek, deniz, spor", "googleSiteVerification": "abc123...",
+  "googleAnalyticsId": "G-ABCD1234", "allowIndexing": true
+}
+```
+GET yanıtı aynı alanları (`logoPath` ve `galleryImages` dahil) döner.
+
+SEO alan kuralları (tümü isteğe bağlı; baştaki/sondaki boşluklar kırpılır, boş değer `null` olarak saklanır):
+
+| Alan | Kural | Hata kodu |
+|---|---|---|
+| `seoTitle` | en fazla 70 karakter | `invalid_seo_title` |
+| `seoDescription` | en fazla 170 karakter | `invalid_seo_description` |
+| `seoKeywords` | en fazla 255 karakter, virgülle ayrılmış | `invalid_seo_keywords` |
+| `googleSiteVerification` | en fazla 100 karakter, yalnızca `content` değeri (meta etiketinin tamamı değil) | `invalid_google_site_verification` |
+| `googleAnalyticsId` | en fazla 32 karakter, `^G-[A-Z0-9]{4,20}$` ile eşleşmeli | `invalid_google_analytics_id` |
+| `allowIndexing` | `bool`, varsayılan `true`; `false` ise kulüp sitesi arama motorlarından indekslenmemesini ister (`robots.txt` → `Disallow: /`) | — |
+
+Kural ihlalleri diğer site içeriği hataları gibi `DomainException` olarak döner. Geriye dönük
+uyumluluk: istekte SEO alanlarının **hiçbiri** yoksa (hepsi `null`/eksik) mevcut SEO ayarları
+korunur; en az biri gönderilirse (ör. `allowIndexing`) altı alan birlikte güncellenir ve gönderilmeyen
+metin alanları temizlenir, `allowIndexing` eksikse mevcut değeri korunur.
+
+**Production notu:** Arama motorları `sitemap.xml` ve `robots.txt` dosyalarını kulüp sitesinin
+kökünde arar. Production'da web sunucusu (reverse proxy), kulüp alt alan adlarında
+(`{subdomain}.faturebase.com`) gelen `/sitemap.xml` ve `/robots.txt` isteklerini sırasıyla
+`/api/v1/public/{subdomain}/sitemap.xml` ve `/api/v1/public/{subdomain}/robots.txt` API uçlarına
+yönlendirmelidir (proxy); SPA'nın `index.html` fallback'ine düşmemelidir.
 
 ### 6.1a Abonelik ve Faturalama (iyzico)
 
@@ -670,11 +752,16 @@ GET aynı şekli döner.
 
 | Metot | Route | Açıklama |
 |---|---|---|
-| GET | `/feed` | Tüm akışı (üye görünümüyle aynı veri) görür |
+| GET | `/feed` | Tüm akışı (üye görünümüyle aynı veri) görür; `myReaction` kulübün tepkisidir |
 | POST | `/feed` | **Kulüp adına** paylaşım yapar (`authorCustomerId: null`); `pollOptions` doluysa paylaşım **anket** olur |
 | POST | `/feed/{id}/delete` | **Herhangi bir** paylaşımı kaldırabilir (moderasyon yetkisi); anket seçenekleri ve oylar da silinir |
-| GET | `/feed/{id}/media` \| `/comments` \| `/participants` | Salt okunur görüntüleme |
-| GET | `/feed/{id}/likes` | Paylaşımı beğenen üyeler, en yeniden eskiye: `[{ fullName, level, likedAtUtc }]` |
+| GET | `/feed/{id}/media` \| `/media/{index}` \| `/comments` \| `/participants` | Görüntüleme (medya/yorum şekilleri üye akışıyla aynı; yorumlarda `likedByMe`/`isMine` kulübe göredir) |
+| POST | `/feed/{id}/react` | **Kulüp adına** tepki: `{ "emoji": "👏" \| null }` → `{ reactions, myReaction }`; her paylaşımda (kulüp ya da üye) kullanılabilir |
+| GET | `/feed/{id}/reactions` | Tepki verenler, en yeniden eskiye: `[{ emoji, fullName, isClub, level, atUtc }]` |
+| GET | `/feed/{id}/likes` | (Geriye dönük) 👍 tepkisi verenler, en yeniden eskiye: `[{ fullName, level, likedAtUtc }]` |
+| POST | `/feed/{id}/comments` | **Kulüp adına** yorum/yanıt: `{ "body": "...", "parentId": "guid?" }` → `CommentDto` |
+| POST | `/feed/comments/{commentId}/like` | Kulüp adına yorum beğenisini açar/kapatır, `{ active, count }` |
+| POST | `/feed/comments/{commentId}/delete` | **Herhangi bir** yorumu kaldırır (moderasyon); ana yorum silinirse yanıtları ve beğenileri de silinir |
 | GET | `/feed/{id}/poll-votes` | Ankete oy veren üyeler, en yeniden eskiye: `[{ optionId, fullName, level, votedAtUtc }]` |
 | POST | `/feed/{id}/poll/close` | Anketi erkenden kapatır (`pollClosesOn` = dün); anket değilse 409 `not_a_poll` |
 

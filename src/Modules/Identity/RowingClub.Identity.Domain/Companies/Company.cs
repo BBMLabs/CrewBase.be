@@ -1,3 +1,4 @@
+using System.Text.RegularExpressions;
 using RowingClub.BuildingBlocks.Domain;
 
 namespace RowingClub.Identity.Domain.Companies;
@@ -9,8 +10,14 @@ public enum CompanyStatus
     Suspended = 2,
 }
 
-public sealed class Company : AggregateRoot<Guid>
+public sealed partial class Company : AggregateRoot<Guid>
 {
+    public const int SeoTitleMaxLength = 70;
+    public const int SeoDescriptionMaxLength = 170;
+    public const int SeoKeywordsMaxLength = 255;
+    public const int GoogleSiteVerificationMaxLength = 100;
+    public const int GoogleAnalyticsIdMaxLength = 32;
+
     public string Name { get; private set; } = null!;
 
     /// <summary>Firmanın site adresi: {Subdomain}.faturebase.com (şimdilik mock domain).</summary>
@@ -48,6 +55,18 @@ public sealed class Company : AggregateRoot<Guid>
     public string? ContactEmail { get; private set; }
 
     public string? Address { get; private set; }
+
+    public string? SeoTitle { get; private set; }
+
+    public string? SeoDescription { get; private set; }
+
+    public string? SeoKeywords { get; private set; }
+
+    public string? GoogleSiteVerification { get; private set; }
+
+    public string? GoogleAnalyticsId { get; private set; }
+
+    public bool AllowIndexing { get; private set; } = true;
 
     /// <summary>Vergi kimlik no (10 hane) veya T.C. kimlik no (11 hane, şahıs işletmesi için).</summary>
     public string? TaxNumber { get; private set; }
@@ -174,6 +193,48 @@ public sealed class Company : AggregateRoot<Guid>
     {
         GoogleMapsUrl = NormalizeUrl(googleMapsUrl, "invalid_google_maps_url", "Google Haritalar bağlantısı");
     }
+
+    public void UpdateSeoSettings(
+        string? seoTitle, string? seoDescription, string? seoKeywords,
+        string? googleSiteVerification, string? googleAnalyticsId, bool allowIndexing)
+    {
+        var title = NormalizeText(seoTitle, SeoTitleMaxLength, "invalid_seo_title", "SEO başlığı");
+        var description = NormalizeText(
+            seoDescription, SeoDescriptionMaxLength, "invalid_seo_description", "SEO açıklaması");
+        var keywords = NormalizeText(seoKeywords, SeoKeywordsMaxLength, "invalid_seo_keywords", "SEO anahtar kelimeleri");
+        var verification = NormalizeText(
+            googleSiteVerification, GoogleSiteVerificationMaxLength,
+            "invalid_google_site_verification", "Google site doğrulama kodu");
+        var analyticsId = NormalizeText(
+            googleAnalyticsId, GoogleAnalyticsIdMaxLength, "invalid_google_analytics_id", "Google Analytics kimliği");
+
+        if (analyticsId is not null && !GoogleAnalyticsIdPattern().IsMatch(analyticsId))
+            throw new DomainException(
+                "invalid_google_analytics_id",
+                "Google Analytics kimliği G-XXXXXXXXXX biçiminde olmalıdır.");
+
+        SeoTitle = title;
+        SeoDescription = description;
+        SeoKeywords = keywords;
+        GoogleSiteVerification = verification;
+        GoogleAnalyticsId = analyticsId;
+        AllowIndexing = allowIndexing;
+    }
+
+    private static string? NormalizeText(string? value, int maxLength, string errorCode, string fieldLabel)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            return null;
+
+        var trimmed = value.Trim();
+        if (trimmed.Length > maxLength)
+            throw new DomainException(errorCode, $"{fieldLabel} en fazla {maxLength} karakter olabilir.");
+
+        return trimmed;
+    }
+
+    [GeneratedRegex("^G-[A-Z0-9]{4,20}$", RegexOptions.CultureInvariant)]
+    private static partial Regex GoogleAnalyticsIdPattern();
 
     private static string? NormalizeUrl(string? url, string errorCode, string fieldLabel)
     {
