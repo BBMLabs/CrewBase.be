@@ -22,6 +22,29 @@ public sealed class BookingWindowTests
     }
 
     [Fact]
+    public void Booking_is_rejected_for_any_slot_within_24_hours()
+    {
+        // Varsayılan ayarlarda her gün 09-18 açık; kulübün yerel bugünündeki slotlar hep 24 saatin içindedir
+        var today = DateOnly.FromDateTime(Settings.NowLocal());
+        var slot = Settings.Slots(today.DayOfWeek).Last();
+
+        var act = () => Settings.EnsureBookable(today, slot);
+
+        act.Should().Throw<DomainException>().Which.ErrorCode.Should().Be("too_soon");
+    }
+
+    [Fact]
+    public void Booking_is_allowed_for_a_slot_more_than_24_hours_ahead()
+    {
+        var day = DateOnly.FromDateTime(Settings.NowLocal()).AddDays(2);
+        var slot = Settings.Slots(day.DayOfWeek).First();
+
+        var act = () => Settings.EnsureBookable(day, slot);
+
+        act.Should().NotThrow();
+    }
+
+    [Fact]
     public void Cancellation_is_allowed_more_than_24_hours_before_start()
     {
         var (date, time) = HoursFromNow(25);

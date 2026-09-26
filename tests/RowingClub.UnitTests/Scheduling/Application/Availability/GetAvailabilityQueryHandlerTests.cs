@@ -79,4 +79,33 @@ public sealed class GetAvailabilityQueryHandlerTests
         slot.Available.Should().BeTrue();
         slot.SeatsLeft.Should().Be(BoatClass.Double2x.Capacity());
     }
+
+    [Fact]
+    public async Task Slots_inside_the_24_hour_booking_window_are_not_available_even_with_free_boats()
+    {
+        // Regresyon: müsaitlik bu saatleri boş gösterse rezervasyon too_soon ile reddedilirdi.
+        // Kulübün yerel "bugün"ündeki her slot her zaman şimdi + 24 saatin içindedir.
+        var today = DateOnly.FromDateTime(CompanySettings.Default().NowLocal());
+        _sessionRepository.GetByDateAsync(today, Arg.Any<CancellationToken>()).Returns(new List<TrainingSession>());
+        _boatRepository.GetAllAsync(Arg.Any<CancellationToken>())
+            .Returns(new List<Boat> { Boat.Create("Tek 1", BoatClass.Single1x) });
+
+        var slots = await CreateHandler().Handle(new GetAvailabilityQuery(today, "1x", null), CancellationToken.None);
+
+        slots.Should().NotBeEmpty();
+        slots.Should().OnlyContain(s => !s.Available);
+    }
+
+    [Fact]
+    public async Task Slots_beyond_the_booking_window_are_available_on_a_free_boat()
+    {
+        _boatRepository.GetAllAsync(Arg.Any<CancellationToken>())
+            .Returns(new List<Boat> { Boat.Create("Tek 1", BoatClass.Single1x) });
+
+        var slot = (await CreateHandler().Handle(new GetAvailabilityQuery(_date, "1x", null), CancellationToken.None))
+            .Single(s => s.Time == _slot.ToString("HH:mm"));
+
+        slot.Available.Should().BeTrue();
+        slot.SeatsLeft.Should().Be(BoatClass.Single1x.Capacity());
+    }
 }
