@@ -202,7 +202,9 @@ public static class MemberEndpoints
             return Results.Ok(ApiResponse<List<PurchasablePackageDto>>.Ok(catalog));
         })).WithName("MemberPackageCatalog");
 
-        group.MapPost("/packages/{packageId:guid}/purchase", GuardedRoute(async (ctx, packageId, sender, ct) =>
+        // GuardedRoute yol parametresini "id" adıyla bağlar; "{packageId}" yazıldığında Guid sorgu dizisinde
+        // aranıyor ve uç her istekte 400/500 dönüyordu.
+        group.MapPost("/packages/{id:guid}/purchase", GuardedRoute(async (ctx, packageId, sender, ct) =>
         {
             // Ham SPA route'u DEĞİL - iyzico callback'i token'ı form POST ile gönderir, SPA bunu
             // yakalayamaz; bkz. WebhookEndpoints.MapWebhookEndpoints'teki POST->GET köprüsü. "tenant"
@@ -325,7 +327,7 @@ public static class MemberEndpoints
             HttpContext http, Guid id, int index, ICurrentUser user, TenantResolver resolver,
             ISender sender, CancellationToken ct) =>
         {
-            var (_, error) = await ResolveAsync(http, user, resolver, ct);
+            var (_, error) = await ResolveAsync(http, user, resolver, sender, ct);
             if (error is not null)
                 return error;
 
@@ -422,21 +424,27 @@ public static class MemberEndpoints
     }
 
     private static async Task<(MemberContext? Ctx, IResult? Error)> ResolveAsync(
-        HttpContext http, ICurrentUser user, TenantResolver resolver, CancellationToken ct)
+        HttpContext http, ICurrentUser user, TenantResolver resolver, ISender sender, CancellationToken ct)
     {
         CompanySiteDto? company = user.CompanyId is { } companyId
             ? await resolver.ResolveByCompanyIdAsync(companyId, ct)
             : null;
 
-        return company is null
-            ? (null, CompanyNotFound())
-            : (new MemberContext(user.UserId, ClientIp(http), company.Subdomain, company.Name), null);
+        if (company is null)
+            return (null, CompanyNotFound());
+
+        // Token geçerli olsa da üye silinmiş/engellenmişse oturum biter: gövdesiz 401, frontend'in
+        // oturum-sonu akışını (girişe yönlendirme) tetikler; yeniden girişte engel mesajı gösterilir.
+        if (!await sender.Send(new GetMemberAccessQuery(user.UserId), ct))
+            return (null, Results.Unauthorized());
+
+        return (new MemberContext(user.UserId, ClientIp(http), company.Subdomain, company.Name), null);
     }
 
     private static Delegate Guarded(Func<MemberContext, ISender, CancellationToken, Task<IResult>> handler) =>
         async (HttpContext http, ICurrentUser user, TenantResolver resolver, ISender sender, CancellationToken ct) =>
         {
-            var (ctx, error) = await ResolveAsync(http, user, resolver, ct);
+            var (ctx, error) = await ResolveAsync(http, user, resolver, sender, ct);
             return error ?? await handler(ctx!, sender, ct);
         };
 
@@ -445,7 +453,7 @@ public static class MemberEndpoints
         async (HttpContext http, [FromBody] TBody body, ICurrentUser user, TenantResolver resolver,
             ISender sender, CancellationToken ct) =>
         {
-            var (ctx, error) = await ResolveAsync(http, user, resolver, ct);
+            var (ctx, error) = await ResolveAsync(http, user, resolver, sender, ct);
             return error ?? await handler(ctx!, body, sender, ct);
         };
 
@@ -454,7 +462,7 @@ public static class MemberEndpoints
         async (HttpContext http, Guid id, ICurrentUser user, TenantResolver resolver,
             ISender sender, CancellationToken ct) =>
         {
-            var (ctx, error) = await ResolveAsync(http, user, resolver, ct);
+            var (ctx, error) = await ResolveAsync(http, user, resolver, sender, ct);
             return error ?? await handler(ctx!, id, sender, ct);
         };
 
@@ -463,7 +471,7 @@ public static class MemberEndpoints
         async (HttpContext http, Guid id, [FromBody] TBody body, ICurrentUser user, TenantResolver resolver,
             ISender sender, CancellationToken ct) =>
         {
-            var (ctx, error) = await ResolveAsync(http, user, resolver, ct);
+            var (ctx, error) = await ResolveAsync(http, user, resolver, sender, ct);
             return error ?? await handler(ctx!, id, body, sender, ct);
         };
 

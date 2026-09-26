@@ -81,6 +81,11 @@ public sealed class GlobalExceptionHandler(
         UnauthorizedAccessException => (
             StatusCodes.Status403Forbidden, "forbidden", "Forbidden", null),
 
+        // Minimal API parametre bağlama hataları (eksik zorunlu query parametresi, okunamayan JSON
+        // gövdesi...) istemci hatasıdır; önceden 500 unexpected_error'a düşüyordu.
+        BadHttpRequestException badRequest => (
+            badRequest.StatusCode, "bad_request", "Bad request", null),
+
         _ => (StatusCodes.Status500InternalServerError, "unexpected_error", "An unexpected error occurred", null),
     };
 }

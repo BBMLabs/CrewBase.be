@@ -34,11 +34,18 @@ public sealed class GetAvailabilityQueryHandler(
         }
 
         var level = 0;
+        var hasAccount = false;
         if (!string.IsNullOrWhiteSpace(request.Phone))
         {
             var customer = await customerRepository.GetByPhoneAsync(request.Phone, cancellationToken);
             level = customer?.Level ?? 0;
+            hasAccount = customer?.HasAccount ?? false;
         }
+
+        // BookAppointmentCommandHandler ile aynı kural: hesabı olmayan misafir yeni bir 2x seans açamaz,
+        // yalnızca o saatte boş koltuğu olan mevcut bir 2x seansa (seviyeden bağımsız) katılabilir.
+        // Aksi halde müsaitlik slotu boş gösterir, rezervasyon no_2x_partner_available ile reddedilirdi.
+        var joinExistingOnly = !hasAccount && boatClass == BoatClass.Double2x;
 
         var daySessions = await sessionRepository.GetByDateAsync(request.Date, cancellationToken);
         var boatsOfClass = (await boatRepository.GetAllAsync(cancellationToken))
@@ -48,7 +55,9 @@ public sealed class GetAvailabilityQueryHandler(
         var slots = new List<SlotDto>();
         foreach (var slot in settings.Slots(request.Date.DayOfWeek))
         {
-            var seatsLeft = DailyBoatCapacity.SeatsLeftAt(daySessions, boatClass, boatsOfClass.Count, slot);
+            var seatsLeft = joinExistingOnly
+                ? JoinableSeatsAnyLevel(daySessions, boatClass, slot)
+                : DailyBoatCapacity.SeatsLeftAt(daySessions, boatClass, boatsOfClass.Count, slot);
             var bookable = seatsLeft > 0 && IsBookable(settings, request.Date, slot);
             slots.Add(new SlotDto(slot.ToString("HH:mm"), bookable, seatsLeft));
         }
@@ -68,4 +77,9 @@ public sealed class GetAvailabilityQueryHandler(
             return false;
         }
     }
+
+    private static int JoinableSeatsAnyLevel(List<TrainingSession> daySessions, BoatClass boatClass, TimeOnly slot) =>
+        daySessions
+            .Where(s => s.StartTime == slot && s.BoatClass == boatClass && s.HasFreeSeat && DailyBoatCapacity.HoldsBoat(s))
+            .Sum(s => s.Capacity - s.ActiveMemberCount);
 }

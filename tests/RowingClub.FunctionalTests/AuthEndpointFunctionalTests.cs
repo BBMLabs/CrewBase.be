@@ -1,6 +1,11 @@
 using System.Net;
 using System.Net.Http.Json;
 using FluentAssertions;
+using Microsoft.AspNetCore.TestHost;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
+using NSubstitute;
+using RowingClub.Identity.Domain.Companies;
 
 namespace RowingClub.FunctionalTests;
 
@@ -200,7 +205,16 @@ public sealed class AuthEndpointFunctionalTests(RowingClubWebApplicationFactory 
     [Fact]
     public async Task SubdomainAvailability_returns_true_for_a_fresh_valid_value()
     {
-        using var client = factory.CreateClient();
+        // Fonksiyonel test host'unun gerçek bir veritabanı yok (Postgres host'u 'unused'); müsaitlik
+        // sorgusu DB'ye gittiği için yalnızca repository sahte nesneyle değiştirilir - HTTP sözleşmesi
+        // ve handler'ın slug/rezerve kontrolleri gerçek koddan geçer.
+        var companies = Substitute.For<ICompanyRepository>();
+        companies.ExistsBySubdomainAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns(false);
+        using var client = factory.WithWebHostBuilder(builder => builder.ConfigureTestServices(services =>
+        {
+            services.RemoveAll<ICompanyRepository>();
+            services.AddScoped(_ => companies);
+        })).CreateClient();
 
         var response = await client.GetAsync(
             $"/api/v1/auth/companies/subdomain-availability?value=fresh-club-{Guid.NewGuid():N}");
@@ -208,6 +222,17 @@ public sealed class AuthEndpointFunctionalTests(RowingClubWebApplicationFactory 
         response.StatusCode.Should().Be(HttpStatusCode.OK);
         var body = await response.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>();
         body.GetProperty("data").GetProperty("available").GetBoolean().Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task SubdomainAvailability_without_value_is_a_client_error_not_500()
+    {
+        // Regresyon: eksik zorunlu query parametresi GlobalExceptionHandler'da 500 unexpected_error oluyordu.
+        using var client = factory.CreateClient();
+
+        var response = await client.GetAsync("/api/v1/auth/companies/subdomain-availability");
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
     }
 
     [Fact]

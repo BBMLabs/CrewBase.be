@@ -29,6 +29,9 @@ public sealed record SessionDto(
 /// <summary>Panel: günün seansları - kim hangi teknede, hangi hocayla, hangi derece grubunda.</summary>
 public sealed record GetSessionsQuery(DateOnly Date) : IRequest<List<SessionDto>>;
 
+/// <summary>Panel: tek bir seans (tarihinden bağımsız) - seans detayındaki katılımcı listesi için.</summary>
+public sealed record GetSessionByIdQuery(Guid SessionId) : IRequest<SessionDto?>;
+
 /// <summary>Panel: seansın teknesini/eğitmenini elle değiştirme (otomatik atamayı ezer).</summary>
 public sealed record AssignSessionResourcesCommand(Guid SessionId, Guid? BoatId, Guid? InstructorId)
     : ICommand<SessionDto>;
@@ -45,6 +48,16 @@ public sealed class GetSessionsQueryHandler(ITrainingSessionRepository sessionRe
             .OrderBy(s => s.StartTime).ThenBy(s => s.Level)
             .Select(SessionMapper.ToDto)
             .ToList();
+    }
+}
+
+public sealed class GetSessionByIdQueryHandler(ITrainingSessionRepository sessionRepository)
+    : IRequestHandler<GetSessionByIdQuery, SessionDto?>
+{
+    public async Task<SessionDto?> Handle(GetSessionByIdQuery request, CancellationToken cancellationToken)
+    {
+        var session = await sessionRepository.GetByIdAsync(request.SessionId, cancellationToken);
+        return session is null ? null : SessionMapper.ToDto(session);
     }
 }
 

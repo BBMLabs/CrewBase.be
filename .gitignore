@@ -32,6 +32,9 @@ bld/
 [Oo]bj/
 [Ll]og/
 [Ll]ogs/
+# Uygulama log klasörleri yukarıdaki kuralla dışlanır; ancak src/ altındaki "Logs" bir kaynak kodu
+# klasörüdür (örn. Scheduling.Domain/Logs) ve mutlaka commit'lenmelidir.
+!src/**/[Ll]ogs/
 
 # Visual Studio 2015/2017 cache/options directory
 .vs/
